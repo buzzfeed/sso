@@ -1,0 +1,35 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/golang:1.9
+    working_directory: /go/src/github.com/buzzfeed/sso
+    steps:
+      - checkout
+      - run:
+          name: get lint
+          command: go get github.com/golang/lint/golint
+      - run:
+          name: install dependencies
+          command: |
+            cp Godeps /tmp/Godeps
+            cp gpm /tmp/gpm
+            cd /tmp && ./gpm
+      - run:
+          name: copy source
+          command: |
+            mkdir bin
+      - run:
+          name: run lint and tests for both services
+          command: |
+            scripts/test
+      - run:
+          name: build sso_auth
+          command: |
+            cd cmd/sso-auth
+            go build
+      - run:
+          name: build sso_proxy
+          command: |
+            cd cmd/sso-proxy
+            go build
