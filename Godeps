@@ -1,7 +1,6 @@
 github.com/18F/hmacauth                  1.0.1
 gopkg.in/yaml.v2                         v2
 github.com/imdario/mergo                 v0.3.4
-github.com/BurntSushi/toml               d94612f9fc140360834f9742158c70b5c5b5535b
 github.com/bitly/go-simplejson           da1a8928f709389522c8023062a3739f3b4af419
 github.com/mreiferson/go-options         77551d20752b54535462404ad9d877ebdb26e53d
 github.com/datadog/datadog-go/statsd	 c74bd0589c83817c93e4eff39ccae69d6c46df9b

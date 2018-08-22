@@ -1,13 +1,32 @@
-FROM golang:1.9.2
+# =============================================================================
+# build stage
+#
+# install golang dependencies & build binaries
+# =============================================================================
+FROM golang:1.10 AS build
 
-RUN apt-get update && apt-get install -y curl bash git jq gettext
+ENV GOFLAGS='-ldflags="-s -w"'
+ENV CGO_ENABLED=0
 
-# install gpm dependencies
-COPY gpm /tmp/gpm
-COPY Godeps /tmp/Godeps
-RUN cd /tmp && ./gpm
+# use gpm to install dependencies
+COPY Godeps gpm /tmp/
+RUN cd /tmp && ./gpm install
 
-COPY / /go/src/github.com/buzzfeed/sso/
+WORKDIR /go/src/github.com/buzzfeed/sso
 
-RUN cd /go/src/github.com/buzzfeed/sso/cmd/sso-auth; go build -o /bin/sso-auth
-RUN cd /go/src/github.com/buzzfeed/sso/cmd/sso-proxy; go build -o /bin/sso-proxy
+COPY cmd ./cmd
+COPY internal ./internal
+RUN cd cmd/sso-auth && go build -o /bin/sso-auth
+RUN cd cmd/sso-proxy && go build -o /bin/sso-proxy
+
+
+# =============================================================================
+# final stage
+#
+# add static assets and copy binaries from build stage
+# =============================================================================
+FROM debian:stable-slim
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+WORKDIR /sso
+COPY ./static ./static
+COPY --from=build /bin/sso-* /bin/
