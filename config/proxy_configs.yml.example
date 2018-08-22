@@ -1,0 +1,8 @@
+- service: payload
+  default:
+    from: payload.sso.sso-test.io
+    to: http://payload:8080
+    options:
+      timeout: 20s
+      allowed_groups:
+        - dev@sso-test.io
