@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -e
+
+cd $(dirname "$BASH_SOURCE[0]")/..
+
+echo "running gofmt ..."
+res=$(gofmt -d -s -e .)
+if [ -n "$res" ]; then
+  echo "$res"
+  echo "gofmt failed..."
+  exit 1
+fi
+
+echo "running golint ..."
+golint -set_exit_status ./...
+
+echo "running go vet ..."
+go vet ./...
+
+echo "running tests ..."
+cd internal
+go test -cover -race ./... $@

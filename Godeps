@@ -1,0 +1,15 @@
+github.com/18F/hmacauth                  1.0.1
+gopkg.in/yaml.v2                         v2
+github.com/imdario/mergo                 v0.3.4
+github.com/BurntSushi/toml               d94612f9fc140360834f9742158c70b5c5b5535b
+github.com/bitly/go-simplejson           da1a8928f709389522c8023062a3739f3b4af419
+github.com/mreiferson/go-options         77551d20752b54535462404ad9d877ebdb26e53d
+github.com/datadog/datadog-go/statsd	 c74bd0589c83817c93e4eff39ccae69d6c46df9b
+golang.org/x/oauth2                      7fdf09982454086d5570c7db3e11f360194830ca
+golang.org/x/net/context                 242b6b35177ec3909636b6cf6a47e8c2c6324b5d
+google.golang.org/api/admin/directory/v1 650535c7d6201e8304c92f38c922a9a3a36c6877
+cloud.google.com/go/compute/metadata     v0.7.0
+github.com/benbjohnson/clock             7dc76406b6d3c05b5f71a86293cbcf3c4ea03b19
+github.com/kelseyhightower/envconfig     v1.3.0
+github.com/miscreant/miscreant/go        9a32f76c00c1294ef308947092687049a057381b
+github.com/sirupsen/logrus               e54a77765aca7bbdd8e56c1c54f60579968b2dc9
