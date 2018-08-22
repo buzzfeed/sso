@@ -11,7 +11,7 @@ BuzzFeed's SSO is our single sign-on experience for our internal web services, l
 
 SSO is used to provide single-sign-on authentication and authorization for internal web applications behind it by ensuring that only people in a specific email domain (and optionally users in specific Google Groups) can access them. It consists of two processes - `auth` and `proxy`.
 
-The main idea of COP is a "double OAuth2" flow, where `auth` is the OAuth2 provider for `proxy`, and Google or another third-party provider, is the OAuth2 provider for `auth`.
+The main idea of SSO is a "double OAuth2" flow, where `auth` is the OAuth2 provider for `proxy`, and Google or another third-party provider, is the OAuth2 provider for `auth`.
 
 In a nutshell:
 
@@ -25,7 +25,7 @@ In a nutshell:
      transparently redirected back to `proxy` where they will be logged in,
      without needing to go through the Google OAuth2 flow
 2. `proxy` transparently re-validates & refreshes the user's session with `auth`
-3. After 15 days, all sessions are expired and `proxy` will redirect the user to `auth` to go through the Google OAuth2 flow once, after which they will again have access to all COP-protected services.
+3. After 15 days, all sessions are expired and `proxy` will redirect the user to `auth` to go through the Google OAuth2 flow once, after which they will again have access to all SSO-protected services.
 
 ## Code of Conduct
 
