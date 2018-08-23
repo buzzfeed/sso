@@ -3,8 +3,6 @@
 `SSO` is used to provide single-sign-on authentication and authorization for internal web
 applications, however, there are a few one-time prerequisites that need to be handled manually.
 
-**NOTE: all commands should be performed on your HOST OS.**
-
 ## Google OAuth Setup
 
 Configuring `sso` requires that we first configure a Google OAuth Project.
