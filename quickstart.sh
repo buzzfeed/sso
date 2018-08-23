@@ -19,7 +19,7 @@ test -f config/proxy_configs.yml || die "Error: could not locate \`config/proxy_
 Copy and configure from \`config/proxy_configs.yml.example\`"
 
 # lets find out the host ip and then use that to connect the sso-proxy to the nginx-proxy
-export host_ip=`docker run buzzfeed/cop:fix-dockerfile ping -c 1 host.docker.internal | grep icmp_seq | awk '{print $4}' | cut -d':' -f1`
+export host_ip=`docker run buzzfeed/sso:latest ping -c 1 host.docker.internal | grep icmp_seq | awk '{print $4}' | cut -d':' -f1`
 
 #create cookies if they don't exist otherwise use the ones already created
 test -f proxy_cookie_secret || openssl rand -base64 32 | head -c 32 | base64 > proxy_cookie_secret
