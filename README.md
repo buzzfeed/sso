@@ -11,7 +11,7 @@
 
 ----
 
-**sso** — lovingly known as *the S.S. Octopus* or *octoboils* — is the
+**sso** — lovingly known as *the S.S. Octopus* or *octoboi* — is the
 authentication and authorization system BuzzFeed developed to provide a secure,
 single sign-on experience for access to the many internal web apps used by our
 employees.
