@@ -9,7 +9,7 @@ services:
       - /var/run/docker.sock:/tmp/docker.sock:ro
 
 
-  proxy:
+  sso-proxy:
     image: buzzfeed/sso:lastest
     entrypoint: /bin/sso-proxy
     working_dir: /go/src/github.com/buzzfeed/sso/
@@ -40,7 +40,7 @@ services:
       - OLD_COOKIE_SECRET=${old_cookie_secret}
 
 
-  authenticator:
+  sso-auth:
     image: buzzfeed/sso:lastest
     entrypoint: /bin/sso-auth
     working_dir: /go/src/github.com/buzzfeed/sso/

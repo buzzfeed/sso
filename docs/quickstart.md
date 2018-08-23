@@ -150,7 +150,7 @@ Copy the `docker-compose.yml.example`, `env.example` and `proxy_configs.yml.exam
 
 Config those files per the instructions in http://./quickstart.md#docker-and-docker-compose-provisioning
 
-Execute the containers by running the `quickstart.sh` script, and run a `docker ps` to see all four containers are up.
+Execute the containers by running the `sudo quickstart.sh` script, and run a `docker ps` to see all four containers are up.
 
 ![StartScript](images/start-script.jpg)
 
