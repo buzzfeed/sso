@@ -1,0 +1,84 @@
+version: '3.2'
+
+services:
+  nginx-proxy:
+    image: jwilder/nginx-proxy:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+
+
+  sso-proxy:
+    image: buzzfeed/sso:lastest
+    entrypoint: /bin/sso-proxy
+    working_dir: /go/src/github.com/buzzfeed/sso/
+    volumes:
+      - type: bind
+        source: ./config
+        target: /tmp/config
+    env_file:
+     - ./env
+    hostname: sso-proxy
+    domainname: sso.sso-test.io
+    extra_hosts:
+      - "sso-auth.sso-test.io:$host_ip"
+    expose:
+      - "4180"
+    environment:
+      - VIRTUAL_HOST=*.sso.sso-test.io
+      - NETWORK_ACCESS=external
+      - VIRTUAL_PORT=4180
+      - PORT=4180
+      - CLIENT_ID=
+      - CLIENT_SECRET=
+      - AUTH_CODE_SECRET=
+      - HTTP_PUBLIC_CNAME=sso-proxy.sso.sso-test.io
+      - HOST=sso-proxy.sso.sso-test.io
+      - CNAME=sso-proxy.sso.sso-test.io
+      - COOKIE_SECRET=${proxy_cookie_secret}
+      - OLD_COOKIE_SECRET=${old_cookie_secret}
+
+
+  sso-auth:
+    image: buzzfeed/sso:lastest
+    entrypoint: /bin/sso-auth
+    working_dir: /go/src/github.com/buzzfeed/sso/
+    volumes:
+      - type: bind
+        source: ./config
+        target: /tmp/config
+    env_file:
+     - ./env
+    hostname: sso-auth
+    domainname: sso-test.io
+    expose:
+      - "4181"
+    environment:
+      - VIRTUAL_HOST=sso-auth.sso-test.io
+      - NETWORK_ACCESS=external
+      - VIRTUAL_PORT=4181
+      - PORT=4181
+      - CLIENT_ID=
+      - CLIENT_SECRET=
+      - HOSTNAME=sso-auth.sso-test.io
+      - PROXY_CLIENT_ID=
+      - PROXY_CLIENT_SECRET=
+      - AUTH_CODE_SECRET=
+      - HOST=sso-auth.sso-test.io
+      - SERVICE=sso_authenticator
+      - CNAME=sso-auth.sso-test.io
+      - COOKIE_SECRET=${auth_cookie_secret}
+      - OLD_COOKIE_SECRET=${old_cookie_secret}
+
+  payload:
+    # replace username/repo:tag with your name and image details
+    image: mccutchen/go-httpbin:19ea19b
+    hostname: payload-internal
+    domainname: sso-test.io
+    expose:
+      - "8080"
+    environment:
+      - VIRTUAL_HOST=payload-internal.sso-test.io
+      - NETWORK_ACCESS=internal
+      - VIRTUAL_PORT=8080
