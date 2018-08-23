@@ -70,7 +70,7 @@ Click "Create Service Account" toward the top of the page to begin creating the 
 ![Creating a service account](images/setup-create_service_account.jpg)
 
 Fill out the fields requested as follows:
-- **Service account name**: Any appropriate name is fine. We recommend `sso-authenticator`.
+- **Service account name**: Any appropriate name is fine. We recommend `sso-auth`.
 - **Service account ID**: Google will generate this as you type the "account name". We recommend
 leaving as-is.
 - **Project rol**: No project roles are required for `sso`.
@@ -112,19 +112,16 @@ will need to provide the following "API Scopes" for the service account that we 
 Type these into the field titled "One or More API Scopes", as a comma-separated list. After these
 have been filled in, click the "Authorize" button.
 
-#### Configuring `sso` to act as an administrator
+#### Configuring `sso-auth` to act as an administrator
 
-When running the `sso-authenticator` binary, the following environment variables must be set, in
+When running the `sso-auth` binary, the following environment variables must be set, in
 order to act as an administrator and access user group membership data:
-- **`BUZZFEED_GOOGLE_ADMIN_EMAIL`**: An administrative email address on your organization's
-domain, the identity of which can be assumed by `sso`.
-- **`BUZZFEED_GOOGLE_SERVICE_ACCOUNT_JSON`**: A permanent location for the private key `.json` file 
+- **`GOOGLE_ADMIN_EMAIL`**: An administrative email address on your organization's
+domain, the identity of which can be assumed by `sso-auth`.
+- **`GOOGLE_SERVICE_ACCOUNT_JSON`**: A permanent location for the private key `.json` file 
 that was downloaded through your browser at the time of service account creation. There is no
-reason why this file should ever be accessed by any person or service other than `sso`; ensure that
+reason why this file should ever be accessed by any person or service other than `sso-auth`; ensure that
 file permissions are set accordingly.
-
-If you already have an instance of `sso` running, then it will need to be restarted before these
-changes will take effect.
 
 ## Docker and Docker Compose Provisioning
 
