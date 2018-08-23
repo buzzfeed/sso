@@ -44,9 +44,9 @@ The next screen will ask you to choose an "Application Type"; select "Web applic
 asked to fill in three fields.
 - **Name**: Any appropriate name is fine (e.g. `Dev`).
 - **Authorized JavaScript origins**: We recommend leaving this field blank.
-- **Authorized redirect URIs**: Add the URI of your `sso-proxy` deployment, with the path suffix
-`/oauth2/callback`. For example, if your `sso-proxy` will  be accessible at the domain
-`sso.example.com`, then add the URI `https://sso.example.com/oauth2/callback`.
+- **Authorized redirect URIs**: Add the URI of your `sso-auth` deployment, with the path suffix
+`/oauth2/callback`. For example, if your `sso-auth` will  be accessible at the domain
+`sso-auth.sso-test.io`, then add the URI `http://sso-auth.sso-test.io/oauth2/callback`.
 
 ![Credentials](images/setup-credentials.jpg)
 
