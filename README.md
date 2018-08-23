@@ -2,16 +2,23 @@
 
 [![CircleCI](https://circleci.com/gh/buzzfeed/sso.svg?style=svg)](https://circleci.com/gh/buzzfeed/sso)
 [![MIT license](http://img.shields.io/badge/license-MIT-brightgreen.svg)](http://opensource.org/licenses/MIT)
+[![Docker Automated build](https://img.shields.io/docker/automated/buzzfeed/sso.svg)](https://hub.docker.com/r/buzzfeed/sso/)
 
 <img src="https://user-images.githubusercontent.com/10510566/44476420-a64e5980-a605-11e8-8ad9-2820109deb75.png" width="128px">
 
 ----
 
-BuzzFeed's **sso** is our single sign-on experience for our internal web services, lovingly known as the *S.S. Octopus* (octoboi) by our team. In addition to the source code, we publish an official [Docker image][docker_hub].
+**sso** — lovingly known as *the S.S. Octopus* or *octoboi* — is the
+authentication and authorization system BuzzFeed developed to provide a secure,
+single sign-on experience for access to the many internal web apps used by our
+employees.
 
-It is used to provide single-sign-on authentication and authorization for internal web applications behind it by ensuring that only people in a specific email domain (and optionally users in specific Google Groups) can access them. It consists of two processes - `sso-auth` and `sso-proxy`.
+It depends on Google as its authoritative OAuth2 provider, and authenticates
+users against a specific email domain. Further authorization based on Google
+Group membership can be required on a per-upstream basis.
 
-The main idea of **sso** is a "double OAuth2" flow, where `sso-auth` is the OAuth2 provider for `sso-proxy`, and Google (or another third-party provider), is the OAuth2 provider for `sso-auth`.
+The main idea behind **sso** is a "double OAuth2" flow, where `sso-auth` is the
+OAuth2 provider for `sso-proxy` and Google is the OAuth2 provider for `sso-auth`.
 
 In a nutshell:
 
@@ -25,6 +32,17 @@ In a nutshell:
      transparently redirected back to `proxy` where they will be logged in,
      without needing to go through the Google OAuth2 flow
 - `sso-proxy` transparently re-validates & refreshes the user's session with `sso-auth`
+
+## Installation
+
+- [Prebuilt binary releases](https://github.com/buzzfeed/sso/releases)
+- [Docker][docker_hub]
+- `go get github.com/buzzfeed/sso/cmd/...`
+
+## Quickstart
+
+Follow our [Quickstart guide](docs/quickstart.md) to spin up a local deployment
+of **sso** to get a feel for how it works!
 
 ## Code of Conduct
 

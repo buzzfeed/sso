@@ -1,0 +1,143 @@
+version: '3'
+
+services:
+  # ===========================================================================
+  # sso services
+  #
+  # Here we provide a minimal sso installation for demo purposes that allows
+  # any valid google account to log in, and hard codes the various secrets
+  # required to secure communication.
+  #
+  # A more realistic deployment will likely require a specific organization's
+  # email domain and restrict access to upstream services based on Google Group
+  # membership.
+  #
+  # The sso-proxy service is handing requests to any domain under
+  # *.sso.localtest.me and the sso-auth service is available at sso-
+  # auth.localtest.me.
+  #
+  # There are two upstream services defined below, which can be accessed at
+  #  - http://hello-world.sso.localtest.me
+  #  - http://httpbin.sso.localtest.me
+  # ===========================================================================
+  sso-proxy:
+    image: buzzfeed/sso:latest # change this to `build: ..` to try local changes
+    entrypoint: /bin/sso-proxy
+    environment:
+      # Allow any google account to log in for demo purposes
+      - EMAIL_DOMAIN=*
+
+      - UPSTREAM_CONFIGS=/sso/upstream_configs.yml
+      - PROVIDER_URL=http://sso-auth.localtest.me
+
+      # CLIENT_ID and CLIENT_SECRET must match sso-auth's PROXY_CLIENT_ID and
+      # PROXY_CLIENT_SECRET configuration
+      - CLIENT_ID=aGNHd3FqWUVDb1Z0NVFVZDE4Vk8xbWhQeVdoc3pjMnU=
+      - CLIENT_SECRET=aDducXQzK2tPY3R4TmdqTGhaYS80eGYxcTUvWWJDb2M=
+
+      # XXX: These secrets are for demonstration purposes only! Use
+      #
+      #     openssl rand -base64 32 | head -c 32 | base64
+      #
+      # to generate your own.
+      - AUTH_CODE_SECRET=SVM0NEFMUUlaZGxyaFVhOGxsQ0wvOFYyZTh2S2Fha1U=
+      - COOKIE_SECRET=WEl0Y054TXNUN2ltTWRkazZ0YmNpRTlucXBPQUY2VHU=
+
+      # Disable https for demo purposes
+      - COOKIE_SECURE=false
+
+      # TODO: these config values should probably have defaults
+      - CLUSTER=dev
+      - STATSD_HOST=127.0.0.1
+      - STATSD_PORT=8125
+
+      # Tells nginx-proxy service how to route requests to this service
+      - VIRTUAL_HOST=*.sso.localtest.me
+    volumes:
+      - ./upstream_configs.yml:/sso/upstream_configs.yml:ro
+    expose:
+      - 4180
+    # Because the sso-auth.localtest.me domain will not resolve correctly
+    # within the sso-proxy container for sso-proxy => sso-auth communication,
+    # we must manually add an /etc/hosts entry pointing at the docker-compose
+    # host IP
+    extra_hosts:
+      - 'sso-auth.localtest.me:172.20.0.1'
+
+  sso-auth:
+    image: buzzfeed/sso:latest # change this to `build: ..` to try local changes
+    entrypoint: /bin/sso-auth
+    env_file:
+      ./env
+    environment:
+      # Allow any google account to log in for demo purposes
+      - SSO_EMAIL_DOMAIN=*
+
+      - HOST=sso-auth.localtest.me
+      - REDIRECT_URL=http://sso-auth.localtest.me
+      - PROXY_ROOT_DOMAIN=localtest.me
+
+      # These values must match sso-proxy's CLIENT_ID and CLIENT_SECRET values
+      - PROXY_CLIENT_ID=aGNHd3FqWUVDb1Z0NVFVZDE4Vk8xbWhQeVdoc3pjMnU=
+      - PROXY_CLIENT_SECRET=aDducXQzK2tPY3R4TmdqTGhaYS80eGYxcTUvWWJDb2M=
+
+      # XXX: These secrets are for demonstration purposes only! Use
+      #
+      #     openssl rand -base64 32 | head -c 32 | base64
+      #
+      # to generate your own.
+      - AUTH_CODE_SECRET=c1kxTHcyN3FwdGRiZHpZRU15TUpNdFlpb1ZEUUw5R3M=
+      - COOKIE_SECRET=V2JBZk0zWGtsL29UcFUvWjVDWWQ2UHExNXJ0b2VhcDI=
+
+      # Disable https for demo purposes
+      - COOKIE_SECURE=false
+
+      # TODO: these config values should probably have defaults
+      - CLUSTER=dev
+      - STATSD_HOST=127.0.0.1
+      - STATSD_PORT=8125
+
+      # TODO: remove the need for this config value
+      - OLD_COOKIE_SECRET=V2JBZk0zWGtsL29UcFUvWjVDWWQ2UHExNXJ0b2VhcDI=
+
+      # Tells nginx-proxy service how to route requests to this service
+      - VIRTUAL_HOST=sso-auth.localtest.me
+    expose:
+      - 4180
+
+  # ===========================================================================
+  # Upstream services protected by sso
+  #
+  # These services can be accessed at
+  # - hello-world.sso.localtest.me
+  # - httpbin.sso.localtest.me
+  # ===========================================================================
+  httpbin:
+    image: mccutchen/go-httpbin:latest
+    expose:
+      - 8080
+
+  hello-world:
+    image: tutum/hello-world:latest
+    expose:
+      - 80
+
+  # ===========================================================================
+  # nginx-proxy handles routing of requests to the sso-proxy and sso-auth
+  # containers.  See its docs for more info:
+  # https://github.com/jwilder/nginx-proxy
+  # ===========================================================================
+  nginx-proxy:
+    image: jwilder/nginx-proxy:latest
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+
+networks:
+  default:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
