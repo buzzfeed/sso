@@ -128,6 +128,10 @@ func SetCookieStore(opts *Options) func(*Authenticator) error {
 				return nil
 			}, setPayloads(opts))
 
+		if err != nil {
+			return err
+		}
+
 		a.csrfStore = cookieStore
 		a.sessionStore = cookieStore
 		a.AuthCodeCipher = authCodeCipher
