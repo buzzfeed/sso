@@ -302,10 +302,13 @@ func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthPr
 
 		provider:          opts.provider,
 		redirectURL:       &url.URL{Path: "/oauth2/callback"},
-		proxyredirectURL:  opts.ProxyProviderURLString,
 		skipAuthPreflight: opts.SkipAuthPreflight,
 		templates:         getTemplates(),
 	}
+
+	logger.Error(p, "oauth proxy")
+	p.proxyredirectURL, _ = url.Parse(opts.ProxyProviderURLString)
+	logger.Error(p, "oauth proxy after add in of ProxyProviderURLString")
 
 	for _, optFunc := range optFuncs {
 		err := optFunc(p)
