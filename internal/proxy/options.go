@@ -175,7 +175,7 @@ func (o *Options) Validate() error {
 		}
 	}
 
-	if o.ProxyProviderURLString = "" {
+	if o.ProxyProviderURLString == "" {
 		o.ProxyProviderURLString = o.ProviderURLString
 	}
 
