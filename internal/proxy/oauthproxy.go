@@ -66,6 +66,7 @@ type OAuthProxy struct {
 	EmailValidator EmailValidatorFn
 
 	redirectURL       *url.URL // the url to receive requests at
+	proxyredirectURL  *url.URL // the url to direct connect to the sso-auth
 	provider          providers.Provider
 	skipAuthPreflight bool
 	templates         *template.Template
@@ -301,6 +302,7 @@ func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthPr
 
 		provider:          opts.provider,
 		redirectURL:       &url.URL{Path: "/oauth2/callback"},
+		proxyredirectURL:  opts.ProxyProviderURLString,
 		skipAuthPreflight: opts.SkipAuthPreflight,
 		templates:         getTemplates(),
 	}
@@ -423,11 +425,30 @@ func (p *OAuthProxy) GetRedirectURL(host string) *url.URL {
 	return &u
 }
 
+// GetProxyRedirectURL returns the redirect url for a given OAuthProxy,
+// setting the scheme to be https if CookieSecure is true.
+func (p *OAuthProxy) GetProxyRedirectURL(host string) *url.URL {
+	// TODO: Ensure that we only allow valid upstream hosts in redirect URIs
+	var u url.URL
+	u = *p.proxyredirectURL
+
+	// Build redirect URI from request host
+	if u.Scheme == "" {
+		if p.CookieSecure {
+			u.Scheme = "https"
+		} else {
+			u.Scheme = "http"
+		}
+	}
+	u.Host = host
+	return &u
+}
+
 func (p *OAuthProxy) redeemCode(host, code string) (s *providers.SessionState, err error) {
 	if code == "" {
 		return nil, errors.New("missing code")
 	}
-	redirectURL := p.GetRedirectURL(host)
+	redirectURL := p.GetProxyRedirectURL(host)
 	s, err = p.provider.Redeem(redirectURL.String(), code)
 	if err != nil {
 		return
