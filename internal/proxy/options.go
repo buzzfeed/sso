@@ -229,7 +229,6 @@ func parseProviderInfo(o *Options) error {
 		return errors.New("proxy-provider-url must include scheme and host")
 	}
 
-
 	providerData := &providers.ProviderData{
 		ClientID:           o.ClientID,
 		ClientSecret:       o.ClientSecret,
