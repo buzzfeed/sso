@@ -1,5 +1,7 @@
 version := "v1.0.0"
 
+commit := $(shell git rev-parse --short HEAD)
+
 build: dist/sso-auth dist/sso-proxy
 
 dist/sso-auth: 
@@ -15,3 +17,8 @@ test:
 
 clean:
 	rm -r dist
+
+imagepush: 
+	docker build -t buzzfeed/sso-dev:$(commit) .
+	docker login -u $(DOCKER_USER) -p $(DOCKER_PASS)
+	docker push buzzfeed/sso-dev:$(commit)
