@@ -6,6 +6,7 @@ jobs:
     working_directory: /go/src/github.com/buzzfeed/sso
     steps:
       - checkout
+      - setup_remote_docker
       - run:
           name: get lint
           command: go get github.com/golang/lint/golint
@@ -24,12 +25,14 @@ jobs:
           command: |
             scripts/test
       - run:
-          name: build sso_auth
+          name: build sso-auth
           command: |
-            cd cmd/sso-auth
-            go build
+            make dist/sso-auth
       - run:
-          name: build sso_proxy
+          name: build sso-proxy
           command: |
-            cd cmd/sso-proxy
-            go build
+            make dist/sso-proxy
+      - run:
+          name: push sso-dev image
+          command: |
+            make imagepush
