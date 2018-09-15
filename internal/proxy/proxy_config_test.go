@@ -471,6 +471,7 @@ func TestUpstreamConfigRoutes(t *testing.T) {
 							Host:   "bar-internal.sso.dev",
 						},
 					},
+					TLSSkipVerify: false,
 				},
 			},
 		},
@@ -498,6 +499,129 @@ func TestUpstreamConfigRoutes(t *testing.T) {
 							Opaque: "bar--$1.sso.dev",
 						},
 					},
+					TLSSkipVerify: false,
+				},
+			},
+		},
+		{
+			name: "handle default route w/ explicit tls_verify: true",
+			rawConfig: []byte(`
+- service: bar
+  default:
+    from: bar.{{cluster}}.{{root_domain}}
+    to: bar-internal.{{cluster}}.{{root_domain}}
+    options:
+      tls_verify: true
+`),
+			wantConfigs: []*UpstreamConfig{
+				{
+					Service: "bar",
+					RouteConfig: RouteConfig{
+						From: "bar.sso.dev",
+						To:   "bar-internal.sso.dev",
+					},
+					Route: &SimpleRoute{
+						FromURL: &url.URL{
+							Scheme: "http",
+							Host:   "bar.sso.dev",
+						},
+						ToURL: &url.URL{
+							Scheme: "http",
+							Host:   "bar-internal.sso.dev",
+						},
+					},
+					TLSSkipVerify: false,
+				},
+			},
+		},
+		{
+			name: "handle rewrite route w/ explicit tls_verify: true",
+			rawConfig: []byte(`
+- service: bar
+  default:
+    from: ^bar--(.*).{{cluster}}.{{root_domain}}$
+    to: bar--$1.{{cluster}}.{{root_domain}}
+    type: rewrite
+    options:
+      tls_verify: true
+`),
+			wantConfigs: []*UpstreamConfig{
+				{
+					Service: "bar",
+					RouteConfig: RouteConfig{
+						From: "^bar--(.*).sso.dev$",
+						To:   "bar--$1.sso.dev",
+						Type: "rewrite",
+					},
+					Route: &RewriteRoute{
+						FromRegex: regexp.MustCompile("^bar--(.*).sso.dev$"),
+						ToTemplate: &url.URL{
+							Scheme: "http",
+							Opaque: "bar--$1.sso.dev",
+						},
+					},
+					TLSSkipVerify: false,
+				},
+			},
+		},
+		{
+			name: "handle default route with explicit tls_verify false",
+			rawConfig: []byte(`
+- service: bar
+  default:
+    from: bar.{{cluster}}.{{root_domain}}
+    to: bar-internal.{{cluster}}.{{root_domain}}
+    options:
+      tls_skip_verify: true
+`),
+			wantConfigs: []*UpstreamConfig{
+				{
+					Service: "bar",
+					RouteConfig: RouteConfig{
+						From: "bar.sso.dev",
+						To:   "bar-internal.sso.dev",
+					},
+					Route: &SimpleRoute{
+						FromURL: &url.URL{
+							Scheme: "http",
+							Host:   "bar.sso.dev",
+						},
+						ToURL: &url.URL{
+							Scheme: "http",
+							Host:   "bar-internal.sso.dev",
+						},
+					},
+					TLSSkipVerify: true,
+				},
+			},
+		},
+		{
+			name: "handle rewrite route with explicit tls_verify false",
+			rawConfig: []byte(`
+- service: bar
+  default:
+    from: ^bar--(.*).{{cluster}}.{{root_domain}}$
+    to: bar--$1.{{cluster}}.{{root_domain}}
+    type: rewrite
+    options:
+      tls_skip_verify: true
+`),
+			wantConfigs: []*UpstreamConfig{
+				{
+					Service: "bar",
+					RouteConfig: RouteConfig{
+						From: "^bar--(.*).sso.dev$",
+						To:   "bar--$1.sso.dev",
+						Type: "rewrite",
+					},
+					Route: &RewriteRoute{
+						FromRegex: regexp.MustCompile("^bar--(.*).sso.dev$"),
+						ToTemplate: &url.URL{
+							Scheme: "http",
+							Opaque: "bar--$1.sso.dev",
+						},
+					},
+					TLSSkipVerify: true,
 				},
 			},
 		},
@@ -529,7 +653,7 @@ func TestUpstreamConfigRoutes(t *testing.T) {
 				for i, gotConfig := range gotConfigs {
 					t.Logf("got  %#v", gotConfig)
 					t.Logf("want %#v", tc.wantConfigs[i])
-					t.Fatalf("expectec configs to be equal")
+					t.Fatalf("expected configs to be equal")
 				}
 			}
 		})
@@ -572,6 +696,7 @@ func TestUpstreamConfigExtraRoutes(t *testing.T) {
 							Host:   "bar-internal.sso.dev",
 						},
 					},
+					TLSSkipVerify: false,
 				},
 				{
 					Service: "bar",
@@ -589,6 +714,7 @@ func TestUpstreamConfigExtraRoutes(t *testing.T) {
 							Host:   "foo-internal.sso.dev",
 						},
 					},
+					TLSSkipVerify: false,
 				},
 			},
 		},
@@ -621,6 +747,7 @@ func TestUpstreamConfigExtraRoutes(t *testing.T) {
 							Host:   "bar-internal.sso.dev",
 						},
 					},
+					TLSSkipVerify: false,
 				},
 				{
 					Service: "bar",
@@ -636,6 +763,7 @@ func TestUpstreamConfigExtraRoutes(t *testing.T) {
 							Opaque: "bar--$1.sso.dev",
 						},
 					},
+					TLSSkipVerify: false,
 				},
 			},
 		},
@@ -681,6 +809,7 @@ func TestUpstreamConfigExtraRoutes(t *testing.T) {
 					HeaderOverrides: map[string]string{
 						"X-Frame-Options": "DENY",
 					},
+					TLSSkipVerify: false,
 				},
 				{
 					Service: "bar",
@@ -703,6 +832,7 @@ func TestUpstreamConfigExtraRoutes(t *testing.T) {
 					HeaderOverrides: map[string]string{
 						"X-Frame-Options": "DENY",
 					},
+					TLSSkipVerify: false,
 				},
 			},
 		},
@@ -752,6 +882,7 @@ func TestUpstreamConfigExtraRoutes(t *testing.T) {
 					HeaderOverrides: map[string]string{
 						"X-Frame-Options": "DENY",
 					},
+					TLSSkipVerify: false,
 				},
 				{
 					Service: "bar",
@@ -774,6 +905,7 @@ func TestUpstreamConfigExtraRoutes(t *testing.T) {
 					HeaderOverrides: map[string]string{
 						"X-Frame-Options": "ALLOW",
 					},
+					TLSSkipVerify: false,
 				},
 			},
 		},

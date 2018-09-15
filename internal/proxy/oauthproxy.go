@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -131,11 +132,13 @@ func (u *UpstreamProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // upstreamTransport is used to ensure that upstreams cannot override the
 // security headers applied by sso_proxy
-type upstreamTransport struct{}
+type upstreamTransport struct {
+	transport *http.Transport
+}
 
 // RoundTrip round trips the request and deletes security headers before returning the response.
 func (t *upstreamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	resp, err := http.DefaultTransport.RoundTrip(req)
+	resp, err := t.transport.RoundTrip(req)
 	if err != nil {
 		logger := log.NewLogEntry()
 		logger.Error(err, "error in upstreamTransport RoundTrip")
@@ -147,11 +150,29 @@ func (t *upstreamTransport) RoundTrip(req *http.Request) (*http.Response, error)
 	return resp, err
 }
 
+func newUpstreamTransport(insecureSkipVerify bool) *upstreamTransport {
+	return &upstreamTransport{
+		transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			TLSClientConfig:       &tls.Config{InsecureSkipVerify: insecureSkipVerify},
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+	}
+}
+
 // NewReverseProxy creates a reverse proxy to a specified url.
 // It adds an X-Forwarded-Host header that is the request's host.
-func NewReverseProxy(to *url.URL) *httputil.ReverseProxy {
+func NewReverseProxy(to *url.URL, config *UpstreamConfig) *httputil.ReverseProxy {
 	proxy := httputil.NewSingleHostReverseProxy(to)
-	proxy.Transport = &upstreamTransport{}
+	proxy.Transport = newUpstreamTransport(config.TLSSkipVerify)
 	director := proxy.Director
 	proxy.Director = func(req *http.Request) {
 		req.Header.Add("X-Forwarded-Host", req.Host)
@@ -164,9 +185,9 @@ func NewReverseProxy(to *url.URL) *httputil.ReverseProxy {
 // NewRewriteReverseProxy creates a reverse proxy that is capable of creating upstream
 // urls on the fly based on a from regex and a templated to field.
 // It adds an X-Forwarded-Host header to the the upstream's request.
-func NewRewriteReverseProxy(route *RewriteRoute) *httputil.ReverseProxy {
+func NewRewriteReverseProxy(route *RewriteRoute, config *UpstreamConfig) *httputil.ReverseProxy {
 	proxy := &httputil.ReverseProxy{}
-	proxy.Transport = &upstreamTransport{}
+	proxy.Transport = newUpstreamTransport(config.TLSSkipVerify)
 	proxy.Director = func(req *http.Request) {
 		// we do this to rewrite requests
 		rewritten := route.FromRegex.ReplaceAllString(req.Host, route.ToTemplate.Opaque)
@@ -296,15 +317,15 @@ func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthPr
 	for _, upstreamConfig := range opts.upstreamConfigs {
 		switch route := upstreamConfig.Route.(type) {
 		case *SimpleRoute:
-			reverseProxy := NewReverseProxy(route.ToURL)
+			reverseProxy := NewReverseProxy(route.ToURL, upstreamConfig)
 			handler, tags := NewReverseProxyHandler(reverseProxy, opts, upstreamConfig)
 			p.Handle(route.FromURL.Host, handler, tags, upstreamConfig)
 		case *RewriteRoute:
-			reverseProxy := NewRewriteReverseProxy(route)
+			reverseProxy := NewRewriteReverseProxy(route, upstreamConfig)
 			handler, tags := NewReverseProxyHandler(reverseProxy, opts, upstreamConfig)
 			p.HandleRegex(route.FromRegex, handler, tags, upstreamConfig)
 		default:
-			return nil, fmt.Errorf("unkown route type")
+			return nil, fmt.Errorf("unknown route type")
 		}
 	}
 
