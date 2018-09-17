@@ -23,7 +23,6 @@ func testOptions() *Options {
 	o.Host = "/"
 	o.CookieRefresh = time.Hour
 	o.CookieSecret = testEncodedCookieSecret
-	o.OldCookieSecret = testEncodedCookieSecret
 	return o
 }
 

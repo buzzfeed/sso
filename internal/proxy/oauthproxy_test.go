@@ -426,7 +426,6 @@ func NewProcessCookieTest(opts ProcessCookieTestOpts) *ProcessCookieTest {
 	pcTest.opts.ClientID = "bazquux"
 	pcTest.opts.ClientSecret = "xyzzyplugh"
 	pcTest.opts.CookieSecret = testEncodedCookieSecret
-	pcTest.opts.OldCookieSecret = "574b776a7c934d6b9fc42ec63a389f79"
 	pcTest.opts.ProviderURLString = "https://auth.sso.dev"
 	pcTest.opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev")
 	pcTest.opts.Validate()
@@ -474,10 +473,9 @@ func (p *ProcessCookieTest) LoadCookiedSession() (*providers.SessionState, error
 func TestLoadCookiedSession(t *testing.T) {
 
 	testCases := []struct {
-		name               string
-		want               *providers.SessionState
-		useOldCookieCipher bool
-		expectedError      error
+		name          string
+		want          *providers.SessionState
+		expectedError error
 	}{
 		{
 			name: "normal load with new cookie cipher",
@@ -488,27 +486,12 @@ func TestLoadCookiedSession(t *testing.T) {
 			expectedError: http.ErrNoCookie,
 			want:          nil,
 		},
-		{
-			name:               "using old cookie gives refresh error",
-			want:               testSession(),
-			useOldCookieCipher: true,
-			expectedError:      ErrRefreshCookie,
-		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			pcTest := NewProcessCookieTestWithDefaults()
 
-			var value string
-			var err error
-
-			if tc.useOldCookieCipher {
-				value, err = providers.MarshalSession(tc.want, pcTest.proxy.OldCookieCipher)
-			} else {
-				value, err = providers.MarshalSession(tc.want, pcTest.proxy.CookieCipher)
-
-			}
-
+			value, err := providers.MarshalSession(tc.want, pcTest.proxy.CookieCipher)
 			if err != nil {
 				t.Errorf("error marshaling session, value=%s error=%s", value, err)
 			}
@@ -1073,7 +1056,6 @@ func TestAuthenticate(t *testing.T) {
 		Session             *providers.SessionState
 		ExpectedErr         error
 		CookieExpectation   int // One of: {NewCookie, ClearCookie, KeepCookie}
-		UseOldCookie        bool
 		RefreshSessionFunc  func(*providers.SessionState, []string) (bool, error)
 		ValidateSessionFunc func(*providers.SessionState, []string) bool
 	}{
@@ -1150,19 +1132,6 @@ func TestAuthenticate(t *testing.T) {
 			RefreshSessionFunc: func(s *providers.SessionState, g []string) (bool, error) { return true, nil },
 		},
 		{
-			Name: "refresh when using old cookie cipher to load cookie",
-			Session: &providers.SessionState{
-				Email:            "email1@example.com",
-				AccessToken:      "my_access_token",
-				LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
-				RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
-				ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
-			},
-			UseOldCookie:       true,
-			CookieExpectation:  NewCookie,
-			RefreshSessionFunc: func(s *providers.SessionState, g []string) (bool, error) { return true, nil },
-		},
-		{
 			Name: "validation expired, user not OK, do not authenticate",
 			Session: &providers.SessionState{
 				Email:            "email1@example.com",
@@ -1194,7 +1163,6 @@ func TestAuthenticate(t *testing.T) {
 			// setup deafults
 			opts := NewOptions()
 			opts.CookieSecret = testEncodedCookieSecret
-			opts.OldCookieSecret = "574b776a7c934d6b9fc42ec63a389f79"
 			opts.CookieExpire = time.Duration(72) * time.Hour
 			opts.ClientID = "client ID"
 			opts.ClientSecret = "client secret"
@@ -1208,14 +1176,8 @@ func TestAuthenticate(t *testing.T) {
 				refreshSessionFunc:  tc.RefreshSessionFunc,
 				validateSessionFunc: tc.ValidateSessionFunc,
 			}
-			var value string
-			var err error
-			// save our session
-			if tc.UseOldCookie {
-				value, err = providers.MarshalSession(tc.Session, proxy.OldCookieCipher)
-			} else {
-				value, err = providers.MarshalSession(tc.Session, proxy.CookieCipher)
-			}
+
+			value, err := providers.MarshalSession(tc.Session, proxy.CookieCipher)
 			if err != nil {
 				t.Fatalf("unexpected err encoding session err:%s", err)
 			}

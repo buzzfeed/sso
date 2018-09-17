@@ -45,7 +45,6 @@ var (
 	ErrLifetimeExpired   = errors.New("user lifetime expired")
 	ErrUserNotAuthorized = errors.New("user not authorized")
 	ErrUnknownHost       = errors.New("unknown host")
-	ErrRefreshCookie     = errors.New("stale cookie, refresh")
 )
 
 const statusInvalidHost = 421
@@ -55,16 +54,15 @@ type EmailValidatorFn func(string) bool
 
 // OAuthProxy stores all the information associated with proxying the request.
 type OAuthProxy struct {
-	CookieCipher    aead.Cipher
-	OldCookieCipher aead.Cipher
-	CookieDomain    string
-	CookieExpire    time.Duration
-	CookieHTTPOnly  bool
-	CookieName      string
-	CookieSecure    bool
-	CookieSeed      string
-	CSRFCookieName  string
-	EmailValidator  EmailValidatorFn
+	CookieCipher   aead.Cipher
+	CookieDomain   string
+	CookieExpire   time.Duration
+	CookieHTTPOnly bool
+	CookieName     string
+	CookieSecure   bool
+	CookieSeed     string
+	CSRFCookieName string
+	EmailValidator EmailValidatorFn
 
 	redirectURL       *url.URL // the url to receive requests at
 	provider          providers.Provider
@@ -246,16 +244,6 @@ func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthPr
 	if err != nil {
 		return nil, fmt.Errorf("cookie-secret error: %s", err.Error())
 	}
-	// We have an old cookie secret because we do not want stale cookies to error because they are using the old cipher
-	// TODO: Remove this logic after the CookieExpire duraition passes, since cookies will be refreshed by then.
-	if opts.OldCookieSecret == "" {
-		opts.OldCookieSecret = opts.CookieSecret
-	}
-
-	oldCipher, err := aead.NewOldCipher(secretBytes(opts.OldCookieSecret))
-	if err != nil {
-		return nil, fmt.Errorf("cookie-secret error: %s", err.Error())
-	}
 
 	// we setup a runtime collector to emit stats to datadog
 	go func() {
@@ -264,15 +252,14 @@ func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthPr
 	}()
 
 	p := &OAuthProxy{
-		CookieCipher:    cipher,
-		OldCookieCipher: oldCipher,
-		CookieDomain:    opts.CookieDomain,
-		CookieExpire:    opts.CookieExpire,
-		CookieHTTPOnly:  opts.CookieHTTPOnly,
-		CookieName:      opts.CookieName,
-		CookieSecure:    opts.CookieSecure,
-		CookieSeed:      opts.CookieSecret,
-		CSRFCookieName:  fmt.Sprintf("%v_%v", opts.CookieName, "csrf"),
+		CookieCipher:   cipher,
+		CookieDomain:   opts.CookieDomain,
+		CookieExpire:   opts.CookieExpire,
+		CookieHTTPOnly: opts.CookieHTTPOnly,
+		CookieName:     opts.CookieName,
+		CookieSecure:   opts.CookieSecure,
+		CookieSeed:     opts.CookieSecret,
+		CSRFCookieName: fmt.Sprintf("%v_%v", opts.CookieName, "csrf"),
 
 		StatsdClient: opts.StatsdClient,
 
@@ -478,8 +465,6 @@ func (p *OAuthProxy) SetSessionCookie(rw http.ResponseWriter, req *http.Request,
 
 // LoadCookiedSession returns a SessionState from the cookie in the request.
 func (p *OAuthProxy) LoadCookiedSession(req *http.Request) (*providers.SessionState, error) {
-	logger := log.NewLogEntry()
-
 	c, err := req.Cookie(p.CookieName)
 	if err != nil {
 		// always http.ErrNoCookie
@@ -488,14 +473,7 @@ func (p *OAuthProxy) LoadCookiedSession(req *http.Request) (*providers.SessionSt
 
 	session, err := providers.UnmarshalSession(c.Value, p.CookieCipher)
 	if err != nil {
-		logger.Info("using old cookie cipher...")
-		// invalid cookie session, try using the old cookie cipher
-		session, err = providers.UnmarshalSession(c.Value, p.OldCookieCipher)
-		if err != nil {
-			logger.Error(err, "error loading sesion with old cookie cipher")
-			return nil, err
-		}
-		return session, ErrRefreshCookie
+		return nil, err
 	}
 
 	return session, nil
@@ -918,9 +896,9 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 			p.ClearSessionCookie(rw, req)
 		}
 	}()
+
 	session, err := p.LoadCookiedSession(req)
-	// TODO: Remove ErrCookieRefresh codepath after completing migration from AES-GCM to AES-SIV.
-	if err != nil && err != ErrRefreshCookie {
+	if err != nil {
 		// We loaded a cookie but it wasn't valid, clear it, and reject the request
 		logger.WithRemoteAddress(remoteAddr).Error(err, "error authenticating user")
 		return err
@@ -933,7 +911,7 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 		logger.WithUser(session.Email).Info(
 			"lifetime has expired; restarting authentication")
 		return ErrLifetimeExpired
-	} else if session.RefreshPeriodExpired() || err == ErrRefreshCookie {
+	} else if session.RefreshPeriodExpired() {
 		// Refresh period is the period in which the access token is valid. This is ultimately
 		// controlled by the upstream provider and tends to be around 1 hour.
 		ok, err := p.provider.RefreshSession(session, allowedGroups)

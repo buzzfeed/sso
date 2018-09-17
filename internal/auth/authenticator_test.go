@@ -409,31 +409,6 @@ func TestSignIn(t *testing.T) {
 			expectedCode: http.StatusFound,
 		},
 		{
-			name: "load session returns a refresh error with a session, successful refresh",
-			mockSessionStore: &sessions.MockSessionStore{
-				Session: &sessions.SessionState{
-					Email:            "email",
-					AccessToken:      "accesstoken",
-					RefreshToken:     "refresh",
-					LifetimeDeadline: time.Now().Add(time.Hour),
-					RefreshDeadline:  time.Now().Add(time.Hour),
-				},
-				LoadError: sessions.ErrRefreshCookie,
-			},
-			paramsMap: map[string]string{
-				"state":        "state",
-				"redirect_uri": "http://foo.example.com",
-			},
-			refreshResponse: providerRefreshResponse{
-				OK: true,
-			},
-			mockAuthCodeCipher: &aead.MockCipher{
-				MarshalString: "abcdefg",
-			},
-			validEmail:   true,
-			expectedCode: http.StatusFound,
-		},
-		{
 			name: "valid session state, successful save",
 			mockSessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
