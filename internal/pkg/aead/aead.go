@@ -98,7 +98,7 @@ func (c *MiscreantCipher) Marshal(s interface{}) (string, error) {
 	}
 
 	// base64-encode the result
-	encoded := base64.URLEncoding.EncodeToString(ciphertext)
+	encoded := base64.RawURLEncoding.EncodeToString(ciphertext)
 	return encoded, nil
 }
 
@@ -106,7 +106,7 @@ func (c *MiscreantCipher) Marshal(s interface{}) (string, error) {
 // byte slice the pased cipher, and unmarshals the resulting JSON into the struct pointer passed
 func (c *MiscreantCipher) Unmarshal(value string, s interface{}) error {
 	// convert base64 string value to bytes
-	ciphertext, err := base64.URLEncoding.DecodeString(value)
+	ciphertext, err := base64.RawURLEncoding.DecodeString(value)
 	if err != nil {
 		return err
 	}
