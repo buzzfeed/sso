@@ -33,6 +33,9 @@ jobs:
           command: |
             make dist/sso-proxy
       - run:
-          name: push sso-dev image
-          command: |
-            make imagepush
+            name: push sso-dev image
+            command: |
+              if [[ -z "${CIRCLE_PROJECT_OWNER_KEY}" ]]; then
+                docker login -u $DOCKER_USER -p $DOCKER_PASS
+                make imagepush
+              fi
