@@ -66,8 +66,9 @@ func setTestProvider(provider *providers.TestProvider) func(*Authenticator) erro
 	}
 }
 
-var testEncodedCookieSecret = base64.URLEncoding.EncodeToString([]byte("574b776a7c934d6b9fc42ec63a389f79"))
-var testAuthCodeSecret = base64.URLEncoding.EncodeToString([]byte("52592f914a1a499e8462724f4a9bf40a"))
+// generated using `openssl rand 32 -base64`
+var testEncodedCookieSecret = "x7xzsM1Ky4vGQPwqy6uTztfr3jtm/pIdRbJXgE0q8kU="
+var testAuthCodeSecret = "qICChm3wdjbjcWymm7PefwtPP6/PZv+udkFEubTeE38="
 
 func testOpts(proxyClientID, proxyClientSecret string) *Options {
 	opts := NewOptions()

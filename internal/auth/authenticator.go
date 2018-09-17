@@ -89,14 +89,17 @@ type getProfileResponse struct {
 // SetCookieStore sets the cookie store to use a miscreant cipher
 func SetCookieStore(opts *Options) func(*Authenticator) error {
 	return func(a *Authenticator) error {
-
-		authCodeCipher, err := aead.NewMiscreantCipher(sessions.SecretBytes(opts.AuthCodeSecret))
+		decodedAuthCodeSecret, err := base64.StdEncoding.DecodeString(opts.AuthCodeSecret)
+		if err != nil {
+			return err
+		}
+		authCodeCipher, err := aead.NewMiscreantCipher([]byte(decodedAuthCodeSecret))
 		if err != nil {
 			return err
 		}
 
 		cookieStore, err := sessions.NewCookieStore(opts.CookieName,
-			sessions.CreateMiscreantCookieCipher(opts.CookieSecret),
+			sessions.CreateMiscreantCookieCipher(opts.decodedCookieSecret),
 			func(c *sessions.CookieStore) error {
 				c.CookieDomain = opts.CookieDomain
 				c.CookieHTTPOnly = opts.CookieHTTPOnly

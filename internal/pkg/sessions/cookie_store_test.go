@@ -11,12 +11,12 @@ import (
 	"github.com/buzzfeed/sso/internal/pkg/testutil"
 )
 
-var testEncodedCookieSecret = base64.URLEncoding.EncodeToString([]byte("574b776a7c934d6b9fc42ec63a389f79"))
+var testEncodedCookieSecret, _ = base64.StdEncoding.DecodeString("qICChm3wdjbjcWymm7PefwtPP6/PZv+udkFEubTeE38=")
 
 func TestCreateMiscreantCookieCipher(t *testing.T) {
 	testCases := []struct {
 		name          string
-		cookieSecret  string
+		cookieSecret  []byte
 		expectedError bool
 	}{
 		{
@@ -26,7 +26,7 @@ func TestCreateMiscreantCookieCipher(t *testing.T) {
 
 		{
 			name:          "error when not base64 encoded",
-			cookieSecret:  "abcd",
+			cookieSecret:  []byte("abcd"),
 			expectedError: true,
 		},
 	}
