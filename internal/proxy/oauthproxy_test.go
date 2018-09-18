@@ -77,7 +77,7 @@ func TestNewReverseProxy(t *testing.T) {
 	backendHost := net.JoinHostPort(backendHostname, backendPort)
 	proxyURL, _ := url.Parse(backendURL.Scheme + "://" + backendHost + "/")
 
-	proxyHandler := NewReverseProxy(proxyURL, &UpstreamConfig{TLSSkipVerify: false})
+	proxyHandler := NewReverseProxy(proxyURL, &UpstreamConfig{TLSSkipVerify: false, PreserveHost: false})
 	frontend := httptest.NewServer(proxyHandler)
 	defer frontend.Close()
 
@@ -109,7 +109,7 @@ func TestNewRewriteReverseProxy(t *testing.T) {
 		},
 	}
 
-	rewriteProxy := NewRewriteReverseProxy(route, &UpstreamConfig{TLSSkipVerify: false})
+	rewriteProxy := NewRewriteReverseProxy(route, &UpstreamConfig{TLSSkipVerify: false, PreserveHost: false})
 
 	frontend := httptest.NewServer(rewriteProxy)
 	defer frontend.Close()
@@ -156,7 +156,7 @@ func TestNewReverseProxyHostname(t *testing.T) {
 		t.Fatalf("expected to parse to url: %s", err)
 	}
 
-	reverseProxy := NewReverseProxy(toURL, &UpstreamConfig{TLSSkipVerify: false})
+	reverseProxy := NewReverseProxy(toURL, &UpstreamConfig{TLSSkipVerify: false, PreserveHost: false})
 	from := httptest.NewServer(reverseProxy)
 	defer from.Close()
 
@@ -265,6 +265,129 @@ func TestNewReverseProxyTLSSkipVerify(t *testing.T) {
 	}
 }
 
+func TestNewReverseProxyPreserveHost(t *testing.T) {
+	type respStruct struct {
+		Host           string `json:"host"`
+		XForwardedHost string `json:"x-forwarded-host"`
+	}
+
+	to := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		body, err := json.Marshal(
+			&respStruct{
+				Host:           r.Host,
+				XForwardedHost: r.Header.Get("X-Forwarded-Host"),
+			},
+		)
+		if err != nil {
+			t.Fatalf("expected to marshal json: %s", err)
+		}
+		rw.Write(body)
+	}))
+	defer to.Close()
+
+	toURL, err := url.Parse(to.URL)
+	if err != nil {
+		t.Fatalf("expected to parse to url: %s", err)
+	}
+
+	reverseProxy := NewReverseProxy(toURL, &UpstreamConfig{PreserveHost: true})
+	from := httptest.NewServer(reverseProxy)
+	defer from.Close()
+
+	fromURL, err := url.Parse(from.URL)
+	if err != nil {
+		t.Fatalf("expected to parse from url: %s", err)
+	}
+
+	want := &respStruct{
+		Host:           fromURL.Host,
+		XForwardedHost: "something",
+	}
+
+	req, err := http.NewRequest("GET", from.URL, strings.NewReader(""))
+	if err != nil {
+		t.Fatalf("expected to be able to make req: %s", err)
+	}
+	req.Header.Set("X-Forwarded-Host", "something")
+
+	res, err := http.DefaultTransport.RoundTrip(req)
+	if err != nil {
+		t.Fatalf("expected to be able to get res: %s", err)
+	}
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("expected to read body: %s", err)
+	}
+
+	got := &respStruct{}
+	err = json.Unmarshal(body, got)
+	if err != nil {
+		t.Fatalf("expected to decode json: %s", err)
+	}
+
+	if !reflect.DeepEqual(want, got) {
+		t.Logf(" got host: %v", got.Host)
+		t.Logf("want host: %v", want.Host)
+
+		t.Logf(" got X-Forwarded-Host: %v", got.XForwardedHost)
+		t.Logf("want X-Forwarded-Host: %v", want.XForwardedHost)
+
+		t.Errorf("got unexpected response for Host or X-Forwarded-Host header")
+	}
+	if res.Header.Get("Cookie") != "" {
+		t.Errorf("expected Cookie header to be empty but was %s", res.Header.Get("Cookie"))
+	}
+
+}
+
+func TestNewRewriteReverseProxyPreserveHost(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		rw.WriteHeader(200)
+		rw.Write([]byte(req.Host))
+	}))
+	defer upstream.Close()
+
+	parsedUpstreamURL, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatalf("expected to parse upstream URL err:%q", err)
+	}
+
+	route := &RewriteRoute{
+		FromRegex: regexp.MustCompile("(.*)"),
+		ToTemplate: &url.URL{
+			Scheme: parsedUpstreamURL.Scheme,
+			Opaque: parsedUpstreamURL.Host,
+		},
+	}
+
+	rewriteProxy := NewRewriteReverseProxy(route, &UpstreamConfig{PreserveHost: true})
+
+	frontend := httptest.NewServer(rewriteProxy)
+	defer frontend.Close()
+
+	frontendURL, err := url.Parse(frontend.URL)
+	if err != nil {
+		t.Fatalf("expected to parse frontend url: %s", err)
+	}
+
+	resp, err := http.Get(frontend.URL)
+	if err != nil {
+		t.Fatalf("expected to make successful request err:%q", err)
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("expected to read body err:%q", err)
+	}
+
+	if string(body) != frontendURL.Host {
+		t.Logf("got  %v", string(body))
+		t.Logf("want %v", frontendURL.Host)
+		t.Fatalf("got unexpected response from upstream")
+	}
+}
+
 func TestDeleteSSOHeader(t *testing.T) {
 	testCases := []struct {
 		name                 string
@@ -364,7 +487,7 @@ func TestEncodedSlashes(t *testing.T) {
 	defer backend.Close()
 
 	b, _ := url.Parse(backend.URL)
-	proxyHandler := NewReverseProxy(b, &UpstreamConfig{TLSSkipVerify: false})
+	proxyHandler := NewReverseProxy(b, &UpstreamConfig{TLSSkipVerify: false, PreserveHost: false})
 	frontend := httptest.NewServer(proxyHandler)
 	defer frontend.Close()
 

@@ -53,6 +53,7 @@ type UpstreamConfig struct {
 	SkipAuthCompiledRegex []*regexp.Regexp
 	AllowedGroups         []string
 	TLSSkipVerify         bool
+	PreserveHost          bool
 	HMACAuth              hmacauth.HmacAuth
 	Timeout               time.Duration
 	FlushInterval         time.Duration
@@ -82,6 +83,7 @@ type OptionsConfig struct {
 	SkipAuthRegex      []string          `yaml:"skip_auth_regex"`
 	AllowedGroups      []string          `yaml:"allowed_groups"`
 	TLSSkipVerify      bool              `yaml:"tls_skip_verify"`
+	PreserveHost       bool              `yaml:"preserve_host"`
 	Timeout            time.Duration     `yaml:"timeout"`
 	FlushInterval      time.Duration     `yaml:"flush_interval"`
 	SkipRequestSigning bool              `yaml:"skip_request_signing"`
@@ -367,6 +369,7 @@ func parseOptionsConfig(proxy *UpstreamConfig) error {
 	proxy.FlushInterval = proxy.RouteConfig.Options.FlushInterval
 	proxy.HeaderOverrides = proxy.RouteConfig.Options.HeaderOverrides
 	proxy.TLSSkipVerify = proxy.RouteConfig.Options.TLSSkipVerify
+	proxy.PreserveHost = proxy.RouteConfig.Options.PreserveHost
 	proxy.SkipRequestSigning = proxy.RouteConfig.Options.SkipRequestSigning
 
 	proxy.RouteConfig.Options = nil

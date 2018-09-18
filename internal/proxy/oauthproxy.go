@@ -183,9 +183,13 @@ func NewReverseProxy(to *url.URL, config *UpstreamConfig) *httputil.ReverseProxy
 	proxy.Transport = newUpstreamTransport(config.TLSSkipVerify)
 	director := proxy.Director
 	proxy.Director = func(req *http.Request) {
-		req.Header.Add("X-Forwarded-Host", req.Host)
+		if req.Header.Get("X-Forwarded-Host") == "" {
+			req.Header.Set("X-Forwarded-Host", req.Host)
+		}
 		director(req)
-		req.Host = to.Host
+		if !config.PreserveHost {
+			req.Host = to.Host
+		}
 	}
 	return proxy
 }
@@ -212,9 +216,13 @@ func NewRewriteReverseProxy(route *RewriteRoute, config *UpstreamConfig) *httput
 		}
 		director := httputil.NewSingleHostReverseProxy(target).Director
 
-		req.Header.Add("X-Forwarded-Host", req.Host)
+		if req.Header.Get("X-Forwarded-Host") == "" {
+			req.Header.Set("X-Forwarded-Host", req.Host)
+		}
 		director(req)
-		req.Host = target.Host
+		if !config.PreserveHost {
+			req.Host = target.Host
+		}
 	}
 	return proxy
 }
