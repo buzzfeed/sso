@@ -2,6 +2,8 @@
 # quickstart process and may contain secrets
 env
 
+# Don't check in the dist/ directory created by make
+dist/
 
 # Compiled source #
 ###################
@@ -54,4 +56,3 @@ __pycache__/
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
-
