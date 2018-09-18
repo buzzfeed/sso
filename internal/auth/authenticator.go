@@ -12,7 +12,6 @@ import (
 	"github.com/buzzfeed/sso/internal/auth/providers"
 	"github.com/buzzfeed/sso/internal/pkg/aead"
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
-	"github.com/buzzfeed/sso/internal/pkg/payloads"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	"github.com/buzzfeed/sso/internal/pkg/templates"
 
@@ -87,28 +86,6 @@ type getProfileResponse struct {
 	Groups []string `json:"groups"`
 }
 
-// TODO: remove this after the cookie refresh time expires.
-func setPayloads(opts *Options) func(*sessions.CookieStore) error {
-	return func(s *sessions.CookieStore) error {
-		// TODO: keep the old cookie cipher for the cookie refresh time
-		var cipher *payloads.Cipher
-
-		if opts.OldCookieSecret == "" {
-			return fmt.Errorf("no old cookie secret set in options")
-		}
-		var err error
-		cipher, err = payloads.NewCipher(sessions.SecretBytes(opts.OldCookieSecret))
-		if err != nil {
-			return err
-		}
-
-		s.OldPayloadCipher = cipher
-		s.OldPayloadSecret = opts.OldCookieSecret
-		return nil
-	}
-
-}
-
 // SetCookieStore sets the cookie store to use a miscreant cipher
 func SetCookieStore(opts *Options) func(*Authenticator) error {
 	return func(a *Authenticator) error {
@@ -126,7 +103,7 @@ func SetCookieStore(opts *Options) func(*Authenticator) error {
 				c.CookieExpire = opts.CookieExpire
 				c.CookieSecure = opts.CookieSecure
 				return nil
-			}, setPayloads(opts))
+			})
 
 		if err != nil {
 			return err
@@ -136,18 +113,6 @@ func SetCookieStore(opts *Options) func(*Authenticator) error {
 		a.sessionStore = cookieStore
 		a.AuthCodeCipher = authCodeCipher
 		return nil
-	}
-}
-
-// LoadSession wraps the SessionStore LoadSession function, conditionally calling the custom AuthLoadSession
-// function if SessionStore is a CookieStore so that it will fall back on the old payloads cipher if necessary.
-// TODO: remove this once the cookie refresh time has passed.
-func (p *Authenticator) LoadSession(req *http.Request) (*sessions.SessionState, error) {
-	switch s := p.sessionStore.(type) {
-	case *sessions.CookieStore:
-		return s.AuthLoadSession(req)
-	default:
-		return s.LoadSession(req)
 	}
 }
 
@@ -283,14 +248,8 @@ func (p *Authenticator) authenticate(rw http.ResponseWriter, req *http.Request) 
 	logger := log.NewLogEntry()
 	remoteAddr := getRemoteAddr(req)
 	// TODO remove refresh cookie bool when we remove payloads cipher logic
-	var refreshCookie bool
-	session, err := p.LoadSession(req)
-	switch err {
-	case nil:
-		break
-	case sessions.ErrRefreshCookie:
-		refreshCookie = true
-	default:
+	session, err := p.sessionStore.LoadSession(req)
+	if err != nil {
 		logger.WithRemoteAddress(remoteAddr).Error(err, "error loading session")
 		p.sessionStore.ClearSession(rw, req)
 		return nil, err
@@ -302,7 +261,7 @@ func (p *Authenticator) authenticate(rw http.ResponseWriter, req *http.Request) 
 		return nil, sessions.ErrLifetimeExpired
 	}
 
-	if session.RefreshPeriodExpired() || refreshCookie {
+	if session.RefreshPeriodExpired() {
 		ok, err := p.provider.RefreshSessionIfNeeded(session)
 		// We failed to refresh the session successfully
 		// clear the cookie and reject the request
@@ -477,7 +436,7 @@ func (p *Authenticator) SignOut(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	session, err := p.LoadSession(req)
+	session, err := p.sessionStore.LoadSession(req)
 	switch err {
 	case nil:
 		break
@@ -521,7 +480,7 @@ func (p *Authenticator) SignOutPage(rw http.ResponseWriter, req *http.Request, m
 	// validateRedirectURI middleware already ensures that this is a valid URL
 	redirectURI := req.Form.Get("redirect_uri")
 
-	session, err := p.LoadSession(req)
+	session, err := p.sessionStore.LoadSession(req)
 	if err != nil {
 		http.Redirect(rw, req, redirectURI, http.StatusFound)
 		return

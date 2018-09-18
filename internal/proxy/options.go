@@ -62,13 +62,12 @@ type Options struct {
 	TCPWriteTimeout time.Duration `envconfig:"TCP_WRITE_TIMEOUT" default:"30s"`
 	TCPReadTimeout  time.Duration `envconfig:"TCP_READ_TIMEOUT" default:"30s"`
 
-	CookieName      string
-	CookieSecret    string        `envconfig:"COOKIE_SECRET"`
-	OldCookieSecret string        `envconfig:"OLD_COOKIE_SECRET"`
-	CookieDomain    string        `envconfig:"COOKIE_DOMAIN"`
-	CookieExpire    time.Duration `envconfig:"COOKIE_EXPIRE" default:"168h"`
-	CookieSecure    bool          `envconfig:"COOKIE_SECURE" default:"true"`
-	CookieHTTPOnly  bool          `envconfig:"COOKIE_HTTP_ONLY"`
+	CookieName     string
+	CookieSecret   string        `envconfig:"COOKIE_SECRET"`
+	CookieDomain   string        `envconfig:"COOKIE_DOMAIN"`
+	CookieExpire   time.Duration `envconfig:"COOKIE_EXPIRE" default:"168h"`
+	CookieSecure   bool          `envconfig:"COOKIE_SECURE" default:"true"`
+	CookieHTTPOnly bool          `envconfig:"COOKIE_HTTP_ONLY"`
 
 	// These options allow for other providers besides Google, with potential overrides.
 	Provider string `envconfig:"PROVIDER" default:"google"`

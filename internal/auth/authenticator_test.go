@@ -17,7 +17,6 @@ import (
 
 	"github.com/buzzfeed/sso/internal/auth/providers"
 	"github.com/buzzfeed/sso/internal/pkg/aead"
-	"github.com/buzzfeed/sso/internal/pkg/payloads"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	"github.com/buzzfeed/sso/internal/pkg/templates"
 	"github.com/buzzfeed/sso/internal/pkg/testutil"
@@ -25,20 +24,6 @@ import (
 
 func init() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
-
-}
-
-func createEncryptedValue(t *testing.T, createTime time.Time, token, salt, name string) (*payloads.Cipher, string) {
-	c, err := payloads.NewCipher([]byte("0123456789abcdefghijklmnopqrstuv"))
-	if err != nil {
-		t.Fatalf("error creating cipher: %s", err.Error())
-	}
-	payload := payloads.New(name, token, salt, createTime, c)
-	encrypted, err := payloads.Encrypt(payload)
-	if err != nil {
-		t.Fatalf("error encrypting payload: %s", err.Error())
-	}
-	return c, encrypted
 
 }
 
@@ -394,31 +379,6 @@ func TestSignIn(t *testing.T) {
 					LifetimeDeadline: time.Now().Add(time.Hour),
 					RefreshDeadline:  time.Now().Add(-time.Hour),
 				},
-			},
-			paramsMap: map[string]string{
-				"state":        "state",
-				"redirect_uri": "http://foo.example.com",
-			},
-			refreshResponse: providerRefreshResponse{
-				OK: true,
-			},
-			mockAuthCodeCipher: &aead.MockCipher{
-				MarshalString: "abcdefg",
-			},
-			validEmail:   true,
-			expectedCode: http.StatusFound,
-		},
-		{
-			name: "load session returns a refresh error with a session, successful refresh",
-			mockSessionStore: &sessions.MockSessionStore{
-				Session: &sessions.SessionState{
-					Email:            "email",
-					AccessToken:      "accesstoken",
-					RefreshToken:     "refresh",
-					LifetimeDeadline: time.Now().Add(time.Hour),
-					RefreshDeadline:  time.Now().Add(time.Hour),
-				},
-				LoadError: sessions.ErrRefreshCookie,
 			},
 			paramsMap: map[string]string{
 				"state":        "state",

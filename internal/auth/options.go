@@ -68,14 +68,13 @@ type Options struct {
 
 	Footer string `envconfig:"FOOTER"`
 
-	CookieName      string
-	CookieSecret    string        `envconfig:"COOKIE_SECRET"`
-	OldCookieSecret string        `envconfig:"OLD_COOKIE_SECRET"`
-	CookieDomain    string        `envconfig:"COOKIE_DOMAIN"`
-	CookieExpire    time.Duration `envconfig:"COOKIE_EXPIRE" default:"168h"`
-	CookieRefresh   time.Duration `envconfig:"COOKIE_REFRESH" default:"1h"`
-	CookieSecure    bool          `envconfig:"COOKIE_SECURE" default:"true"`
-	CookieHTTPOnly  bool          `envconfig:"COOKIE_HTTP_ONLY" default:"true"`
+	CookieName     string
+	CookieSecret   string        `envconfig:"COOKIE_SECRET"`
+	CookieDomain   string        `envconfig:"COOKIE_DOMAIN"`
+	CookieExpire   time.Duration `envconfig:"COOKIE_EXPIRE" default:"168h"`
+	CookieRefresh  time.Duration `envconfig:"COOKIE_REFRESH" default:"1h"`
+	CookieSecure   bool          `envconfig:"COOKIE_SECURE" default:"true"`
+	CookieHTTPOnly bool          `envconfig:"COOKIE_HTTP_ONLY" default:"true"`
 
 	RequestTimeout  time.Duration `envconfig:"REQUEST_TIMEOUT" default:"2s"`
 	TCPWriteTimeout time.Duration `envconfig:"TCP_WRITE_TIMEOUT" default:"30s"`

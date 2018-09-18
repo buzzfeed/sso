@@ -2,7 +2,6 @@ package sessions
 
 import (
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -11,11 +10,7 @@ import (
 	"time"
 
 	"github.com/buzzfeed/sso/internal/pkg/aead"
-	"github.com/buzzfeed/sso/internal/pkg/payloads"
 )
-
-// ErrRefreshCookie is the error for a stale cookie
-var ErrRefreshCookie = errors.New("stale cookie, refresh")
 
 // CSRFStore has the functions for setting, getting, and clearing the CSRF cookie
 type CSRFStore interface {
@@ -42,8 +37,6 @@ type CookieStore struct {
 	CookieHTTPOnly     bool
 	CookieDomain       string
 	CookieCipher       aead.Cipher
-	OldPayloadCipher   *payloads.Cipher
-	OldPayloadSecret   string
 	SessionLifetimeTTL time.Duration
 }
 
@@ -188,30 +181,4 @@ func (s *CookieStore) SaveSession(rw http.ResponseWriter, req *http.Request, ses
 
 	s.setSessionCookie(rw, req, value)
 	return nil
-}
-
-// AuthLoadSession attempts to decrypt the cookie value from the request ande set its information in a session
-// state. TODO: remove this when we transition ciphers to only use one
-func (s *CookieStore) AuthLoadSession(req *http.Request) (*SessionState, error) {
-	c, err := req.Cookie(s.Name)
-	if err != nil {
-		// always http.ErrNoCookie
-		return nil, err
-	}
-	session, err := UnmarshalSession(c.Value, s.CookieCipher)
-	// if the payload cipher is set
-	if err != nil {
-		// attempt to decrypt with the old cipher
-		payload, err := payloads.Decrypt(s.Name, c.Value, s.OldPayloadSecret, s.CookieExpire, s.OldPayloadCipher)
-		if err != nil {
-			return nil, err
-		}
-
-		session, err := NewSessionState(payload.Value, s.SessionLifetimeTTL)
-		if err != nil {
-			return nil, err
-		}
-		return session, ErrRefreshCookie
-	}
-	return session, nil
 }
