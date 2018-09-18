@@ -35,7 +35,7 @@ jobs:
       - run:
             name: push sso-dev image
             command: |
-              if [[ -z "${CIRCLE_PROJECT_OWNER_KEY}" ]]; then
+              if [[ -n $DOCKER_USER ]]; then
                 docker login -u $DOCKER_USER -p $DOCKER_PASS
                 make imagepush
               fi
