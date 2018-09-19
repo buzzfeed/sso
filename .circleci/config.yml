@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/golang:1.9
+      - image: circleci/golang:1.10
     working_directory: /go/src/github.com/buzzfeed/sso
     steps:
       - checkout
@@ -15,7 +15,7 @@ jobs:
           command: |
             cp Godeps /tmp/Godeps
             cp gpm /tmp/gpm
-            cd /tmp && ./gpm
+            cd /tmp && ./gpm install
       - run:
           name: copy source
           command: |

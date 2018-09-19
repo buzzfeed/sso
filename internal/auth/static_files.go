@@ -3,6 +3,11 @@ package auth
 import (
 	"net/http"
 	"os"
+
+	"github.com/rakyll/statik/fs"
+
+	// Statik makes assets available via a blank import
+	_ "github.com/buzzfeed/sso/internal/auth/statik"
 )
 
 // noDirectoryFilesystem is used to prevent an http.FileServer from providing directory listings
@@ -28,4 +33,15 @@ func (fs noDirectoryFS) Open(name string) (http.File, error) {
 	}
 
 	return f, nil
+}
+
+//go:generate $GOPATH/bin/statik -src=./static
+
+func loadFSHandler() (http.Handler, error) {
+	statikFS, err := fs.New()
+	if err != nil {
+		return nil, err
+	}
+
+	return http.FileServer(noDirectoryFS{statikFS}), nil
 }

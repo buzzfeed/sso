@@ -164,6 +164,8 @@ func NewAuthenticator(opts *Options, optionFuncs ...func(*Authenticator) error) 
 }
 
 func (p *Authenticator) newMux() http.Handler {
+	logger := log.NewLogEntry()
+
 	mux := http.NewServeMux()
 
 	// we setup global endpoints that should respond to any hostname
@@ -181,8 +183,11 @@ func (p *Authenticator) newMux() http.Handler {
 	serviceMux.HandleFunc("/validate", p.withMethods(p.validateClientID(p.validateClientSecret(p.ValidateToken)), "GET"))
 	serviceMux.HandleFunc("/redeem", p.withMethods(p.validateClientID(p.validateClientSecret(p.Redeem)), "POST"))
 	serviceMux.HandleFunc("/refresh", p.withMethods(p.validateClientID(p.validateClientSecret(p.Refresh)), "POST"))
-	// serve static files but prevent directory listings, see static_files.go
-	serviceMux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(noDirectoryFS{http.Dir("./static")})))
+	fsHandler, err := loadFSHandler()
+	if err != nil {
+		logger.Fatal(err)
+	}
+	serviceMux.Handle("/static/", http.StripPrefix("/static/", fsHandler))
 
 	// NOTE: we have to include trailing slash for the router to match the host header
 	host := p.Host

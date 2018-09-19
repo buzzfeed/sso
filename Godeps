@@ -12,3 +12,4 @@ github.com/benbjohnson/clock             7dc76406b6d3c05b5f71a86293cbcf3c4ea03b1
 github.com/kelseyhightower/envconfig     v1.3.0
 github.com/miscreant/miscreant-go        6b98fbe3dd42dfd24a8ecbabdb3586ada20dc5f8
 github.com/sirupsen/logrus               e54a77765aca7bbdd8e56c1c54f60579968b2dc9
+github.com/rakyll/statik                 v0.1.4
