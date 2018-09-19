@@ -859,7 +859,7 @@ func (p *OAuthProxy) Proxy(rw http.ResponseWriter, req *http.Request) {
 			// The user session is invalid and we can't decode it.
 			// This can happen for a variety of reasons but the most common non-malicious
 			// case occurs when the session encoding schema changes. We manage this ux
-			// by trigger the start of a new oauth flow.
+			// by triggering the start of the oauth flow.
 			p.OAuthStart(rw, req, tags)
 			return
 		default:
