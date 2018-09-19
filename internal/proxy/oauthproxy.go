@@ -93,9 +93,11 @@ type StateParameter struct {
 
 // UpstreamProxy stores information necessary for proxying the request back to the upstream.
 type UpstreamProxy struct {
-	cookieName string
-	handler    http.Handler
-	auth       hmacauth.HmacAuth
+	name         string
+	cookieName   string
+	handler      http.Handler
+	auth         hmacauth.HmacAuth
+	statsdClient *statsd.Client
 }
 
 // deleteSSOCookieHeader deletes the session cookie from the request header string.
@@ -116,7 +118,15 @@ func (u *UpstreamProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if u.auth != nil {
 		u.auth.SignRequest(r)
 	}
+
+	start := time.Now()
 	u.handler.ServeHTTP(w, r)
+	duration := time.Now().Sub(start)
+
+	tags := []string{
+		fmt.Sprintf("service_name:%s", u.name),
+	}
+	u.statsdClient.Timing("proxy_request", duration, tags, 1.0)
 }
 
 // upstreamTransport is used to ensure that upstreams cannot override the
@@ -183,9 +193,11 @@ func NewRewriteReverseProxy(route *RewriteRoute) *httputil.ReverseProxy {
 // NewReverseProxyHandler creates a new http.Handler given a httputil.ReverseProxy
 func NewReverseProxyHandler(reverseProxy *httputil.ReverseProxy, opts *Options, config *UpstreamConfig) (http.Handler, []string) {
 	upstreamProxy := &UpstreamProxy{
-		handler:    reverseProxy,
-		auth:       config.HMACAuth,
-		cookieName: opts.CookieName,
+		name:         config.Service,
+		handler:      reverseProxy,
+		auth:         config.HMACAuth,
+		cookieName:   opts.CookieName,
+		statsdClient: opts.StatsdClient,
 	}
 	if config.FlushInterval != 0 {
 		return NewStreamingHandler(upstreamProxy, opts, config), []string{"handler:streaming"}
