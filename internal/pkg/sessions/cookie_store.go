@@ -2,15 +2,19 @@ package sessions
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/buzzfeed/sso/internal/pkg/aead"
+	log "github.com/buzzfeed/sso/internal/pkg/logging"
 )
+
+// ErrInvalidSession is an error for invalid sessions.
+var ErrInvalidSession = errors.New("invalid session")
 
 // CSRFStore has the functions for setting, getting, and clearing the CSRF cookie
 type CSRFStore interface {
@@ -102,13 +106,14 @@ func NewCookieStore(cookieName string, optFuncs ...func(*CookieStore) error) (*C
 }
 
 func (s *CookieStore) makeCookie(req *http.Request, name string, value string, expiration time.Duration, now time.Time) *http.Cookie {
+	logger := log.NewLogEntry()
 	domain := req.Host
 	if h, _, err := net.SplitHostPort(domain); err == nil {
 		domain = h
 	}
 	if s.CookieDomain != "" {
 		if !strings.HasSuffix(domain, s.CookieDomain) {
-			log.Printf("Warning: Using configured cookie domain. request_host=%s cookie_domain=%s", domain, s.CookieDomain)
+			logger.WithRequestHost(domain).WithCookieDomain(s.CookieDomain).Warn("Warning: Using configured cookie domain.")
 		}
 		domain = s.CookieDomain
 	}
@@ -160,6 +165,7 @@ func (s *CookieStore) setSessionCookie(rw http.ResponseWriter, req *http.Request
 
 // LoadSession returns a SessionState from the cookie in the request.
 func (s *CookieStore) LoadSession(req *http.Request) (*SessionState, error) {
+	logger := log.NewLogEntry()
 	c, err := req.Cookie(s.Name)
 	if err != nil {
 		// always http.ErrNoCookie
@@ -167,7 +173,8 @@ func (s *CookieStore) LoadSession(req *http.Request) (*SessionState, error) {
 	}
 	session, err := UnmarshalSession(c.Value, s.CookieCipher)
 	if err != nil {
-		return nil, err
+		logger.WithRequestHost(req.Host).WithError(err).Error("error unmarshaling session")
+		return nil, ErrInvalidSession
 	}
 	return session, nil
 }
