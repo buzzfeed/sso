@@ -10,5 +10,5 @@ google.golang.org/api/admin/directory/v1 650535c7d6201e8304c92f38c922a9a3a36c687
 cloud.google.com/go/compute/metadata     v0.7.0
 github.com/benbjohnson/clock             7dc76406b6d3c05b5f71a86293cbcf3c4ea03b19
 github.com/kelseyhightower/envconfig     v1.3.0
-github.com/miscreant/miscreant/go        9a32f76c00c1294ef308947092687049a057381b
+github.com/miscreant/miscreant-go        6b98fbe3dd42dfd24a8ecbabdb3586ada20dc5f8
 github.com/sirupsen/logrus               e54a77765aca7bbdd8e56c1c54f60579968b2dc9
