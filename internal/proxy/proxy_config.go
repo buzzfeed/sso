@@ -17,6 +17,10 @@ const (
 	rewrite = "rewrite"
 )
 
+var (
+	space = regexp.MustCompile(`\s+`)
+)
+
 // ServiceConfig represents the configuration for a given service
 type ServiceConfig struct {
 	Service        string                     `yaml:"service"`
@@ -302,7 +306,7 @@ func resolveUpstreamConfig(service *ServiceConfig, override string) (*UpstreamCo
 		return nil, err
 	}
 
-	dst.Service = service.Service
+	dst.Service = cleanWhiteSpace(service.Service)
 	return dst, nil
 }
 
@@ -362,4 +366,9 @@ func parseOptionsConfig(proxy *UpstreamConfig) error {
 	proxy.RouteConfig.Options = nil
 
 	return nil
+}
+
+func cleanWhiteSpace(s string) string {
+	// This trims all white space from a service name and collapses all remaining space to `_`
+	return space.ReplaceAllString(strings.TrimSpace(s), "_") //
 }
