@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 
-	miscreant "github.com/miscreant/miscreant/go"
+	miscreant "github.com/miscreant/miscreant-go"
 )
 
 const miscreantNonceSize = 16
