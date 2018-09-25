@@ -6,10 +6,12 @@ build: dist/sso-auth dist/sso-proxy
 
 dist/sso-auth:
 	mkdir -p dist
+	go generate ./...
 	go build -o dist/sso-auth ./cmd/sso-auth
 
 dist/sso-proxy:
 	mkdir -p dist
+	go generate ./...
 	go build -o dist/sso-proxy ./cmd/sso-proxy
 
 test:
