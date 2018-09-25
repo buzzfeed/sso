@@ -1295,6 +1295,15 @@ func TestProxyXHRErrorHandling(t *testing.T) {
 			ExpectedCode: http.StatusUnauthorized,
 		},
 		{
+			Name:    "no session should return error code when XMLHttpRequest",
+			Session: nil,
+			Method:  "GET",
+			Header: map[string]string{
+				"X-Requested-With": "XMLHttpRequest",
+			},
+			ExpectedCode: http.StatusUnauthorized,
+		},
+		{
 			Name: "valid session should proxy as normal when XMLHttpRequest",
 			Session: &providers.SessionState{
 				LifetimeDeadline: time.Now().Add(time.Duration(1) * time.Hour),
