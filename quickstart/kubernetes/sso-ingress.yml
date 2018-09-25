@@ -1,0 +1,28 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: sso
+  namespace: sso
+spec:
+  tls:
+    - secretName: star-sso-mydomain-tls-secret
+      hosts:
+        - "*.sso.mydomain.com"
+    - secretName: sso-auth-mydomain-tls-secret
+      hosts:
+        - "sso-auth.mydomain.com"
+  rules:
+    - host: "*.sso.mydomain.com"
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: sso-proxy
+              servicePort: 80
+    - host: "sso-auth.mydomain.com"
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: sso-auth
+              servicePort: 80

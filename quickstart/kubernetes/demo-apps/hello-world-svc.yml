@@ -1,0 +1,11 @@
+kind: Service
+apiVersion: v1
+metadata:
+  labels:
+    k8s-app: hello-world
+  name: hello-world
+spec:
+  ports:
+  - port: 80
+  selector:
+    k8s-app: hello-world

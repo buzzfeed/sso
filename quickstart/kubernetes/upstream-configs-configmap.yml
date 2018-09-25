@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: upstream-configs
+  namespace: sso
+data:
+  upstream_configs.yml: |-
+    - service: hello-world
+      default:
+        from: hello-world.sso.mydomain.com
+        to: http://hello-world.default.svc.cluster.local

@@ -1,0 +1,19 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: httpbin
+  labels:
+    k8s-app: httpbin
+  namespace: test
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        k8s-app: httpbin
+    spec:
+      containers:
+      - image: mccutchen/go-httpbin:latest
+        name: httpbin
+        ports:
+        - containerPort: 8080

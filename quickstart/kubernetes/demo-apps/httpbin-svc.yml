@@ -1,0 +1,12 @@
+kind: Service
+apiVersion: v1
+metadata:
+  labels:
+    k8s-app: httpbin
+  name: httpbin
+spec:
+  ports:
+  - port: 80
+    targetPort: 8080
+  selector:
+    k8s-app: httpbin

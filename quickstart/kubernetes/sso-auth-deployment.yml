@@ -1,0 +1,106 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: sso-auth
+  labels:
+    k8s-app: sso-auth
+  namespace: sso
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        k8s-app: sso-auth
+    spec:
+      containers:
+      - image: buzzfeed/sso:latest
+        name: sso-auth
+        command: ["/bin/sso-auth"]
+        ports:
+        - containerPort: 4180
+        env:
+          - name: GOOGLE_ADMIN_EMAIL
+            valueFrom:
+              secretKeyRef:
+                name: google-admin-email
+                key: email
+          - name: GOOGLE_SERVICE_ACCOUNT_JSON
+            value: /creds/service_account.json
+          - name: SSO_EMAIL_DOMAIN
+            value: 'mydomain.com'
+          - name: HOST
+            value: sso-auth.mydomain.com
+          - name: REDIRECT_URL
+            value: https://sso-auth.mydomain.com
+          - name: PROXY_ROOT_DOMAIN
+            value: mydomain.com
+          - name: CLIENT_ID
+            valueFrom:
+              secretKeyRef:
+                name: google-client-id
+                key: client-id
+          - name: CLIENT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: google-client-secret
+                key: client-secret
+          - name: PROXY_CLIENT_ID
+            valueFrom:
+              secretKeyRef:
+                name: proxy-client-id
+                key: proxy-client-id
+          - name: PROXY_CLIENT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: proxy-client-secret
+                key: proxy-client-secret
+          - name: AUTH_CODE_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: auth-code-secret
+                key: auth-code-secret
+          - name: COOKIE_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: auth-cookie-secret
+                key: auth-cookie-secret
+          # OLD_COOKIE_SECRET is the same as COOKIE_SECRET, not sure why its even needed at this point
+          - name: OLD_COOKIE_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: auth-cookie-secret
+                key: auth-cookie-secret
+          # STATSD_HOST and STATSD_PORT must be defined or the app wont launch, they dont need to be a real host / port
+          - name: STATSD_HOST
+            value: localhost
+          - name: STATSD_PORT
+            value: "11111"
+          - name: COOKIE_SECURE
+            value: "false"
+          - name: CLUSTER
+            value: dev
+          - name: VIRTUAL_HOST
+            value: sso-auth.mydomain.com
+        readinessProbe:
+          httpGet:
+            path: /ping
+            port: 4180
+            scheme: HTTP
+        livenessProbe:
+          httpGet:
+            path: /ping
+            port: 4180
+            scheme: HTTP
+          initialDelaySeconds: 10
+          timeoutSeconds: 1
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        volumeMounts:
+          - name: google-service-account
+            mountPath: "/creds"
+      volumes:
+        - name: google-service-account
+          secret:
+            secretName: google-service-account
