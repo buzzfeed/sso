@@ -45,6 +45,7 @@ var (
 	ErrLifetimeExpired   = errors.New("user lifetime expired")
 	ErrUserNotAuthorized = errors.New("user not authorized")
 	ErrUnknownHost       = errors.New("unknown host")
+	ErrInvalidSession    = errors.New("invalid session")
 )
 
 const statusInvalidHost = 421
@@ -92,9 +93,11 @@ type StateParameter struct {
 
 // UpstreamProxy stores information necessary for proxying the request back to the upstream.
 type UpstreamProxy struct {
-	cookieName string
-	handler    http.Handler
-	auth       hmacauth.HmacAuth
+	name         string
+	cookieName   string
+	handler      http.Handler
+	auth         hmacauth.HmacAuth
+	statsdClient *statsd.Client
 }
 
 // deleteSSOCookieHeader deletes the session cookie from the request header string.
@@ -115,7 +118,15 @@ func (u *UpstreamProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if u.auth != nil {
 		u.auth.SignRequest(r)
 	}
+
+	start := time.Now()
 	u.handler.ServeHTTP(w, r)
+	duration := time.Now().Sub(start)
+
+	tags := []string{
+		fmt.Sprintf("service_name:%s", u.name),
+	}
+	u.statsdClient.Timing("proxy_request", duration, tags, 1.0)
 }
 
 // upstreamTransport is used to ensure that upstreams cannot override the
@@ -182,9 +193,11 @@ func NewRewriteReverseProxy(route *RewriteRoute) *httputil.ReverseProxy {
 // NewReverseProxyHandler creates a new http.Handler given a httputil.ReverseProxy
 func NewReverseProxyHandler(reverseProxy *httputil.ReverseProxy, opts *Options, config *UpstreamConfig) (http.Handler, []string) {
 	upstreamProxy := &UpstreamProxy{
-		handler:    reverseProxy,
-		auth:       config.HMACAuth,
-		cookieName: opts.CookieName,
+		name:         config.Service,
+		handler:      reverseProxy,
+		auth:         config.HMACAuth,
+		cookieName:   opts.CookieName,
+		statsdClient: opts.StatsdClient,
 	}
 	if config.FlushInterval != 0 {
 		return NewStreamingHandler(upstreamProxy, opts, config), []string{"handler:streaming"}
@@ -465,6 +478,8 @@ func (p *OAuthProxy) SetSessionCookie(rw http.ResponseWriter, req *http.Request,
 
 // LoadCookiedSession returns a SessionState from the cookie in the request.
 func (p *OAuthProxy) LoadCookiedSession(req *http.Request) (*providers.SessionState, error) {
+	logger := log.NewLogEntry().WithRemoteAddress(getRemoteAddr(req))
+
 	c, err := req.Cookie(p.CookieName)
 	if err != nil {
 		// always http.ErrNoCookie
@@ -473,7 +488,10 @@ func (p *OAuthProxy) LoadCookiedSession(req *http.Request) (*providers.SessionSt
 
 	session, err := providers.UnmarshalSession(c.Value, p.CookieCipher)
 	if err != nil {
-		return nil, err
+		tags := []string{"error:unmarshaling_session"}
+		p.StatsdClient.Incr("application_error", tags, 1.0)
+		logger.Error(err, "unable to unmarshal session")
+		return nil, ErrInvalidSession
 	}
 
 	return session, nil
@@ -643,7 +661,7 @@ func (p *OAuthProxy) OAuthStart(rw http.ResponseWriter, req *http.Request, tags 
 	// this value will be unique since we always use a randomized nonce as part of marshaling
 	encryptedState, err := p.CookieCipher.Marshal(state)
 	if err != nil {
-		tags = append(tags, "error_marshalling_state_parameter")
+		tags = append(tags, "error:marshaling_state_parameter")
 		p.StatsdClient.Incr("application_error", tags, 1.0)
 		logger.Error(err, "failed to marshal state parameter for state query parameter")
 		p.ErrorPage(rw, req, http.StatusInternalServerError, "Internal Error", err.Error())
@@ -849,6 +867,13 @@ func (p *OAuthProxy) Proxy(rw http.ResponseWriter, req *http.Request) {
 			// User's lifetime expired, we trigger the start of the oauth flow
 			p.OAuthStart(rw, req, tags)
 			return
+		case ErrInvalidSession:
+			// The user session is invalid and we can't decode it.
+			// This can happen for a variety of reasons but the most common non-malicious
+			// case occurs when the session encoding schema changes. We manage this ux
+			// by triggering the start of the oauth flow.
+			p.OAuthStart(rw, req, tags)
+			return
 		default:
 			logger.Error(err, "unknown error authenticating user")
 			tags = append(tags, "error:internal_error")
@@ -878,10 +903,8 @@ func (p *OAuthProxy) Proxy(rw http.ResponseWriter, req *http.Request) {
 // Authenticate authenticates a request by checking for a session cookie, and validating its expiration,
 // clearing the session cookie if it's invalid and returning an error if necessary..
 func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (err error) {
-	logger := log.NewLogEntry()
+	logger := log.NewLogEntry().WithRemoteAddress(getRemoteAddr(req))
 
-	// use for logging
-	remoteAddr := getRemoteAddr(req)
 	route, ok := p.router(req)
 	if !ok {
 		logger.WithRequestHost(req.Host).Info(
@@ -900,7 +923,7 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 	session, err := p.LoadCookiedSession(req)
 	if err != nil {
 		// We loaded a cookie but it wasn't valid, clear it, and reject the request
-		logger.WithRemoteAddress(remoteAddr).Error(err, "error authenticating user")
+		logger.Error(err, "error authenticating user")
 		return err
 	}
 

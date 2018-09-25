@@ -171,6 +171,7 @@ func (p *Authenticator) newMux() http.Handler {
 
 	// we setup our service mux to handle service routes that use the required host header
 	serviceMux := http.NewServeMux()
+	serviceMux.HandleFunc("/ping", p.withMethods(p.PingPage, "GET"))
 	serviceMux.HandleFunc("/robots.txt", p.withMethods(p.RobotsTxt, "GET"))
 	serviceMux.HandleFunc("/start", p.withMethods(p.OAuthStart, "GET"))
 	serviceMux.HandleFunc("/sign_in", p.withMethods(p.validateClientID(p.validateRedirectURI(p.validateSignature(p.SignIn))), "GET"))
@@ -340,7 +341,7 @@ func (p *Authenticator) SignIn(rw http.ResponseWriter, req *http.Request) {
 		p.ProxyOAuthRedirect(rw, req, session, tags)
 	case http.ErrNoCookie:
 		p.SignInPage(rw, req, http.StatusOK)
-	case sessions.ErrLifetimeExpired:
+	case sessions.ErrLifetimeExpired, sessions.ErrInvalidSession:
 		p.sessionStore.ClearSession(rw, req)
 		p.SignInPage(rw, req, http.StatusOK)
 	default:

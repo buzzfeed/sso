@@ -122,8 +122,8 @@ have been filled in, click the "Authorize" button.
 To give `sso-auth` permission to access Google Group information for users, the following
 environment variables must be set:
 
-- **`BUZZFEED_GOOGLE_ADMIN_EMAIL`**: An administrative email address on your organization's
+- **`GOOGLE_ADMIN_EMAIL`**: An administrative email address on your organization's
 domain, the identity of which can be assumed by `sso`.
-- **`BUZZFEED_GOOGLE_SERVICE_ACCOUNT_JSON`**: The path to the JSON file downloaded at the time of
+- **`GOOGLE_SERVICE_ACCOUNT_JSON`**: The path to the JSON file downloaded at the time of
 service account creation above. There is no reason why this file should ever be accessed by any
 person or service other than `sso`; ensure that file permissions are set accordingly.

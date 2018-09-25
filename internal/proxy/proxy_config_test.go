@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"fmt"
 	"net/url"
 	"reflect"
 	"regexp"
@@ -10,47 +9,102 @@ import (
 )
 
 func TestUpstreamConfigParsing(t *testing.T) {
-	serviceName := "foo"
-	defaultField := "foo"
-	from := "foo.dev.sso"
-	to := "foo.internal.dev.sso"
-	data := []byte(fmt.Sprintf(`
-- service: %s
-  %s:
-    from: %s
-    to: %s
-`, serviceName, defaultField, from, to))
+	testCases := []struct {
+		name      string
+		rawConfig []byte
 
-	serviceConfigs, err := parseServiceConfigs(data)
-	if err != nil {
-		t.Fatalf("expected to parse error, got error:%v", err)
+		wantErr     *ErrParsingConfig
+		wantConfigs []*UpstreamConfig
+	}{
+		{
+			name: "basic parsing",
+			rawConfig: []byte(`
+- service: bar
+  default:
+    from: bar.{{cluster}}.{{root_domain}}
+    to: bar-internal.{{cluster}}.{{root_domain}}
+`),
+			wantConfigs: []*UpstreamConfig{
+				{
+					Service: "bar",
+					RouteConfig: RouteConfig{
+						From: "bar.sso.dev",
+						To:   "bar-internal.sso.dev",
+					},
+					Route: &SimpleRoute{
+						FromURL: &url.URL{
+							Scheme: "http",
+							Host:   "bar.sso.dev",
+						},
+						ToURL: &url.URL{
+							Scheme: "http",
+							Host:   "bar-internal.sso.dev",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "parse white space in service name correctly",
+			rawConfig: []byte(`
+- service: bar 	  service 	 
+  default:
+    from: bar.{{cluster}}.{{root_domain}}
+    to: bar-internal.{{cluster}}.{{root_domain}}
+`),
+			wantConfigs: []*UpstreamConfig{
+				{
+					Service: "bar_service",
+					RouteConfig: RouteConfig{
+						From: "bar.sso.dev",
+						To:   "bar-internal.sso.dev",
+					},
+					Route: &SimpleRoute{
+						FromURL: &url.URL{
+							Scheme: "http",
+							Host:   "bar.sso.dev",
+						},
+						ToURL: &url.URL{
+							Scheme: "http",
+							Host:   "bar-internal.sso.dev",
+						},
+					},
+				},
+			},
+		},
 	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			templateVars := map[string]string{
+				"root_domain": "dev",
+				"cluster":     "sso",
+			}
+			gotConfigs, err := loadServiceConfigs(tc.rawConfig, "sso", "http", templateVars)
+			if tc.wantErr != nil {
+				if err != tc.wantErr {
+					t.Logf("got err %v", err)
+					t.Logf("want err %v", tc.wantErr)
+					t.Fatalf("got unexpected error load service configs")
+				}
+				return
+			}
 
-	if serviceConfigs == nil {
-		t.Fatalf("expected to get non-nil config")
-	}
+			if err != nil {
+				t.Logf("got err %v", err)
+				t.Logf("want err %v", tc.wantErr)
+				t.Fatalf("got unexpected error load service configs")
+			}
 
-	if len(serviceConfigs) != 1 {
-		t.Fatalf("expected to get a config with one item, got:%v", serviceConfigs)
-	}
-
-	serviceConfig := serviceConfigs[0]
-
-	if serviceConfig.Service != serviceName {
-		t.Errorf("expected config to have service:%q, got:%q", serviceName, serviceConfig.Service)
-	}
-
-	upstreamConfig, ok := serviceConfig.ClusterConfigs[defaultField]
-	if !ok {
-		t.Fatalf("expected config to have cluster field %q but has none", defaultField)
-	}
-
-	if upstreamConfig.RouteConfig.From != from {
-		t.Errorf("expected upstream config to have `from` %q but got %q", from, upstreamConfig.RouteConfig.From)
-	}
-
-	if upstreamConfig.RouteConfig.To != to {
-		t.Errorf("expected upstream config to have `to` %q but got %q", to, upstreamConfig.RouteConfig.To)
+			if !reflect.DeepEqual(gotConfigs, tc.wantConfigs) {
+				for _, gotConfig := range gotConfigs {
+					t.Logf("got  %#v", gotConfig)
+				}
+				for _, wantConfig := range tc.wantConfigs {
+					t.Logf("want %#v", wantConfig)
+				}
+				t.Fatalf("expected configs to be equal")
+			}
+		})
 	}
 }
 

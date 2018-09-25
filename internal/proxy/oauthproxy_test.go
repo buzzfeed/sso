@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buzzfeed/sso/internal/pkg/aead"
 	"github.com/buzzfeed/sso/internal/proxy/providers"
 
 	"github.com/18F/hmacauth"
@@ -36,6 +37,15 @@ func testValidatorFunc(valid bool) func(*OAuthProxy) error {
 	return func(p *OAuthProxy) error {
 		p.EmailValidator = func(string) bool {
 			return valid
+		}
+		return nil
+	}
+}
+
+func testCookieCipher(a aead.Cipher) func(*OAuthProxy) error {
+	return func(p *OAuthProxy) error {
+		if a != nil {
+			p.CookieCipher = a
 		}
 		return nil
 	}
@@ -1058,6 +1068,7 @@ func TestAuthenticate(t *testing.T) {
 		CookieExpectation   int // One of: {NewCookie, ClearCookie, KeepCookie}
 		RefreshSessionFunc  func(*providers.SessionState, []string) (bool, error)
 		ValidateSessionFunc func(*providers.SessionState, []string) bool
+		Cipher              aead.Cipher
 	}{
 		{
 			Name: "redirect if deadlines are blank",
@@ -1067,6 +1078,22 @@ func TestAuthenticate(t *testing.T) {
 			},
 			ExpectedErr:       ErrLifetimeExpired,
 			CookieExpectation: ClearCookie,
+		},
+		{
+			Name: "session unmarshaling fails, get ErrInvalidSession",
+			Session: &providers.SessionState{
+				Email:            "email1@example.com",
+				AccessToken:      "my_access_token",
+				LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
+				RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
+				ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+			},
+			ExpectedErr:       ErrInvalidSession,
+			CookieExpectation: ClearCookie,
+			Cipher: &aead.MockCipher{
+				MarshalString:  "randomstring",
+				UnmarshalError: errors.New("siv: authentication failed"),
+			},
 		},
 		{
 			Name: "authenticate successfully",
@@ -1171,7 +1198,7 @@ func TestAuthenticate(t *testing.T) {
 			opts.GracePeriodTTL = time.Duration(3) * time.Hour
 			opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev")
 			opts.Validate()
-			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true))
+			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true), testCookieCipher(tc.Cipher))
 			proxy.provider = &testAuthenticateProvider{
 				refreshSessionFunc:  tc.RefreshSessionFunc,
 				validateSessionFunc: tc.ValidateSessionFunc,
@@ -1213,13 +1240,13 @@ func TestAuthenticate(t *testing.T) {
 			}()
 
 			if gotErr != tc.ExpectedErr {
-				t.Logf(" got: %#v", gotErr)
-				t.Logf(" want: %#v", tc.ExpectedErr)
+				t.Logf(" got error: %#v", gotErr)
+				t.Logf("want error: %#v", tc.ExpectedErr)
 				t.Error("unexpected error value for authenticate")
 			}
 			if cookieBehavior != tc.CookieExpectation {
-				t.Logf(" got: %d", cookieBehavior)
-				t.Logf(" want: %d", tc.CookieExpectation)
+				t.Logf(" got cookie behavior: %d", cookieBehavior)
+				t.Logf("want cookie behavior: %d", tc.CookieExpectation)
 				t.Error("unexpected session cookie behavior for authenticate")
 			}
 		})

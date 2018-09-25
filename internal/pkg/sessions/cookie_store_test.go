@@ -299,13 +299,13 @@ func TestLoadCookiedSession(t *testing.T) {
 		name          string
 		optFuncs      []func(*CookieStore) error
 		setupCookies  func(*testing.T, *http.Request, *CookieStore, *SessionState)
-		expectedError bool
+		expectedError error
 		sessionState  *SessionState
 	}{
 		{
 			name:          "no cookie set returns an error",
 			setupCookies:  func(*testing.T, *http.Request, *CookieStore, *SessionState) {},
-			expectedError: true,
+			expectedError: http.ErrNoCookie,
 		},
 		{
 			name:     "cookie set with cipher set",
@@ -328,7 +328,7 @@ func TestLoadCookiedSession(t *testing.T) {
 				value := "574b776a7c934d6b9fc42ec63a389f79"
 				req.AddCookie(s.makeSessionCookie(req, value, time.Hour, time.Now()))
 			},
-			expectedError: true,
+			expectedError: ErrInvalidSession,
 		},
 	}
 
@@ -339,10 +339,8 @@ func TestLoadCookiedSession(t *testing.T) {
 			req := httptest.NewRequest("GET", "https://www.example.com", nil)
 			tc.setupCookies(t, req, session, tc.sessionState)
 			s, err := session.LoadSession(req)
-			if err != nil {
-				testutil.Assert(t, tc.expectedError, "error expected")
-				return
-			}
+
+			testutil.Equal(t, tc.expectedError, err)
 			testutil.Equal(t, tc.sessionState, s)
 
 		})
