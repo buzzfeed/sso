@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	log "github.com/buzzfeed/sso/internal/pkg/logging"
 	miscreant "github.com/miscreant/miscreant-go"
 )
 
@@ -109,6 +110,7 @@ func (c *MiscreantCipher) Marshal(s interface{}) (string, error) {
 // Unmarshal takes the marshaled string, base64-decodes into a byte slice, decrypts the
 // byte slice the pased cipher, and unmarshals the resulting JSON into the struct pointer passed
 func (c *MiscreantCipher) Unmarshal(value string, s interface{}) error {
+	logger := log.NewLogEntry()
 	// convert base64 string value to bytes
 	decodedVal, err := base64.RawURLEncoding.DecodeString(value)
 	if err != nil {
@@ -123,13 +125,20 @@ func (c *MiscreantCipher) Unmarshal(value string, s interface{}) error {
 	h := sha1.New()
 	h.Write(ciphertext)
 	cipherChecksum := h.Sum(nil)
+
+	logChecksum := false
 	if !bytes.Equal(cipherChecksum, checkSum) {
-		return fmt.Errorf("sha1 of ciphertext and checksum do not match")
+		logChecksum = true
+		// fallback on using the decodedVal as the ciphertext
+		ciphertext = decodedVal
 	}
 
 	// decrypt the bytes
 	plaintext, err := c.Decrypt(ciphertext)
 	if err != nil {
+		if logChecksum {
+			logger.Error("sha1 of ciphertext and checksum do not match")
+		}
 		return err
 	}
 
