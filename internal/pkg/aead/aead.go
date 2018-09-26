@@ -96,12 +96,6 @@ func (c *MiscreantCipher) Marshal(s interface{}) (string, error) {
 		return "", err
 	}
 
-	// add a sha1 hash of the ciphertext to the end of the
-	h := sha1.New()
-	h.Write(ciphertext)
-	checksum := h.Sum(nil)
-	ciphertext = append(ciphertext, checksum...)
-
 	// base64-encode the result
 	encoded := base64.RawURLEncoding.EncodeToString(ciphertext)
 	return encoded, nil
@@ -112,25 +106,9 @@ func (c *MiscreantCipher) Marshal(s interface{}) (string, error) {
 func (c *MiscreantCipher) Unmarshal(value string, s interface{}) error {
 	logger := log.NewLogEntry()
 	// convert base64 string value to bytes
-	decodedVal, err := base64.RawURLEncoding.DecodeString(value)
+	ciphertext, err := base64.RawURLEncoding.DecodeString(value)
 	if err != nil {
 		return err
-	}
-
-	// split apart the checksum from the cipher text and check that the sha1's match
-	pivot := len(decodedVal) - sha1.Size
-	ciphertext := decodedVal[:pivot]
-	checkSum := decodedVal[pivot:]
-
-	h := sha1.New()
-	h.Write(ciphertext)
-	cipherChecksum := h.Sum(nil)
-
-	logChecksum := false
-	if !bytes.Equal(cipherChecksum, checkSum) {
-		logChecksum = true
-		// fallback on using the decodedVal as the ciphertext
-		ciphertext = decodedVal
 	}
 
 	// decrypt the bytes

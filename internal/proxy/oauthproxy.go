@@ -485,6 +485,16 @@ func (p *OAuthProxy) LoadCookiedSession(req *http.Request) (*providers.SessionSt
 		return nil, err
 	}
 
+	sessionShaCookie := req.Cookie("_sso_proxy_sha")
+	if sessionSha.Value != "" {
+		h := sha1.New()
+		h.Write([]byte(c.Value))
+		valChecksum := h.Sum(nil)
+		if !bytes.Equal(sessionSha.Value, valChecksum) {
+			logger.Error("mismatching checksum and encrypted session cookie")
+		}
+	}
+
 	session, err := providers.UnmarshalSession(c.Value, p.CookieCipher)
 	if err != nil {
 		tags := []string{"error:unmarshaling_session"}
@@ -511,6 +521,13 @@ func (p *OAuthProxy) SaveSession(rw http.ResponseWriter, req *http.Request, s *p
 		logger.Error(err, "error when attempting to unmarshal session after saving it")
 		return fmt.Errorf("error when attempteing to unmsarshal marshaled session : %s", err)
 	}
+
+	// set a cookie in the request with the sha of the value
+	// add a sha1 hash of the ciphertext to the end of the
+	h := sha1.New()
+	h.Write([]byte(value))
+	checksum := h.Sum(nil)
+	http.SetCookie(rw, p.makeCookie(req, "_sso_proxy_sha", checksum, p.CookieExpire, time.Now()))
 
 	p.SetSessionCookie(rw, req, value)
 	return nil
