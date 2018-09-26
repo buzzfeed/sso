@@ -44,7 +44,7 @@ func GenerateKey() []byte {
 	return miscreant.GenerateKey(32)
 }
 
-// Encrypt a value using AES GCM
+// Encrypt a value using AES-CMAC-SIV
 func (c *MiscreantCipher) Encrypt(plaintext []byte) (joined []byte, err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -59,7 +59,7 @@ func (c *MiscreantCipher) Encrypt(plaintext []byte) (joined []byte, err error) {
 	return joined, nil
 }
 
-// Decrypt a value using AES GCM
+// Decrypt a value using AES-CMAC-SIV
 func (c *MiscreantCipher) Decrypt(joined []byte) ([]byte, error) {
 	if len(joined) <= miscreantNonceSize {
 		return nil, fmt.Errorf("invalid input size: %d", len(joined))
