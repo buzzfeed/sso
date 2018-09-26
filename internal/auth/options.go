@@ -238,17 +238,21 @@ func parseProviderInfo(o *Options, msgs []string) []string {
 	p.ProfileURL, msgs = parseURL(o.ProfileURL, "profile", msgs)
 	p.ValidateURL, msgs = parseURL(o.ValidateURL, "validate", msgs)
 
-	if o.GoogleServiceAccountJSON != "" {
-		_, err := os.Open(o.GoogleServiceAccountJSON)
-		if err != nil {
-			msgs = append(msgs, "invalid Google credentials file: "+o.GoogleServiceAccountJSON)
+	var singleFlightProvider providers.Provider
+	switch o.Provider {
+	default: // "google"
+		if o.GoogleServiceAccountJSON != "" {
+			_, err := os.Open(o.GoogleServiceAccountJSON)
+			if err != nil {
+				msgs = append(msgs, "invalid Google credentials file: "+o.GoogleServiceAccountJSON)
+			}
 		}
+		googleProvider := providers.NewGoogleProvider(p, o.GoogleAdminEmail, o.GoogleServiceAccountJSON)
+		cache := groups.NewFillCache(googleProvider.PopulateMembers, o.GroupsCacheRefreshTTL)
+		googleProvider.GroupsCache = cache
+		o.GroupsCacheStopFunc = cache.Stop
+		singleFlightProvider = providers.NewSingleFlightProvider(googleProvider)
 	}
-	googleProvider := providers.NewGoogleProvider(p, o.GoogleAdminEmail, o.GoogleServiceAccountJSON)
-	cache := groups.NewFillCache(googleProvider.PopulateMembers, o.GroupsCacheRefreshTTL)
-	googleProvider.GroupsCache = cache
-	o.GroupsCacheStopFunc = cache.Stop
-	singleFlightProvider := providers.NewSingleFlightProvider(googleProvider)
 
 	o.provider = singleFlightProvider
 
