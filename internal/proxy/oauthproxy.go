@@ -498,9 +498,18 @@ func (p *OAuthProxy) LoadCookiedSession(req *http.Request) (*providers.SessionSt
 
 // SaveSession saves a session state to a request cookie.
 func (p *OAuthProxy) SaveSession(rw http.ResponseWriter, req *http.Request, s *providers.SessionState) error {
+	logger := log.NewLogEntry().WithRemoteAddress(getRemoteAddr(req))
+
 	value, err := providers.MarshalSession(s, p.CookieCipher)
 	if err != nil {
 		return err
+	}
+
+	// debugging to see if we can unmarshal the marshaled session
+	_, err = providers.UnmarshalSession(value, p.CookieCipher)
+	if err != nil {
+		logger.Error(err, "error when attempting to unmarshal session after saving it")
+		return fmt.Errorf("error when attempteing to unmsarshal marshaled session : %s", err)
 	}
 
 	p.SetSessionCookie(rw, req, value)

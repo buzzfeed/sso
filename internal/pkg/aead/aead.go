@@ -1,7 +1,9 @@
 package aead
 
 import (
+	"bytes"
 	"crypto/cipher"
+	"crypto/sha1"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -56,6 +58,7 @@ func (c *MiscreantCipher) Encrypt(plaintext []byte) (joined []byte, err error) {
 
 	// we return the nonce as part of the returned value
 	joined = append(ciphertext[:], nonce[:]...)
+
 	return joined, nil
 }
 
@@ -92,6 +95,12 @@ func (c *MiscreantCipher) Marshal(s interface{}) (string, error) {
 		return "", err
 	}
 
+	// add a sha1 hash of the ciphertext to the end of the
+	h := sha1.New()
+	h.Write(ciphertext)
+	checksum := h.Sum(nil)
+	ciphertext = append(ciphertext, checksum...)
+
 	// base64-encode the result
 	encoded := base64.RawURLEncoding.EncodeToString(ciphertext)
 	return encoded, nil
@@ -101,9 +110,21 @@ func (c *MiscreantCipher) Marshal(s interface{}) (string, error) {
 // byte slice the pased cipher, and unmarshals the resulting JSON into the struct pointer passed
 func (c *MiscreantCipher) Unmarshal(value string, s interface{}) error {
 	// convert base64 string value to bytes
-	ciphertext, err := base64.RawURLEncoding.DecodeString(value)
+	decodedVal, err := base64.RawURLEncoding.DecodeString(value)
 	if err != nil {
 		return err
+	}
+
+	// split apart the checksum from the cipher text and check that the sha1's match
+	pivot := len(decodedVal) - sha1.Size
+	ciphertext := decodedVal[:pivot]
+	checkSum := decodedVal[pivot:]
+
+	h := sha1.New()
+	h.Write(ciphertext)
+	cipherChecksum := h.Sum(nil)
+	if !bytes.Equal(cipherChecksum, checkSum) {
+		return fmt.Errorf("sha1 of ciphertext and checksum do not match")
 	}
 
 	// decrypt the bytes
