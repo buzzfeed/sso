@@ -144,7 +144,6 @@ func NewAuthenticator(opts *Options, optionFuncs ...func(*Authenticator) error) 
 		Host:              opts.Host,
 		CookieSecure:      opts.CookieSecure,
 
-		provider:           opts.provider,
 		redirectURL:        redirectURL,
 		SetXAuthRequest:    opts.SetXAuthRequest,
 		PassUserHeaders:    opts.PassUserHeaders,

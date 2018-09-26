@@ -1541,7 +1541,9 @@ func TestOAuthStart(t *testing.T) {
 			opts := testOpts("abced", "testtest")
 			opts.RedirectURL = "https://example.com/oauth2/callback"
 			opts.Validate()
-			proxy, _ := NewAuthenticator(opts, func(p *Authenticator) error {
+			u, _ := url.Parse("http://example.com")
+			provider := providers.NewTestProvider(u)
+			proxy, _ := NewAuthenticator(opts, setTestProvider(provider), func(p *Authenticator) error {
 				p.Validator = func(string) bool { return true }
 				return nil
 			}, setMockCSRFStore(&sessions.MockCSRFStore{}))
@@ -1631,4 +1633,46 @@ func TestHostHeader(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGoogleProviderApiSettings(t *testing.T) {
+	opts := testOpts("abced", "testtest")
+	opts.Provider = "google"
+	opts.Validate()
+	proxy, _ := NewAuthenticator(opts, AssignProvider(opts), func(p *Authenticator) error {
+		p.Validator = func(string) bool { return true }
+		return nil
+	})
+	p := proxy.provider.Data()
+	testutil.Equal(t, "https://accounts.google.com/o/oauth2/auth?access_type=offline",
+		p.SignInURL.String())
+	testutil.Equal(t, "https://www.googleapis.com/oauth2/v3/token",
+		p.RedeemURL.String())
+	testutil.Equal(t, "", p.ProfileURL.String())
+	testutil.Equal(t, "profile email", p.Scope)
+}
+
+func TestGoogleGroupInvalidFile(t *testing.T) {
+	opts := testOpts("abced", "testtest")
+	opts.Provider = "google"
+	opts.GoogleAdminEmail = "admin@example.com"
+	opts.GoogleServiceAccountJSON = "file_doesnt_exist.json"
+	opts.Validate()
+	_, err := NewAuthenticator(opts, AssignProvider(opts), func(p *Authenticator) error {
+		p.Validator = func(string) bool { return true }
+		return nil
+	})
+	testutil.NotEqual(t, nil, err)
+	testutil.Equal(t, "invalid Google credentials file: file_doesnt_exist.json", err.Error())
+}
+
+func TestUnimplementedProvider(t *testing.T) {
+	opts := testOpts("abced", "testtest")
+	opts.Validate()
+	_, err := NewAuthenticator(opts, AssignProvider(opts), func(p *Authenticator) error {
+		p.Validator = func(string) bool { return true }
+		return nil
+	})
+	testutil.NotEqual(t, nil, err)
+	testutil.Equal(t, "unimplemented provider: \"\"", err.Error())
 }

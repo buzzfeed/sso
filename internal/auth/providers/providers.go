@@ -24,6 +24,11 @@ var (
 	ErrServiceUnavailable = errors.New("SERVICE_UNAVAILABLE")
 )
 
+const (
+	// GoogleProviderName identifies the Google provider
+	GoogleProviderName = "google"
+)
+
 // Provider is an interface exposing functions necessary to authenticate with a given provider.
 type Provider interface {
 	Data() *ProviderData
