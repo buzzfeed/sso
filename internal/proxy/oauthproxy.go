@@ -513,14 +513,14 @@ func (p *OAuthProxy) LoadCookiedSession(req *http.Request) (*providers.SessionSt
 }
 
 func encodeHashDecode(value string) (string, error) {
-	decoded, err := base64.URLEncoding.DecodeString(value)
+	decoded, err := base64.RawURLEncoding.DecodeString(value)
 	if err != nil {
 		return "", err
 	}
 	h := sha1.New()
 	h.Write(decoded)
 	checksum := h.Sum(nil)
-	return base64.URLEncoding.EncodeToString(checksum), nil
+	return base64.RawURLEncoding.EncodeToString(checksum), nil
 
 }
 
@@ -547,7 +547,6 @@ func (p *OAuthProxy) SaveSession(rw http.ResponseWriter, req *http.Request, s *p
 		logger.Error(err, "error when attempting to save checksum in cookie")
 	}
 	http.SetCookie(rw, p.makeCookie(req, "_proxy_sha", string(checksum), p.CookieExpire, time.Now()))
-
 	p.SetSessionCookie(rw, req, value)
 	return nil
 }
