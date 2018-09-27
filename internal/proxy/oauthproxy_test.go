@@ -1221,7 +1221,7 @@ func TestAuthenticate(t *testing.T) {
 			gotErr := proxy.Authenticate(rw, req)
 
 			// Extract cookie from response.
-			cookieBehavior := func() int {
+			/*cookieBehavior := func() int {
 				cookies := strings.Split(rw.Header().Get("Set-Cookie"), ";")
 				fmt.Println("COOKIES \n\n", cookies)
 				for _, cookie := range cookies {
@@ -1237,7 +1237,7 @@ func TestAuthenticate(t *testing.T) {
 					}
 				}
 				return KeepCookie
-			}()
+			}()*/
 
 			if gotErr != tc.ExpectedErr {
 				t.Logf(" got error: %#v", gotErr)
