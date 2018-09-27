@@ -1223,6 +1223,7 @@ func TestAuthenticate(t *testing.T) {
 			// Extract cookie from response.
 			cookieBehavior := func() int {
 				cookies := strings.Split(rw.Header().Get("Set-Cookie"), ";")
+				fmt.Println("COOKIES \n\n", cookies)
 				for _, cookie := range cookies {
 					if strings.HasPrefix(cookie, "_sso_proxy=") {
 						if len(cookie) == len("_sso_proxy=") {
@@ -1235,7 +1236,6 @@ func TestAuthenticate(t *testing.T) {
 						return NewCookie
 					}
 				}
-				// No "_sso_proxy" in Set-Cookie header. Keep cookie as is.
 				return KeepCookie
 			}()
 

@@ -1,14 +1,11 @@
 package aead
 
 import (
-	"bytes"
 	"crypto/cipher"
-	"crypto/sha1"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 
-	log "github.com/buzzfeed/sso/internal/pkg/logging"
 	miscreant "github.com/miscreant/miscreant-go"
 )
 
@@ -104,7 +101,6 @@ func (c *MiscreantCipher) Marshal(s interface{}) (string, error) {
 // Unmarshal takes the marshaled string, base64-decodes into a byte slice, decrypts the
 // byte slice the pased cipher, and unmarshals the resulting JSON into the struct pointer passed
 func (c *MiscreantCipher) Unmarshal(value string, s interface{}) error {
-	logger := log.NewLogEntry()
 	// convert base64 string value to bytes
 	ciphertext, err := base64.RawURLEncoding.DecodeString(value)
 	if err != nil {
@@ -114,9 +110,6 @@ func (c *MiscreantCipher) Unmarshal(value string, s interface{}) error {
 	// decrypt the bytes
 	plaintext, err := c.Decrypt(ciphertext)
 	if err != nil {
-		if logChecksum {
-			logger.Error("sha1 of ciphertext and checksum do not match")
-		}
 		return err
 	}
 
