@@ -3,6 +3,7 @@ package auth
 import (
 	"crypto"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -238,13 +239,23 @@ func parseProviderInfo(o *Options, msgs []string) []string {
 	p.ProfileURL, msgs = parseURL(o.ProfileURL, "profile", msgs)
 	p.ValidateURL, msgs = parseURL(o.ValidateURL, "validate", msgs)
 
+	var err error
+	o.provider, err = initProvider(o, p)
+	if err != nil {
+		msgs = append(msgs, err.Error())
+	}
+
+	return msgs
+}
+
+func initProvider(o *Options, p *providers.ProviderData) (providers.Provider, error) {
 	var singleFlightProvider providers.Provider
 	switch o.Provider {
 	default: // "google"
 		if o.GoogleServiceAccountJSON != "" {
 			_, err := os.Open(o.GoogleServiceAccountJSON)
 			if err != nil {
-				msgs = append(msgs, "invalid Google credentials file: "+o.GoogleServiceAccountJSON)
+				return nil, errors.New("invalid Google credentials file: " + o.GoogleServiceAccountJSON)
 			}
 		}
 		googleProvider := providers.NewGoogleProvider(p, o.GoogleAdminEmail, o.GoogleServiceAccountJSON)
@@ -254,9 +265,7 @@ func parseProviderInfo(o *Options, msgs []string) []string {
 		singleFlightProvider = providers.NewSingleFlightProvider(googleProvider)
 	}
 
-	o.provider = singleFlightProvider
-
-	return msgs
+	return singleFlightProvider, nil
 }
 
 func validateCookieName(o *Options, msgs []string) []string {

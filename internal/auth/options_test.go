@@ -54,18 +54,16 @@ func TestNewOptions(t *testing.T) {
 }
 
 func TestGoogleGroupInvalidFile(t *testing.T) {
-	defer func() {
-		r := recover()
-		panicMsg := "could not read google credentials file"
-		if r != panicMsg {
-			t.Errorf("expected panic with message %s but got %s", panicMsg, r)
-		}
-	}()
 	o := testOptions()
 	o.GoogleAdminEmail = "admin@example.com"
 	o.GoogleServiceAccountJSON = "file_doesnt_exist.json"
-	o.Validate()
+	err := o.Validate()
+	testutil.NotEqual(t, nil, err)
 
+	expected := errorMsg([]string{
+		"invalid Google credentials file: file_doesnt_exist.json",
+	})
+	testutil.Equal(t, expected, err.Error())
 }
 
 func TestInitializedOptions(t *testing.T) {
