@@ -107,7 +107,6 @@ type Options struct {
 
 	// internal values that are set after config validation
 	redirectURL         *url.URL
-	provider            providers.Provider
 	decodedCookieSecret []byte
 	GroupsCacheStopFunc func()
 }
@@ -226,6 +225,23 @@ func (o *Options) Validate() error {
 }
 
 func parseProviderInfo(o *Options, msgs []string) []string {
+	_, msgs = parseURL(o.SignInURL, "signin", msgs)
+	_, msgs = parseURL(o.RedeemURL, "redeem", msgs)
+	_, msgs = parseURL(o.ProfileURL, "profile", msgs)
+	_, msgs = parseURL(o.ValidateURL, "validate", msgs)
+
+	return msgs
+}
+
+func validateCookieName(o *Options, msgs []string) []string {
+	cookie := &http.Cookie{Name: o.CookieName}
+	if cookie.String() == "" {
+		return append(msgs, fmt.Sprintf("invalid cookie name: %q", o.CookieName))
+	}
+	return msgs
+}
+
+func newProvider(o *Options) (providers.Provider, error) {
 	p := &providers.ProviderData{
 		Scope:              o.Scope,
 		ClientID:           o.ClientID,
@@ -233,25 +249,25 @@ func parseProviderInfo(o *Options, msgs []string) []string {
 		ApprovalPrompt:     o.ApprovalPrompt,
 		SessionLifetimeTTL: o.SessionLifetimeTTL,
 	}
-	p.SignInURL, msgs = parseURL(o.SignInURL, "signin", msgs)
-	p.RedeemURL, msgs = parseURL(o.RedeemURL, "redeem", msgs)
-	p.RevokeURL = &url.URL{}
-	p.ProfileURL, msgs = parseURL(o.ProfileURL, "profile", msgs)
-	p.ValidateURL, msgs = parseURL(o.ValidateURL, "validate", msgs)
 
 	var err error
-	o.provider, err = initProvider(o, p)
-	if err != nil {
-		msgs = append(msgs, err.Error())
+	if p.SignInURL, err = url.Parse(o.SignInURL); err != nil {
+		return nil, err
+	}
+	if p.RedeemURL, err = url.Parse(o.RedeemURL); err != nil {
+		return nil, err
+	}
+	p.RevokeURL = &url.URL{}
+	if p.ProfileURL, err = url.Parse(o.ProfileURL); err != nil {
+		return nil, err
+	}
+	if p.ValidateURL, err = url.Parse(o.ValidateURL); err != nil {
+		return nil, err
 	}
 
-	return msgs
-}
-
-func initProvider(o *Options, p *providers.ProviderData) (providers.Provider, error) {
 	var singleFlightProvider providers.Provider
 	switch o.Provider {
-	default: // "google"
+	default: // Google
 		if o.GoogleServiceAccountJSON != "" {
 			_, err := os.Open(o.GoogleServiceAccountJSON)
 			if err != nil {
@@ -268,12 +284,15 @@ func initProvider(o *Options, p *providers.ProviderData) (providers.Provider, er
 	return singleFlightProvider, nil
 }
 
-func validateCookieName(o *Options, msgs []string) []string {
-	cookie := &http.Cookie{Name: o.CookieName}
-	if cookie.String() == "" {
-		return append(msgs, fmt.Sprintf("invalid cookie name: %q", o.CookieName))
+// AssignProvider is a function that takes an Options struct and assigns the
+// appropriate provider to the proxy. Should be called prior to
+// AssignStatsdClient.
+func AssignProvider(opts *Options) func(*Authenticator) error {
+	return func(proxy *Authenticator) error {
+		var err error
+		proxy.provider, err = newProvider(opts)
+		return err
 	}
-	return msgs
 }
 
 // AssignStatsdClient is function that takes in an Options struct and assigns a statsd client

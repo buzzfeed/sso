@@ -53,19 +53,6 @@ func TestNewOptions(t *testing.T) {
 	testutil.Equal(t, expected, err.Error())
 }
 
-func TestGoogleGroupInvalidFile(t *testing.T) {
-	o := testOptions()
-	o.GoogleAdminEmail = "admin@example.com"
-	o.GoogleServiceAccountJSON = "file_doesnt_exist.json"
-	err := o.Validate()
-	testutil.NotEqual(t, nil, err)
-
-	expected := errorMsg([]string{
-		"invalid Google credentials file: file_doesnt_exist.json",
-	})
-	testutil.Equal(t, expected, err.Error())
-}
-
 func TestInitializedOptions(t *testing.T) {
 	o := testOptions()
 	testutil.Equal(t, nil, o.Validate())
@@ -80,18 +67,6 @@ func TestRedirectURL(t *testing.T) {
 	expected := &url.URL{
 		Scheme: "https", Host: "myhost.com", Path: "/oauth2/callback"}
 	testutil.Equal(t, expected, o.redirectURL)
-}
-
-func TestDefaultProviderApiSettings(t *testing.T) {
-	o := testOptions()
-	testutil.Equal(t, nil, o.Validate())
-	p := o.provider.Data()
-	testutil.Equal(t, "https://accounts.google.com/o/oauth2/auth?access_type=offline",
-		p.SignInURL.String())
-	testutil.Equal(t, "https://www.googleapis.com/oauth2/v3/token",
-		p.RedeemURL.String())
-	testutil.Equal(t, "", p.ProfileURL.String())
-	testutil.Equal(t, "profile email", p.Scope)
 }
 
 func TestCookieRefreshMustBeLessThanCookieExpire(t *testing.T) {
