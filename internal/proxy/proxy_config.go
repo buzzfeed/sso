@@ -52,6 +52,7 @@ type UpstreamConfig struct {
 
 	SkipAuthCompiledRegex []*regexp.Regexp
 	AllowedGroups         []string
+	TLSSkipVerify         bool
 	HMACAuth              hmacauth.HmacAuth
 	Timeout               time.Duration
 	FlushInterval         time.Duration
@@ -79,6 +80,7 @@ type OptionsConfig struct {
 	HeaderOverrides map[string]string `yaml:"header_overrides"`
 	SkipAuthRegex   []string          `yaml:"skip_auth_regex"`
 	AllowedGroups   []string          `yaml:"allowed_groups"`
+	TLSSkipVerify   bool              `yaml:"tls_skip_verify"`
 	Timeout         time.Duration     `yaml:"timeout"`
 	FlushInterval   time.Duration     `yaml:"flush_interval"`
 }
@@ -109,7 +111,7 @@ func loadServiceConfigs(raw []byte, cluster, scheme string, configVars map[strin
 	// we don't set this to the len(serviceConfig) since not all service configs
 	// are configured for all clusters, leaving nil tail pointers in the slice.
 	configs := make([]*UpstreamConfig, 0)
-	// resovle overrides
+	// resolve overrides
 	for _, service := range serviceConfigs {
 		proxy, err := resolveUpstreamConfig(service, cluster)
 		if err != nil {
@@ -362,6 +364,7 @@ func parseOptionsConfig(proxy *UpstreamConfig) error {
 	proxy.Timeout = proxy.RouteConfig.Options.Timeout
 	proxy.FlushInterval = proxy.RouteConfig.Options.FlushInterval
 	proxy.HeaderOverrides = proxy.RouteConfig.Options.HeaderOverrides
+	proxy.TLSSkipVerify = proxy.RouteConfig.Options.TLSSkipVerify
 
 	proxy.RouteConfig.Options = nil
 

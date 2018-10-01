@@ -75,7 +75,7 @@ func TestNewReverseProxy(t *testing.T) {
 	backendHost := net.JoinHostPort(backendHostname, backendPort)
 	proxyURL, _ := url.Parse(backendURL.Scheme + "://" + backendHost + "/")
 
-	proxyHandler := NewReverseProxy(proxyURL)
+	proxyHandler := NewReverseProxy(proxyURL, &UpstreamConfig{TLSSkipVerify: false})
 	frontend := httptest.NewServer(proxyHandler)
 	defer frontend.Close()
 
@@ -107,7 +107,7 @@ func TestNewRewriteReverseProxy(t *testing.T) {
 		},
 	}
 
-	rewriteProxy := NewRewriteReverseProxy(route)
+	rewriteProxy := NewRewriteReverseProxy(route, &UpstreamConfig{TLSSkipVerify: false})
 
 	frontend := httptest.NewServer(rewriteProxy)
 	defer frontend.Close()
@@ -154,7 +154,7 @@ func TestNewReverseProxyHostname(t *testing.T) {
 		t.Fatalf("expected to parse to url: %s", err)
 	}
 
-	reverseProxy := NewReverseProxy(toURL)
+	reverseProxy := NewReverseProxy(toURL, &UpstreamConfig{TLSSkipVerify: false})
 	from := httptest.NewServer(reverseProxy)
 	defer from.Close()
 
@@ -197,6 +197,70 @@ func TestNewReverseProxyHostname(t *testing.T) {
 		t.Errorf("expected Cookie header to be empty but was %s", res.Header.Get("Cookie"))
 	}
 
+}
+
+func TestNewReverseProxyTLSSkipVerify(t *testing.T) {
+	type respStruct struct {
+		HandshakeComplete bool `json:"handshake-complete"`
+	}
+
+	testCases := []struct {
+		name           string
+		skipVerify     bool
+		expectedStatus int
+	}{
+		{
+			name:           "skip verify true",
+			skipVerify:     true,
+			expectedStatus: 200,
+		},
+		{
+			name:           "skip verify false",
+			skipVerify:     false,
+			expectedStatus: 502,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			to := httptest.NewTLSServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+				body, err := json.Marshal(
+					// Doesn't really matter what's sent since we should 502
+					&respStruct{
+						HandshakeComplete: r.TLS.HandshakeComplete,
+					},
+				)
+				if err != nil {
+					t.Fatalf("expected to marshal json: %s", err)
+				}
+				rw.Write(body)
+			}))
+			defer to.Close()
+
+			toURL, err := url.Parse(to.URL)
+			if err != nil {
+				t.Fatalf("expected to parse to url: %s", err)
+			}
+
+			reverseProxy := NewReverseProxy(toURL, &UpstreamConfig{TLSSkipVerify: tc.skipVerify})
+			from := httptest.NewServer(reverseProxy)
+			defer from.Close()
+
+			res, err := http.Get(from.URL)
+			if err != nil {
+				t.Fatalf("expected to be able to make req: %s", err)
+			}
+
+			if res.StatusCode != tc.expectedStatus {
+				t.Logf(" got status code: %v", res.StatusCode)
+				t.Logf("want status code: %d", tc.expectedStatus)
+
+				t.Errorf("got unexpected response code for tls failure")
+			}
+			if res.Header.Get("Cookie") != "" {
+				t.Errorf("expected Cookie header to be empty but was %s", res.Header.Get("Cookie"))
+			}
+		})
+	}
 }
 
 func TestDeleteSSOHeader(t *testing.T) {
@@ -269,7 +333,7 @@ func TestRoundTrip(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest("GET", tc.url, nil)
-			ut := upstreamTransport{}
+			ut := newUpstreamTransport(false)
 			resp, err := ut.RoundTrip(req)
 			if err == nil && tc.expectedError {
 				t.Errorf("expected error but error was nil")
@@ -298,7 +362,7 @@ func TestEncodedSlashes(t *testing.T) {
 	defer backend.Close()
 
 	b, _ := url.Parse(backend.URL)
-	proxyHandler := NewReverseProxy(b)
+	proxyHandler := NewReverseProxy(b, &UpstreamConfig{TLSSkipVerify: false})
 	frontend := httptest.NewServer(proxyHandler)
 	defer frontend.Close()
 
