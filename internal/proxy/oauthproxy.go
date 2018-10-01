@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"crypto/sha1"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -485,6 +487,20 @@ func (p *OAuthProxy) LoadCookiedSession(req *http.Request) (*providers.SessionSt
 		return nil, err
 	}
 
+	sessionShaCookie, err := req.Cookie("_proxy_sha")
+	if err == nil {
+		if sessionShaCookie.Value != "" {
+			valChecksum, err := encodeHashDecode(c.Value)
+			if err != nil {
+				logger.Error("error trying to create checksum from cookie value")
+			}
+			if sessionShaCookie.Value != valChecksum {
+				logger.Error("mismatching checksum and encrypted session cookie")
+				return nil, fmt.Errorf("mismatching checksum and encrypted session cookie")
+			}
+		}
+	}
+
 	session, err := providers.UnmarshalSession(c.Value, p.CookieCipher)
 	if err != nil {
 		tags := []string{"error:unmarshaling_session"}
@@ -496,13 +512,41 @@ func (p *OAuthProxy) LoadCookiedSession(req *http.Request) (*providers.SessionSt
 	return session, nil
 }
 
+func encodeHashDecode(value string) (string, error) {
+	decoded, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil {
+		return "", err
+	}
+	h := sha1.New()
+	h.Write(decoded)
+	checksum := h.Sum(nil)
+	return base64.RawURLEncoding.EncodeToString(checksum), nil
+
+}
+
 // SaveSession saves a session state to a request cookie.
 func (p *OAuthProxy) SaveSession(rw http.ResponseWriter, req *http.Request, s *providers.SessionState) error {
+	logger := log.NewLogEntry().WithRemoteAddress(getRemoteAddr(req))
+
 	value, err := providers.MarshalSession(s, p.CookieCipher)
 	if err != nil {
 		return err
 	}
 
+	// debugging to see if we can unmarshal the marshaled session
+	_, err = providers.UnmarshalSession(value, p.CookieCipher)
+	if err != nil {
+		logger.Error(err, "error when attempting to unmarshal session after saving it")
+		return fmt.Errorf("error when attempteing to unmarshal marshaled session : %s", err)
+	}
+
+	// set a cookie in the request with the sha of the value
+	// add a sha1 hash of the ciphertext to the end of the
+	checksum, err := encodeHashDecode(value)
+	if err != nil {
+		logger.Error(err, "error when attempting to save checksum in cookie")
+	}
+	http.SetCookie(rw, p.makeCookie(req, "_proxy_sha", string(checksum), p.CookieExpire, time.Now()))
 	p.SetSessionCookie(rw, req, value)
 	return nil
 }

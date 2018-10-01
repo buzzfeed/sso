@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"sync"
 
-	miscreant "github.com/miscreant/miscreant-go"
+	miscreant "github.com/shrayolacrayon/miscreant-go"
 )
 
 const miscreantNonceSize = 16
@@ -62,6 +62,7 @@ func (c *MiscreantCipher) Encrypt(plaintext []byte) (joined []byte, err error) {
 
 	// we return the nonce as part of the returned value
 	joined = append(ciphertext[:], nonce[:]...)
+
 	return joined, nil
 }
 
