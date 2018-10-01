@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	miscreant "github.com/miscreant/miscreant-go"
 )
@@ -26,6 +27,8 @@ type Cipher interface {
 // For a description of the methodology, see https://en.wikipedia.org/wiki/Authenticated_encryption
 type MiscreantCipher struct {
 	aead cipher.AEAD
+
+	mux sync.Mutex
 }
 
 // NewMiscreantCipher returns a new AES Cipher for encrypting values
@@ -46,6 +49,9 @@ func GenerateKey() []byte {
 
 // Encrypt a value using AES-CMAC-SIV
 func (c *MiscreantCipher) Encrypt(plaintext []byte) (joined []byte, err error) {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("miscreant error encrypting bytes: %v", r)
@@ -61,6 +67,9 @@ func (c *MiscreantCipher) Encrypt(plaintext []byte) (joined []byte, err error) {
 
 // Decrypt a value using AES-CMAC-SIV
 func (c *MiscreantCipher) Decrypt(joined []byte) ([]byte, error) {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+
 	if len(joined) <= miscreantNonceSize {
 		return nil, fmt.Errorf("invalid input size: %d", len(joined))
 	}
