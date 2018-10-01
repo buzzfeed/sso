@@ -251,8 +251,7 @@ func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthPr
 	logger.WithCookieName(opts.CookieName).WithCookieSecure(
 		opts.CookieSecure).WithCookieHTTPOnly(opts.CookieHTTPOnly).WithCookieExpire(
 		opts.CookieExpire).WithCookieDomain(domain).Info()
-
-	cipher, err := aead.NewMiscreantCipher(secretBytes(opts.CookieSecret))
+	cipher, err := aead.NewMiscreantCipher(opts.decodedCookieSecret)
 	if err != nil {
 		return nil, fmt.Errorf("cookie-secret error: %s", err.Error())
 	}
@@ -270,7 +269,7 @@ func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthPr
 		CookieHTTPOnly: opts.CookieHTTPOnly,
 		CookieName:     opts.CookieName,
 		CookieSecure:   opts.CookieSecure,
-		CookieSeed:     opts.CookieSecret,
+		CookieSeed:     string(opts.decodedCookieSecret),
 		CSRFCookieName: fmt.Sprintf("%v_%v", opts.CookieName, "csrf"),
 
 		StatsdClient: opts.StatsdClient,

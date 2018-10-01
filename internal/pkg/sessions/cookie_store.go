@@ -34,7 +34,6 @@ type SessionStore interface {
 type CookieStore struct {
 	Name               string
 	CSRFCookieName     string
-	CookieSecret       string
 	CookieExpire       time.Duration
 	CookieRefresh      time.Duration
 	CookieSecure       bool
@@ -68,10 +67,9 @@ func addPadding(secret string) string {
 }
 
 // CreateMiscreantCookieCipher creates a new miscreant cipher with the cookie secret
-func CreateMiscreantCookieCipher(cookieSecret string) func(s *CookieStore) error {
+func CreateMiscreantCookieCipher(cookieSecret []byte) func(s *CookieStore) error {
 	return func(s *CookieStore) error {
-		s.CookieSecret = cookieSecret
-		cipher, err := aead.NewMiscreantCipher(SecretBytes(s.CookieSecret))
+		cipher, err := aead.NewMiscreantCipher(cookieSecret)
 		if err != nil {
 			return fmt.Errorf("miscreant cookie-secret error: %s", err.Error())
 		}

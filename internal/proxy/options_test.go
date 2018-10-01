@@ -51,6 +51,7 @@ func TestNewOptions(t *testing.T) {
 		"missing setting: client-secret",
 		"missing setting: statsd-host",
 		"missing setting: statsd-port",
+		"Invalid value for COOKIE_SECRET; must decode to 32 or 64 bytes, but decoded to 0 bytes",
 	})
 	testutil.Equal(t, expected, err.Error())
 }
@@ -143,11 +144,11 @@ func TestBase64CookieSecret(t *testing.T) {
 	testutil.Equal(t, nil, o.Validate())
 
 	// 32 byte, base64 (urlsafe) encoded key
-	o.CookieSecret = "yHBw2lh2Cvo6aI_jn_qMTr-pRAjtq0nzVgDJNb36jgQ="
+	o.CookieSecret = testEncodedCookieSecret
 	testutil.Equal(t, nil, o.Validate())
 
 	// 32 byte, base64 (urlsafe) encoded key, w/o padding
-	o.CookieSecret = "yHBw2lh2Cvo6aI_jn_qMTr-pRAjtq0nzVgDJNb36jgQ"
+	o.CookieSecret = testEncodedCookieSecret
 	testutil.Equal(t, nil, o.Validate())
 
 	testutil.Equal(t, nil, o.Validate())

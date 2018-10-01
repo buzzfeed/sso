@@ -46,7 +46,7 @@ func TestNewOptions(t *testing.T) {
 		"missing setting: proxy-client-id",
 		"missing setting: proxy-client-secret",
 		"missing setting: required-host-header",
-		"cookie_secret must be 32 or 64 bytes to create an AES cipher but is 0 bytes.",
+		"Invalid value for COOKIE_SECRET; must decode to 32 or 64 bytes, but decoded to 0 bytes",
 		"missing setting: no host specified for statsd metrics collections",
 		"missing setting: no port specified for statsd metrics collections",
 	})
@@ -100,7 +100,7 @@ func TestCookieRefreshMustBeLessThanCookieExpire(t *testing.T) {
 	o := testOptions()
 	testutil.Equal(t, nil, o.Validate())
 
-	o.CookieSecret = "yHBw2lh2Cvo6aI_jn_qMTr-pRAjtq0nzVgDJNb36jgQ="
+	o.CookieSecret = testEncodedCookieSecret
 	o.CookieRefresh = o.CookieExpire
 	testutil.NotEqual(t, nil, o.Validate())
 
@@ -113,11 +113,11 @@ func TestBase64CookieSecret(t *testing.T) {
 	testutil.Equal(t, nil, o.Validate())
 
 	// 32 byte, base64 (urlsafe) encoded key
-	o.CookieSecret = "yHBw2lh2Cvo6aI_jn_qMTr-pRAjtq0nzVgDJNb36jgQ="
+	o.CookieSecret = testEncodedCookieSecret
 	testutil.Equal(t, nil, o.Validate())
 
 	// 32 byte, base64 (urlsafe) encoded key, w/o padding
-	o.CookieSecret = "yHBw2lh2Cvo6aI_jn_qMTr-pRAjtq0nzVgDJNb36jgQ"
+	o.CookieSecret = testEncodedCookieSecret
 	testutil.Equal(t, nil, o.Validate())
 }
 
