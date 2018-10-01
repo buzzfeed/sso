@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -273,8 +272,7 @@ func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthPr
 	logger.WithCookieName(opts.CookieName).WithCookieSecure(
 		opts.CookieSecure).WithCookieHTTPOnly(opts.CookieHTTPOnly).WithCookieExpire(
 		opts.CookieExpire).WithCookieDomain(domain).Info()
-
-	cipher, err := aead.NewMiscreantCipher(secretBytes(opts.CookieSecret))
+	cipher, err := aead.NewMiscreantCipher(opts.decodedCookieSecret)
 	if err != nil {
 		return nil, fmt.Errorf("cookie-secret error: %s", err.Error())
 	}
@@ -292,7 +290,7 @@ func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthPr
 		CookieHTTPOnly: opts.CookieHTTPOnly,
 		CookieName:     opts.CookieName,
 		CookieSecure:   opts.CookieSecure,
-		CookieSeed:     opts.CookieSecret,
+		CookieSeed:     string(opts.decodedCookieSecret),
 		CSRFCookieName: fmt.Sprintf("%v_%v", opts.CookieName, "csrf"),
 
 		StatsdClient: opts.StatsdClient,
@@ -554,35 +552,52 @@ func (p *OAuthProxy) PingPage(rw http.ResponseWriter, _ *http.Request) {
 	fmt.Fprintf(rw, "OK")
 }
 
+// XHRError returns a simple error response with an error message to the application if the request is an XML request
+func (p *OAuthProxy) XHRError(rw http.ResponseWriter, req *http.Request, code int, err error) {
+	remoteAddr := getRemoteAddr(req)
+	logger := log.NewLogEntry().WithRemoteAddress(remoteAddr)
+
+	jsonError := struct {
+		Error error `json:"error"`
+	}{
+		Error: err,
+	}
+
+	jsonBytes, err := json.Marshal(jsonError)
+	if err != nil {
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	logger.WithHTTPStatus(code).WithRequestURI(req.URL.String()).Error(err, "error serving XHR")
+	rw.Header().Set("Content-Type", "application/json")
+	rw.WriteHeader(code)
+	rw.Write(jsonBytes)
+}
+
 // ErrorPage renders an error page with a given status code, title, and message.
 func (p *OAuthProxy) ErrorPage(rw http.ResponseWriter, req *http.Request, code int, title string, message string) {
-	if p.isXMLHTTPRequest(req) {
-		rw.Header().Set("Content-Type", "application/json")
-		rw.WriteHeader(code)
-		err := json.NewEncoder(rw).Encode(struct {
-			Error string `json:"error"`
-		}{
-			Error: message,
-		})
-		if err != nil {
-			io.WriteString(rw, err.Error())
-		}
-	} else {
-		logger := log.NewLogEntry()
-		logger.WithHTTPStatus(code).WithPageTitle(title).WithPageMessage(message).Info(
-			"error page")
-		rw.WriteHeader(code)
-		t := struct {
-			Code    int
-			Title   string
-			Message string
-		}{
-			Code:    code,
-			Title:   title,
-			Message: message,
-		}
-		p.templates.ExecuteTemplate(rw, "error.html", t)
+	if p.isXHR(req) {
+		p.XHRError(rw, req, code, errors.New(message))
+		return
 	}
+
+	remoteAddr := getRemoteAddr(req)
+	logger := log.NewLogEntry().WithRemoteAddress(remoteAddr)
+
+	logger.WithHTTPStatus(code).WithPageTitle(title).WithPageMessage(message).Info(
+		"error page")
+	rw.WriteHeader(code)
+	t := struct {
+		Code    int
+		Title   string
+		Message string
+	}{
+		Code:    code,
+		Title:   title,
+		Message: message,
+	}
+	p.templates.ExecuteTemplate(rw, "error.html", t)
 }
 
 // IsWhitelistedRequest cheks that proxy host exists and checks the SkipAuthRegex
@@ -608,7 +623,7 @@ func (p *OAuthProxy) IsWhitelistedRequest(req *http.Request) bool {
 	return false
 }
 
-func (p *OAuthProxy) isXMLHTTPRequest(req *http.Request) bool {
+func (p *OAuthProxy) isXHR(req *http.Request) bool {
 	return req.Header.Get("X-Requested-With") == "XMLHttpRequest"
 }
 
@@ -629,9 +644,12 @@ func (p *OAuthProxy) OAuthStart(rw http.ResponseWriter, req *http.Request, tags 
 	// The proxy redirects to the authenticator, and provides it with redirectURI (which points
 	// back to the sso proxy).
 	logger := log.NewLogEntry()
+	remoteAddr := getRemoteAddr(req)
 
-	if p.isXMLHTTPRequest(req) {
-		p.ErrorPage(rw, req, http.StatusUnauthorized, "Unauthorized", "user not authorized")
+	if p.isXHR(req) {
+		logger.WithRemoteAddress(remoteAddr).Error("aborting start of oauth flow on XHR")
+		p.XHRError(rw, req, http.StatusUnauthorized, errors.New("cannot continue oauth flow on xhr"))
+		return
 	}
 
 	requestURI := req.URL.String()

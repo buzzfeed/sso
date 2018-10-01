@@ -88,9 +88,10 @@ type Options struct {
 	testTemplateVars map[string]string
 
 	// internal values that are set after config validation
-	upstreamConfigs []*UpstreamConfig
-	providerURL     *url.URL
-	provider        providers.Provider
+	upstreamConfigs     []*UpstreamConfig
+	providerURL         *url.URL
+	provider            providers.Provider
+	decodedCookieSecret []byte
 }
 
 // NewOptions returns a new options struct
@@ -179,26 +180,22 @@ func (o *Options) Validate() error {
 		}
 	}
 
-	if o.CookieSecret != "" {
-		validCookieSecretSize := false
-		for _, i := range []int{32, 64} {
-			if len(secretBytes(o.CookieSecret)) == i {
-				validCookieSecretSize = true
-			}
-		}
-		var decoded bool
-		if string(secretBytes(o.CookieSecret)) != o.CookieSecret {
-			decoded = true
-		}
-		if validCookieSecretSize == false {
-			var suffix string
-			if decoded {
-				suffix = fmt.Sprintf(" note: cookie secret was base64 decoded from %q", o.CookieSecret)
-			}
-			msgs = append(msgs, fmt.Sprintf("cookie_secret must be 32 or 64 bytes  but is %d bytes.%s",
-				len(secretBytes(o.CookieSecret)), suffix))
+	decodedCookieSecret, err := base64.StdEncoding.DecodeString(o.CookieSecret)
+	if err != nil {
+		msgs = append(msgs, "Invalid value for COOKIE_SECRET; expected base64-encoded bytes, as from `openssl rand 32 -base64`")
+	}
+	validCookieSecretLength := false
+	for _, i := range []int{32, 64} {
+		if len(decodedCookieSecret) == i {
+			validCookieSecretLength = true
 		}
 	}
+
+	if !validCookieSecretLength {
+		msgs = append(msgs, fmt.Sprintf("Invalid value for COOKIE_SECRET; must decode to 32 or 64 bytes, but decoded to %d bytes", len(decodedCookieSecret)))
+	}
+
+	o.decodedCookieSecret = decodedCookieSecret
 
 	msgs = validateCookieName(o, msgs)
 
@@ -254,15 +251,6 @@ func addPadding(secret string) string {
 	default:
 		return secret
 	}
-}
-
-// secretBytes attempts to base64 decode the secret, if that fails it treats the secret as binary
-func secretBytes(secret string) []byte {
-	b, err := base64.URLEncoding.DecodeString(addPadding(secret))
-	if err == nil {
-		return []byte(addPadding(string(b)))
-	}
-	return []byte(secret)
 }
 
 func parseEnvironment(environ []string) map[string]string {

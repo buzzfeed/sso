@@ -4,7 +4,8 @@ import (
 	"crypto/cipher"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
+	"fmt"
+	"sync"
 
 	miscreant "github.com/miscreant/miscreant-go"
 )
@@ -12,11 +13,6 @@ import (
 const miscreantNonceSize = 16
 
 var algorithmType = "AES-CMAC-SIV"
-
-var (
-	// ErrInvalidValue is an error for an invalid value
-	ErrInvalidValue = errors.New("invalid value")
-)
 
 // Cipher provides methods to encrypt and decrypt values.
 type Cipher interface {
@@ -31,6 +27,8 @@ type Cipher interface {
 // For a description of the methodology, see https://en.wikipedia.org/wiki/Authenticated_encryption
 type MiscreantCipher struct {
 	aead cipher.AEAD
+
+	mux sync.Mutex
 }
 
 // NewMiscreantCipher returns a new AES Cipher for encrypting values
@@ -49,11 +47,14 @@ func GenerateKey() []byte {
 	return miscreant.GenerateKey(32)
 }
 
-// Encrypt a value using AES GCM
+// Encrypt a value using AES-CMAC-SIV
 func (c *MiscreantCipher) Encrypt(plaintext []byte) (joined []byte, err error) {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+
 	defer func() {
 		if r := recover(); r != nil {
-			err = ErrInvalidValue
+			err = fmt.Errorf("miscreant error encrypting bytes: %v", r)
 		}
 	}()
 	nonce := miscreant.GenerateNonce(c.aead)
@@ -64,10 +65,13 @@ func (c *MiscreantCipher) Encrypt(plaintext []byte) (joined []byte, err error) {
 	return joined, nil
 }
 
-// Decrypt a value using AES GCM
+// Decrypt a value using AES-CMAC-SIV
 func (c *MiscreantCipher) Decrypt(joined []byte) ([]byte, error) {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+
 	if len(joined) <= miscreantNonceSize {
-		return nil, ErrInvalidValue
+		return nil, fmt.Errorf("invalid input size: %d", len(joined))
 	}
 	// grab out the nonce
 	pivot := len(joined) - miscreantNonceSize
