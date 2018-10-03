@@ -37,7 +37,8 @@ func newGoogleProvider(providerData *ProviderData) *GoogleProvider {
 			ValidateURL:  &url.URL{},
 			Scope:        ""}
 	}
-	return NewGoogleProvider(providerData, "", "")
+	provider, _ := NewGoogleProvider(providerData, "", "")
+	return provider
 }
 
 func TestGoogleProviderDefaults(t *testing.T) {

@@ -1635,8 +1635,9 @@ func TestHostHeader(t *testing.T) {
 	}
 }
 
-func TestDefaultProviderApiSettings(t *testing.T) {
+func TestGoogleProviderApiSettings(t *testing.T) {
 	opts := testOpts("abced", "testtest")
+	opts.Provider = "google"
 	opts.Validate()
 	proxy, _ := NewAuthenticator(opts, AssignProvider(opts), func(p *Authenticator) error {
 		p.Validator = func(string) bool { return true }
@@ -1653,6 +1654,7 @@ func TestDefaultProviderApiSettings(t *testing.T) {
 
 func TestGoogleGroupInvalidFile(t *testing.T) {
 	opts := testOpts("abced", "testtest")
+	opts.Provider = "google"
 	opts.GoogleAdminEmail = "admin@example.com"
 	opts.GoogleServiceAccountJSON = "file_doesnt_exist.json"
 	opts.Validate()
@@ -1662,4 +1664,15 @@ func TestGoogleGroupInvalidFile(t *testing.T) {
 	})
 	testutil.NotEqual(t, nil, err)
 	testutil.Equal(t, "invalid Google credentials file: file_doesnt_exist.json", err.Error())
+}
+
+func TestUnimplementedProvider(t *testing.T) {
+	opts := testOpts("abced", "testtest")
+	opts.Validate()
+	_, err := NewAuthenticator(opts, AssignProvider(opts), func(p *Authenticator) error {
+		p.Validator = func(string) bool { return true }
+		return nil
+	})
+	testutil.NotEqual(t, nil, err)
+	testutil.Equal(t, "unimplemented provider: \"\"", err.Error())
 }

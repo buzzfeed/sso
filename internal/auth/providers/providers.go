@@ -24,6 +24,23 @@ var (
 	ErrServiceUnavailable = errors.New("SERVICE_UNAVAILABLE")
 )
 
+const (
+	// AzureProviderName identifies the Azure AD provider
+	AzureProviderName = "azure"
+	// FacebookProviderName identifies the Facebook provider
+	FacebookProviderName = "facebook"
+	// GitHubProviderName identifies the GitHub provider
+	GitHubProviderName = "github"
+	// GitLabProviderName identifies the GitLab provider
+	GitLabProviderName = "gitlab"
+	// GoogleProviderName identifies the Google provider
+	GoogleProviderName = "google"
+	// LinkedInProviderName identifies the LinkedIn provider
+	LinkedInProviderName = "linkedin"
+	// OIDCProviderName identifies the generic OpenID Connect provider
+	OIDCProviderName = "oidc"
+)
+
 // Provider is an interface exposing functions necessary to authenticate with a given provider.
 type Provider interface {
 	Data() *ProviderData

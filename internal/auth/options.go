@@ -3,7 +3,6 @@ package auth
 import (
 	"crypto"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -170,7 +169,7 @@ func (o *Options) Validate() error {
 
 	o.redirectURL, msgs = parseURL(o.RedirectURL, "redirect", msgs)
 
-	msgs = parseProviderInfo(o, msgs)
+	msgs = validateEndpoints(o, msgs)
 
 	decodedCookieSecret, err := base64.StdEncoding.DecodeString(o.CookieSecret)
 	if err != nil {
@@ -198,15 +197,6 @@ func (o *Options) Validate() error {
 			o.CookieExpire.String()))
 	}
 
-	if o.GoogleAdminEmail != "" || o.GoogleServiceAccountJSON != "" {
-		if o.GoogleAdminEmail == "" {
-			msgs = append(msgs, "missing setting: google-admin-email")
-		}
-		if o.GoogleServiceAccountJSON == "" {
-			msgs = append(msgs, "missing setting: google-service-account-json")
-		}
-	}
-
 	msgs = validateCookieName(o, msgs)
 
 	if o.StatsdHost == "" {
@@ -224,7 +214,7 @@ func (o *Options) Validate() error {
 	return nil
 }
 
-func parseProviderInfo(o *Options, msgs []string) []string {
+func validateEndpoints(o *Options, msgs []string) []string {
 	_, msgs = parseURL(o.SignInURL, "signin", msgs)
 	_, msgs = parseURL(o.RedeemURL, "redeem", msgs)
 	_, msgs = parseURL(o.ProfileURL, "profile", msgs)
@@ -267,18 +257,23 @@ func newProvider(o *Options) (providers.Provider, error) {
 
 	var singleFlightProvider providers.Provider
 	switch o.Provider {
-	default: // Google
+	case providers.GoogleProviderName: // Google
 		if o.GoogleServiceAccountJSON != "" {
 			_, err := os.Open(o.GoogleServiceAccountJSON)
 			if err != nil {
-				return nil, errors.New("invalid Google credentials file: " + o.GoogleServiceAccountJSON)
+				return nil, fmt.Errorf("invalid Google credentials file: %s", o.GoogleServiceAccountJSON)
 			}
 		}
-		googleProvider := providers.NewGoogleProvider(p, o.GoogleAdminEmail, o.GoogleServiceAccountJSON)
+		googleProvider, err := providers.NewGoogleProvider(p, o.GoogleAdminEmail, o.GoogleServiceAccountJSON)
+		if err != nil {
+			return nil, err
+		}
 		cache := groups.NewFillCache(googleProvider.PopulateMembers, o.GroupsCacheRefreshTTL)
 		googleProvider.GroupsCache = cache
 		o.GroupsCacheStopFunc = cache.Stop
 		singleFlightProvider = providers.NewSingleFlightProvider(googleProvider)
+	default:
+		return nil, fmt.Errorf("unimplemented provider: %q", o.Provider)
 	}
 
 	return singleFlightProvider, nil
