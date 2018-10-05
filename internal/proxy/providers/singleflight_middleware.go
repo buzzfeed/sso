@@ -64,11 +64,6 @@ func (p *SingleFlightProvider) Data() *ProviderData {
 	return p.provider.Data()
 }
 
-// GetEmailAddress calls the provider function getEmailAddress
-func (p *SingleFlightProvider) GetEmailAddress(s *SessionState) (string, error) {
-	return p.provider.GetEmailAddress(s)
-}
-
 // Redeem takes the redirectURL and a code and calls the provider function Redeem
 func (p *SingleFlightProvider) Redeem(redirectURL, code string) (*SessionState, error) {
 	return p.provider.Redeem(redirectURL, code)
@@ -116,16 +111,6 @@ func (p *SingleFlightProvider) ValidateSessionState(s *SessionState, allowedGrou
 	return valid
 }
 
-// GetSignInURL calls the GetSignInURL for the provider, which will return the sign in url
-func (p *SingleFlightProvider) GetSignInURL(redirectURI *url.URL, finalRedirect string) *url.URL {
-	return p.provider.GetSignInURL(redirectURI, finalRedirect)
-}
-
-// GetSignOutURL calls the GetSignOutURL for the provider, which will return the sign out url
-func (p *SingleFlightProvider) GetSignOutURL(redirectURI *url.URL) *url.URL {
-	return p.provider.GetSignOutURL(redirectURI)
-}
-
 // RefreshSession takes in a SessionState and allowedGroups and
 // returns false if the session is not refreshed and true if it is.
 func (p *SingleFlightProvider) RefreshSession(s *SessionState, allowedGroups []string) (bool, error) {
@@ -142,4 +127,14 @@ func (p *SingleFlightProvider) RefreshSession(s *SessionState, allowedGroups []s
 	}
 
 	return r, nil
+}
+
+// GetSignInURL calls the GetSignInURL for the provider, which will return the sign in url
+func (p *SingleFlightProvider) GetSignInURL(redirectURI *url.URL, finalRedirect string) *url.URL {
+	return p.provider.GetSignInURL(redirectURI, finalRedirect)
+}
+
+// GetSignOutURL calls the GetSignOutURL for the provider, which will return the sign out url
+func (p *SingleFlightProvider) GetSignOutURL(redirectURI *url.URL) *url.URL {
+	return p.provider.GetSignOutURL(redirectURI)
 }
