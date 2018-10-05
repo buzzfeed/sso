@@ -306,9 +306,7 @@ func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthPr
 		templates:         getTemplates(),
 	}
 
-	logger.Error(p, "oauth proxy")
 	p.proxyredirectURL, _ = url.Parse(opts.ProxyProviderURLString)
-	logger.Error(p, "oauth proxy after add in of ProxyProviderURLString")
 
 	for _, optFunc := range optFuncs {
 		err := optFunc(p)
@@ -451,7 +449,7 @@ func (p *OAuthProxy) redeemCode(host, code string) (s *providers.SessionState, e
 	if code == "" {
 		return nil, errors.New("missing code")
 	}
-	redirectURL := p.GetProxyRedirectURL(host)
+	redirectURL, err := url.Parse("http://host.docker.internal")
 	s, err = p.provider.Redeem(redirectURL.String(), code)
 	if err != nil {
 		return
