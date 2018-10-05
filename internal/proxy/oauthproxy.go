@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -450,6 +451,7 @@ func (p *OAuthProxy) redeemCode(host, code string) (s *providers.SessionState, e
 		return nil, errors.New("missing code")
 	}
 	redirectURL := p.GetProxyRedirectURL(host)
+	log.Printf("redirectURL! %v", redirectURL)
 	s, err = p.provider.Redeem(redirectURL.String(), code)
 	if err != nil {
 		return
