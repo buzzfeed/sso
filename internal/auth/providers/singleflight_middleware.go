@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buzzfeed/sso/internal/auth/singleflight"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
+	"github.com/buzzfeed/sso/internal/pkg/singleflight"
 
 	"github.com/datadog/datadog-go/statsd"
 )

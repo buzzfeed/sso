@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/buzzfeed/sso/internal/proxy/singleflight"
+	"github.com/buzzfeed/sso/internal/pkg/singleflight"
 
 	"github.com/datadog/datadog-go/statsd"
 )
