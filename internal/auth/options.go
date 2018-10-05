@@ -106,7 +106,6 @@ type Options struct {
 
 	// internal values that are set after config validation
 	redirectURL         *url.URL
-	provider            providers.Provider
 	decodedCookieSecret []byte
 	GroupsCacheStopFunc func()
 }
@@ -170,7 +169,7 @@ func (o *Options) Validate() error {
 
 	o.redirectURL, msgs = parseURL(o.RedirectURL, "redirect", msgs)
 
-	msgs = parseProviderInfo(o, msgs)
+	msgs = validateEndpoints(o, msgs)
 
 	decodedCookieSecret, err := base64.StdEncoding.DecodeString(o.CookieSecret)
 	if err != nil {
@@ -198,15 +197,6 @@ func (o *Options) Validate() error {
 			o.CookieExpire.String()))
 	}
 
-	if o.GoogleAdminEmail != "" || o.GoogleServiceAccountJSON != "" {
-		if o.GoogleAdminEmail == "" {
-			msgs = append(msgs, "missing setting: google-admin-email")
-		}
-		if o.GoogleServiceAccountJSON == "" {
-			msgs = append(msgs, "missing setting: google-service-account-json")
-		}
-	}
-
 	msgs = validateCookieName(o, msgs)
 
 	if o.StatsdHost == "" {
@@ -224,33 +214,11 @@ func (o *Options) Validate() error {
 	return nil
 }
 
-func parseProviderInfo(o *Options, msgs []string) []string {
-	p := &providers.ProviderData{
-		Scope:              o.Scope,
-		ClientID:           o.ClientID,
-		ClientSecret:       o.ClientSecret,
-		ApprovalPrompt:     o.ApprovalPrompt,
-		SessionLifetimeTTL: o.SessionLifetimeTTL,
-	}
-	p.SignInURL, msgs = parseURL(o.SignInURL, "signin", msgs)
-	p.RedeemURL, msgs = parseURL(o.RedeemURL, "redeem", msgs)
-	p.RevokeURL = &url.URL{}
-	p.ProfileURL, msgs = parseURL(o.ProfileURL, "profile", msgs)
-	p.ValidateURL, msgs = parseURL(o.ValidateURL, "validate", msgs)
-
-	if o.GoogleServiceAccountJSON != "" {
-		_, err := os.Open(o.GoogleServiceAccountJSON)
-		if err != nil {
-			msgs = append(msgs, "invalid Google credentials file: "+o.GoogleServiceAccountJSON)
-		}
-	}
-	googleProvider := providers.NewGoogleProvider(p, o.GoogleAdminEmail, o.GoogleServiceAccountJSON)
-	cache := groups.NewFillCache(googleProvider.PopulateMembers, o.GroupsCacheRefreshTTL)
-	googleProvider.GroupsCache = cache
-	o.GroupsCacheStopFunc = cache.Stop
-	singleFlightProvider := providers.NewSingleFlightProvider(googleProvider)
-
-	o.provider = singleFlightProvider
+func validateEndpoints(o *Options, msgs []string) []string {
+	_, msgs = parseURL(o.SignInURL, "signin", msgs)
+	_, msgs = parseURL(o.RedeemURL, "redeem", msgs)
+	_, msgs = parseURL(o.ProfileURL, "profile", msgs)
+	_, msgs = parseURL(o.ValidateURL, "validate", msgs)
 
 	return msgs
 }
@@ -261,6 +229,65 @@ func validateCookieName(o *Options, msgs []string) []string {
 		return append(msgs, fmt.Sprintf("invalid cookie name: %q", o.CookieName))
 	}
 	return msgs
+}
+
+func newProvider(o *Options) (providers.Provider, error) {
+	p := &providers.ProviderData{
+		Scope:              o.Scope,
+		ClientID:           o.ClientID,
+		ClientSecret:       o.ClientSecret,
+		ApprovalPrompt:     o.ApprovalPrompt,
+		SessionLifetimeTTL: o.SessionLifetimeTTL,
+	}
+
+	var err error
+	if p.SignInURL, err = url.Parse(o.SignInURL); err != nil {
+		return nil, err
+	}
+	if p.RedeemURL, err = url.Parse(o.RedeemURL); err != nil {
+		return nil, err
+	}
+	p.RevokeURL = &url.URL{}
+	if p.ProfileURL, err = url.Parse(o.ProfileURL); err != nil {
+		return nil, err
+	}
+	if p.ValidateURL, err = url.Parse(o.ValidateURL); err != nil {
+		return nil, err
+	}
+
+	var singleFlightProvider providers.Provider
+	switch o.Provider {
+	case providers.GoogleProviderName: // Google
+		if o.GoogleServiceAccountJSON != "" {
+			_, err := os.Open(o.GoogleServiceAccountJSON)
+			if err != nil {
+				return nil, fmt.Errorf("invalid Google credentials file: %s", o.GoogleServiceAccountJSON)
+			}
+		}
+		googleProvider, err := providers.NewGoogleProvider(p, o.GoogleAdminEmail, o.GoogleServiceAccountJSON)
+		if err != nil {
+			return nil, err
+		}
+		cache := groups.NewFillCache(googleProvider.PopulateMembers, o.GroupsCacheRefreshTTL)
+		googleProvider.GroupsCache = cache
+		o.GroupsCacheStopFunc = cache.Stop
+		singleFlightProvider = providers.NewSingleFlightProvider(googleProvider)
+	default:
+		return nil, fmt.Errorf("unimplemented provider: %q", o.Provider)
+	}
+
+	return singleFlightProvider, nil
+}
+
+// AssignProvider is a function that takes an Options struct and assigns the
+// appropriate provider to the proxy. Should be called prior to
+// AssignStatsdClient.
+func AssignProvider(opts *Options) func(*Authenticator) error {
+	return func(proxy *Authenticator) error {
+		var err error
+		proxy.provider, err = newProvider(opts)
+		return err
+	}
 }
 
 // AssignStatsdClient is function that takes in an Options struct and assigns a statsd client
