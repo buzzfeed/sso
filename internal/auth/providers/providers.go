@@ -28,8 +28,12 @@ var (
 )
 
 const (
+	// AzureProviderName identifies the Azure AD v2 provider
+	AzureProviderName = "azure"
 	// GoogleProviderName identifies the Google provider
 	GoogleProviderName = "google"
+	// OIDCProviderName identifies the OpenID Connect provider
+	OIDCProviderName = "oidc"
 )
 
 // Provider is an interface exposing functions necessary to authenticate with a given provider.

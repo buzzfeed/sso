@@ -19,6 +19,7 @@ var (
 type SessionState struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
+	IDToken      string `json:"id_token"`
 
 	RefreshDeadline  time.Time `json:"refresh_deadline"`
 	LifetimeDeadline time.Time `json:"lifetime_deadline"`
