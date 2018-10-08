@@ -450,7 +450,7 @@ func (p *OAuthProxy) redeemCode(host, code string) (s *providers.SessionState, e
 	if code == "" {
 		return nil, errors.New("missing code")
 	}
-	redirectURL := p.GetProxyRedirectURL(host)
+	redirectURL, err := url.Parse("http://host.docker.internal")
 	log.Printf("redirectURL! %v", redirectURL)
 	s, err = p.provider.Redeem(redirectURL.String(), code)
 	if err != nil {
