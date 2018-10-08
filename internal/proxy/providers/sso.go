@@ -7,13 +7,14 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"time"
 
-	log "github.com/buzzfeed/sso/internal/pkg/logging"
+	logging "github.com/buzzfeed/sso/internal/pkg/logging"
 	"github.com/datadog/datadog-go/statsd"
 )
 
@@ -105,7 +106,11 @@ func (p *SSOProvider) Redeem(redirectURL, code string) (*SessionState, error) {
 	params.Add("code", code)
 	params.Add("grant_type", "authorization_code")
 
-	req, err := newRequest("POST", p.RedeemURL.String(), bytes.NewBufferString(params.Encode()))
+	log.Printf("p.RedeemURL! %v", p.RedeemURL.String())
+	log.Printf("Params! %v", params)
+	RedeemURL, err := url.Parse("http://host.docker.internal/redeem")
+	log.Printf("hardcode.RedeemURL! %v", RedeemURL.String())
+	req, err := newRequest("POST", RedeemURL.String(), bytes.NewBufferString(params.Encode()))
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +161,7 @@ func (p *SSOProvider) Redeem(redirectURL, code string) (*SessionState, error) {
 // ValidateGroup does a GET request to the profile url and returns true if the user belongs to
 // an authorized group.
 func (p *SSOProvider) ValidateGroup(email string, allowedGroups []string) ([]string, bool, error) {
-	logger := log.NewLogEntry()
+	logger := logging.NewLogEntry()
 
 	logger.WithUser(email).WithAllowedGroups(allowedGroups).Info("validating groups")
 	inGroups := []string{}
@@ -227,7 +232,7 @@ func (p *SSOProvider) UserGroups(email string, groups []string) ([]string, error
 // RefreshSession takes a SessionState and allowedGroups and refreshes the session access token,
 // returns `true` on success, and `false` on error
 func (p *SSOProvider) RefreshSession(s *SessionState, allowedGroups []string) (bool, error) {
-	logger := log.NewLogEntry()
+	logger := logging.NewLogEntry()
 
 	if s.RefreshToken == "" {
 		return false, ErrMissingRefreshToken
@@ -319,7 +324,7 @@ func (p *SSOProvider) redeemRefreshToken(refreshToken string) (token string, exp
 
 // ValidateSessionState takes a sessionState and allowedGroups and validates the session state
 func (p *SSOProvider) ValidateSessionState(s *SessionState, allowedGroups []string) bool {
-	logger := log.NewLogEntry()
+	logger := logging.NewLogEntry()
 
 	// we validate the user's access token is valid
 	params := url.Values{}
