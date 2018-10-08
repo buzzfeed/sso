@@ -29,6 +29,7 @@ services:
 
       - UPSTREAM_CONFIGS=/sso/upstream_configs.yml
       - PROVIDER_URL=http://sso-auth.localtest.me
+      - PROXY_PROVIDER_URL=http://host.docker.internal
 
       # CLIENT_ID and CLIENT_SECRET must match sso-auth's PROXY_CLIENT_ID and
       # PROXY_CLIENT_SECRET configuration
@@ -57,12 +58,6 @@ services:
       - ./upstream_configs.yml:/sso/upstream_configs.yml:ro
     expose:
       - 4180
-    # Because the sso-auth.localtest.me domain will not resolve correctly
-    # within the sso-proxy container for sso-proxy => sso-auth communication,
-    # we must manually add an /etc/hosts entry pointing at the docker-compose
-    # host IP
-    extra_hosts:
-      - 'sso-auth.localtest.me:172.20.0.1'
 
   sso-auth:
     image: buzzfeed/sso:latest # change this to `build: ..` to try local changes
@@ -101,7 +96,7 @@ services:
       - OLD_COOKIE_SECRET=V2JBZk0zWGtsL29UcFUvWjVDWWQ2UHExNXJ0b2VhcDI=
 
       # Tells nginx-proxy service how to route requests to this service
-      - VIRTUAL_HOST=sso-auth.localtest.me
+      - VIRTUAL_HOST=sso-auth.localtest.me,host.docker.internal
     expose:
       - 4180
 
@@ -133,11 +128,3 @@ services:
       - "80:80"
     volumes:
       - /var/run/docker.sock:/tmp/docker.sock:ro
-
-networks:
-  default:
-    driver: bridge
-    ipam:
-      driver: default
-      config:
-        - subnet: 172.20.0.0/16

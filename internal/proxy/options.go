@@ -19,6 +19,7 @@ import (
 // Options are configuration options that can be set by Environment Variables
 // Port - int -  port to listen on for HTTP clients
 // ProviderURLString - the URL for the provider in this environment: "https://sso-auth.example.com"
+// ProxyProviderURLString - the internal URL for the provider in this environment: "https://sso-auth-int.example.com"
 // UpstreamConfigsFile - the path to upstream configs file
 // Cluster - the cluster in which this is running, used for upstream configs
 // Scheme - the default scheme, used for upstream configs
@@ -46,10 +47,11 @@ import (
 type Options struct {
 	Port int `envconfig:"PORT" default:"4180"`
 
-	ProviderURLString   string `envconfig:"PROVIDER_URL"`
-	UpstreamConfigsFile string `envconfig:"UPSTREAM_CONFIGS"`
-	Cluster             string `envconfig:"CLUSTER"`
-	Scheme              string `envconfig:"SCHEME" default:"https"`
+	ProviderURLString      string `envconfig:"PROVIDER_URL"`
+	ProxyProviderURLString string `envconfig:"PROXY_PROVIDER_URL"`
+	UpstreamConfigsFile    string `envconfig:"UPSTREAM_CONFIGS"`
+	Cluster                string `envconfig:"CLUSTER"`
+	Scheme                 string `envconfig:"SCHEME" default:"https"`
 
 	SkipAuthPreflight bool `envconfig:"SKIP_AUTH_PREFLIGHT"`
 
@@ -124,6 +126,9 @@ func (o *Options) Validate() error {
 	}
 	if o.ProviderURLString == "" {
 		msgs = append(msgs, "missing setting: provider-url")
+	}
+	if o.ProxyProviderURLString == "" {
+		o.ProxyProviderURLString = o.ProviderURLString
 	}
 	if o.UpstreamConfigsFile == "" {
 		msgs = append(msgs, "missing setting: upstream-configs")
@@ -215,10 +220,19 @@ func parseProviderInfo(o *Options) error {
 		return errors.New("provider-url must include scheme and host")
 	}
 
+	proxyProviderURL, err := url.Parse(o.ProxyProviderURLString)
+	if err != nil {
+		return err
+	}
+	if proxyProviderURL.Scheme == "" || proxyProviderURL.Host == "" {
+		return errors.New("proxy provider url must include scheme and host")
+	}
+
 	providerData := &providers.ProviderData{
 		ClientID:           o.ClientID,
 		ClientSecret:       o.ClientSecret,
 		ProviderURL:        providerURL,
+		ProxyProviderURL:   proxyProviderURL,
 		Scope:              o.Scope,
 		SessionLifetimeTTL: o.SessionLifetimeTTL,
 		SessionValidTTL:    o.SessionValidTTL,
