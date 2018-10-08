@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/buzzfeed/sso/internal/pkg/aead"
-	log "github.com/buzzfeed/sso/internal/pkg/logging"
+	logging "github.com/buzzfeed/sso/internal/pkg/logging"
 	"github.com/buzzfeed/sso/internal/proxy/collector"
 	"github.com/buzzfeed/sso/internal/proxy/providers"
 
@@ -141,7 +141,7 @@ type upstreamTransport struct {
 func (t *upstreamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	resp, err := t.transport.RoundTrip(req)
 	if err != nil {
-		logger := log.NewLogEntry()
+		logger := logging.NewLogEntry()
 		logger.Error(err, "error in upstreamTransport RoundTrip")
 		return nil, err
 	}
@@ -196,7 +196,7 @@ func NewRewriteReverseProxy(route *RewriteRoute, config *UpstreamConfig) *httput
 		// we use to favor scheme's used in the regex, else we use the default passed in via the template
 		target, err := urlParse(route.ToTemplate.Scheme, rewritten)
 		if err != nil {
-			logger := log.NewLogEntry()
+			logger := logging.NewLogEntry()
 			// we aren't in an error handling context so we have to fake it(thanks stdlib!)
 			logger.WithRequestHost(req.Host).WithRewriteRoute(route).Error(
 				err, "unable to parse and replace rewrite url")
@@ -263,7 +263,7 @@ func generateHmacAuth(signatureKey string) (hmacauth.HmacAuth, error) {
 
 // NewOAuthProxy creates a new OAuthProxy struct.
 func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthProxy, error) {
-	logger := log.NewLogEntry()
+	logger := logging.NewLogEntry()
 	logger.WithProvider(opts.provider.Data().ProviderName).WithClientID(opts.ClientID).Info(
 		"OAuthProxy configured")
 	domain := opts.CookieDomain
@@ -367,7 +367,7 @@ func (p *OAuthProxy) Handler() http.Handler {
 
 // UnknownHost returns an http error for unknown or invalid hosts
 func (p *OAuthProxy) UnknownHost(rw http.ResponseWriter, req *http.Request) {
-	logger := log.NewLogEntry()
+	logger := logging.NewLogEntry()
 
 	tags := []string{
 		fmt.Sprintf("action:%s", GetActionTag(req)),
@@ -474,7 +474,7 @@ func (p *OAuthProxy) MakeCSRFCookie(req *http.Request, value string, expiration 
 }
 
 func (p *OAuthProxy) makeCookie(req *http.Request, name string, value string, expiration time.Duration, now time.Time) *http.Cookie {
-	logger := log.NewLogEntry()
+	logger := logging.NewLogEntry()
 
 	domain := req.Host
 	if h, _, err := net.SplitHostPort(domain); err == nil {
@@ -521,7 +521,7 @@ func (p *OAuthProxy) SetSessionCookie(rw http.ResponseWriter, req *http.Request,
 
 // LoadCookiedSession returns a SessionState from the cookie in the request.
 func (p *OAuthProxy) LoadCookiedSession(req *http.Request) (*providers.SessionState, error) {
-	logger := log.NewLogEntry().WithRemoteAddress(getRemoteAddr(req))
+	logger := logging.NewLogEntry().WithRemoteAddress(getRemoteAddr(req))
 
 	c, err := req.Cookie(p.CookieName)
 	if err != nil {
@@ -579,7 +579,7 @@ func (p *OAuthProxy) PingPage(rw http.ResponseWriter, _ *http.Request) {
 // XHRError returns a simple error response with an error message to the application if the request is an XML request
 func (p *OAuthProxy) XHRError(rw http.ResponseWriter, req *http.Request, code int, err error) {
 	remoteAddr := getRemoteAddr(req)
-	logger := log.NewLogEntry().WithRemoteAddress(remoteAddr)
+	logger := logging.NewLogEntry().WithRemoteAddress(remoteAddr)
 
 	jsonError := struct {
 		Error error `json:"error"`
@@ -607,7 +607,7 @@ func (p *OAuthProxy) ErrorPage(rw http.ResponseWriter, req *http.Request, code i
 	}
 
 	remoteAddr := getRemoteAddr(req)
-	logger := log.NewLogEntry().WithRemoteAddress(remoteAddr)
+	logger := logging.NewLogEntry().WithRemoteAddress(remoteAddr)
 
 	logger.WithHTTPStatus(code).WithPageTitle(title).WithPageMessage(message).Info(
 		"error page")
@@ -667,7 +667,7 @@ func (p *OAuthProxy) SignOut(rw http.ResponseWriter, req *http.Request) {
 func (p *OAuthProxy) OAuthStart(rw http.ResponseWriter, req *http.Request, tags []string) {
 	// The proxy redirects to the authenticator, and provides it with redirectURI (which points
 	// back to the sso proxy).
-	logger := log.NewLogEntry()
+	logger := logging.NewLogEntry()
 	remoteAddr := getRemoteAddr(req)
 
 	if p.isXHR(req) {
@@ -743,7 +743,7 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 	// We receive the callback from the SSO Authenticator. This request will either contain an
 	// error, or it will contain a `code`; the code can be used to fetch an access token, and
 	// other metadata, from the authenticator.
-	logger := log.NewLogEntry()
+	logger := logging.NewLogEntry()
 
 	remoteAddr := getRemoteAddr(req)
 	tags := []string{"action:callback"}
@@ -898,7 +898,7 @@ func (p *OAuthProxy) AuthenticateOnly(rw http.ResponseWriter, req *http.Request)
 // Proxy authenticates a request, either proxying the request if it is authenticated, or starting the authentication process if not.
 func (p *OAuthProxy) Proxy(rw http.ResponseWriter, req *http.Request) {
 	// Attempts to validate the user and their cookie.
-	logger := log.NewLogEntry()
+	logger := logging.NewLogEntry()
 	start := time.Now()
 	tags := []string{"action:proxy"}
 	var err error
@@ -966,7 +966,7 @@ func (p *OAuthProxy) Proxy(rw http.ResponseWriter, req *http.Request) {
 // Authenticate authenticates a request by checking for a session cookie, and validating its expiration,
 // clearing the session cookie if it's invalid and returning an error if necessary..
 func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (err error) {
-	logger := log.NewLogEntry().WithRemoteAddress(getRemoteAddr(req))
+	logger := logging.NewLogEntry().WithRemoteAddress(getRemoteAddr(req))
 
 	route, ok := p.router(req)
 	if !ok {
