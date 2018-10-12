@@ -9,7 +9,7 @@ jobs:
       - setup_remote_docker
       - run:
           name: get lint
-          command: go get github.com/golang/lint/golint
+          command: go get golang.org/x/lint/golint
       - run:
           name: install dependencies
           command: |
