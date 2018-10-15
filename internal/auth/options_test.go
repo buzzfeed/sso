@@ -18,6 +18,7 @@ func testOptions() *Options {
 	o.EmailDomains = []string{"*"}
 	o.ProxyClientID = "abcdef"
 	o.ProxyClientSecret = "testtest"
+	o.ProxyRootDomains = []string{"*"}
 	o.StatsdHost = "statsdhost"
 	o.StatsdPort = 12344
 	o.Host = "/"
@@ -43,6 +44,7 @@ func TestNewOptions(t *testing.T) {
 		"missing setting: cookie-secret",
 		"missing setting: client-id",
 		"missing setting: client-secret",
+		"missing setting: proxy-root-domain",
 		"missing setting: proxy-client-id",
 		"missing setting: proxy-client-secret",
 		"missing setting: required-host-header",

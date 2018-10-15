@@ -157,6 +157,9 @@ func (o *Options) Validate() error {
 	if len(o.EmailDomains) == 0 {
 		msgs = append(msgs, "missing setting for email validation: email-domain required.\n      use email-domain=* to authorize all email addresses")
 	}
+	if len(o.ProxyRootDomains) == 0 {
+		msgs = append(msgs, "missing setting: proxy-root-domain")
+	}
 	if o.ProxyClientID == "" {
 		msgs = append(msgs, "missing setting: proxy-client-id")
 	}
