@@ -35,7 +35,7 @@ func (fs noDirectoryFS) Open(name string) (http.File, error) {
 	return f, nil
 }
 
-//go:generate $GOPATH/bin/statik -src=./static
+//go:generate $GOPATH/bin/statik -f -src=./static
 
 func loadFSHandler() (http.Handler, error) {
 	statikFS, err := fs.New()
