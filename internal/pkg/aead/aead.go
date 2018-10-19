@@ -1,10 +1,13 @@
 package aead
 
 import (
+	"bytes"
+	"compress/gzip"
 	"crypto/cipher"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"sync"
 
 	miscreant "github.com/miscreant/miscreant-go"
@@ -95,8 +98,14 @@ func (c *MiscreantCipher) Marshal(s interface{}) (string, error) {
 		return "", err
 	}
 
+	// gunzip the bytes
+	var jsonBuffer bytes.Buffer
+	w := gzip.NewWriter(&jsonBuffer)
+	w.Write(plaintext)
+	w.Close()
+
 	// encrypt the JSON
-	ciphertext, err := c.Encrypt(plaintext)
+	ciphertext, err := c.Encrypt(jsonBuffer.Bytes())
 	if err != nil {
 		return "", err
 	}
@@ -121,8 +130,16 @@ func (c *MiscreantCipher) Unmarshal(value string, s interface{}) error {
 		return err
 	}
 
+	// gzip the bytes
+	var jsonBuffer bytes.Buffer
+	r, err := gzip.NewReader(bytes.NewBuffer(plaintext))
+	if err != nil {
+		return err
+	}
+	io.Copy(&jsonBuffer, r)
+
 	// unmarshal bytes
-	err = json.Unmarshal(plaintext, s)
+	err = json.Unmarshal(jsonBuffer.Bytes(), s)
 	if err != nil {
 		return err
 	}
