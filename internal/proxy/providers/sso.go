@@ -60,6 +60,7 @@ func NewSSOProvider(p *ProviderData, sc *statsd.Client) *SSOProvider {
 	p.RefreshURL = base.ResolveReference(&url.URL{Path: "/refresh"})
 	p.ValidateURL = base.ResolveReference(&url.URL{Path: "/validate"})
 	p.ProfileURL = base.ResolveReference(&url.URL{Path: "/profile"})
+	p.ProxyRedeemURL = p.ProxyProviderURL.ResolveReference(&url.URL{Path: "/redeem"})
 	return &SSOProvider{
 		ProviderData: p,
 		StatsdClient: sc,
@@ -105,10 +106,11 @@ func (p *SSOProvider) Redeem(redirectURL, code string) (*SessionState, error) {
 	params.Add("code", code)
 	params.Add("grant_type", "authorization_code")
 
-	req, err := newRequest("POST", p.RedeemURL.String(), bytes.NewBufferString(params.Encode()))
+	req, err := newRequest("POST", p.ProxyRedeemURL.String(), bytes.NewBufferString(params.Encode()))
 	if err != nil {
 		return nil, err
 	}
+	req.Host = p.RedeemURL.Host
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := httpClient.Do(req)
 	if err != nil {

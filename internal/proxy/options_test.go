@@ -71,6 +71,8 @@ func TestDefaultProviderApiSettings(t *testing.T) {
 		p.SignOutURL.String())
 	testutil.Equal(t, "https://www.example.com/redeem",
 		p.RedeemURL.String())
+	testutil.Equal(t, "https://www.example.com/redeem",
+		p.ProxyRedeemURL.String())
 	testutil.Equal(t, "https://www.example.com/validate",
 		p.ValidateURL.String())
 	testutil.Equal(t, "https://www.example.com/profile",
@@ -80,10 +82,12 @@ func TestDefaultProviderApiSettings(t *testing.T) {
 
 func TestProviderURLValidation(t *testing.T) {
 	testCases := []struct {
-		name              string
-		providerURLString string
-		expectedError     string
-		expectedSignInURL string
+		name                           string
+		providerURLString              string
+		proxyProviderURLString         string
+		expectedError                  string
+		expectedProxyProviderURLString string
+		expectedSignInURL              string
 	}{
 		{
 			name:              "http scheme preserved",
@@ -94,6 +98,17 @@ func TestProviderURLValidation(t *testing.T) {
 			name:              "https scheme preserved",
 			providerURLString: "https://provider.example.com",
 			expectedSignInURL: "https://provider.example.com/sign_in",
+		},
+		{
+			name:                           "proxy provider url string based on providerURL",
+			providerURLString:              "https://provider.example.com",
+			expectedProxyProviderURLString: "https://provider.example.com",
+		},
+		{
+			name:                           "proxy provider url string based on proxyProviderURL",
+			providerURLString:              "https://provider.example.com",
+			proxyProviderURLString:         "https://provider-internal.example.com",
+			expectedProxyProviderURLString: "https://provider-internal.example.com",
 		},
 		{
 			name:              "scheme required",
@@ -121,6 +136,7 @@ func TestProviderURLValidation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			o := testOptions()
 			o.ProviderURLString = tc.providerURLString
+			o.ProxyProviderURLString = tc.proxyProviderURLString
 			err := o.Validate()
 			if tc.expectedError != "" {
 				if err == nil {
@@ -130,10 +146,10 @@ func TestProviderURLValidation(t *testing.T) {
 				}
 			}
 			if tc.expectedSignInURL != "" {
-				p := o.provider.Data()
-				if p.SignInURL.String() != tc.expectedSignInURL {
-					t.Errorf("expected SignInURL = %q, got %q", tc.expectedSignInURL, p.SignInURL.String())
-				}
+				testutil.Equal(t, o.provider.Data().SignInURL.String(), tc.expectedSignInURL)
+			}
+			if tc.expectedProxyProviderURLString != "" {
+				testutil.Equal(t, o.provider.Data().ProxyProviderURL.String(), tc.expectedProxyProviderURLString)
 			}
 		})
 	}

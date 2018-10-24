@@ -10,11 +10,13 @@ import (
 type ProviderData struct {
 	ProviderName      string
 	ProviderURL       *url.URL
+	ProxyProviderURL  *url.URL
 	ClientID          string
 	ClientSecret      string
 	SignInURL         *url.URL
 	SignOutURL        *url.URL
 	RedeemURL         *url.URL
+	ProxyRedeemURL    *url.URL
 	RefreshURL        *url.URL
 	ProfileURL        *url.URL
 	ProtectedResource *url.URL
