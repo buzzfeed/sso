@@ -21,7 +21,7 @@ services:
   #  - http://httpbin.sso.localtest.me
   # ===========================================================================
   sso-proxy:
-    image: buzzfeed/sso:latest # change this to `build: ..` to try local changes
+    image: buzzfeed/sso-dev:latest # change this to `build: ..` to try local changes
     entrypoint: /bin/sso-proxy
     environment:
       # Allow any google account to log in for demo purposes
@@ -60,7 +60,7 @@ services:
       - 4180
 
   sso-auth:
-    image: buzzfeed/sso:latest # change this to `build: ..` to try local changes
+    image: buzzfeed/sso-dev:latest # change this to `build: ..` to try local changes
     entrypoint: /bin/sso-auth
     env_file:
       ./env

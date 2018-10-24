@@ -13,7 +13,7 @@ spec:
         k8s-app: sso-proxy
     spec:
       containers:
-      - image: buzzfeed/sso:latest
+      - image: buzzfeed/sso-dev:latest
         name: sso-proxy
         command: ["/bin/sso-proxy"]
         ports:
