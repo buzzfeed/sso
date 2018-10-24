@@ -13,7 +13,7 @@ spec:
         k8s-app: sso-auth
     spec:
       containers:
-      - image: buzzfeed/sso:latest
+      - image: buzzfeed/sso-dev:latest
         name: sso-auth
         command: ["/bin/sso-auth"]
         ports:
