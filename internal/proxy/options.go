@@ -87,6 +87,8 @@ type Options struct {
 	StatsdHost string `envconfig:"STATSD_HOST"`
 	StatsdPort int    `envconfig:"STATSD_PORT"`
 
+	RequestSigningKey string `envconfig:"REQUEST_SIGNATURE_KEY"`
+
 	StatsdClient *statsd.Client
 
 	// This is an override for supplying template vars at test time
