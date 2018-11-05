@@ -1,8 +1,6 @@
 package providers
 
 import (
-	"io/ioutil"
-	"net/http"
 	"net/url"
 
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
@@ -44,42 +42,4 @@ func stripParam(param, endpoint string) string {
 	}
 
 	return endpoint
-}
-
-// validateToken returns true if token is valid
-func validateToken(p Provider, accessToken string, header http.Header) bool {
-	logger := log.NewLogEntry()
-
-	if accessToken == "" || p.Data().ValidateURL == nil {
-		return false
-	}
-	endpoint := p.Data().ValidateURL.String()
-	if len(header) == 0 {
-		params := url.Values{"access_token": {accessToken}}
-		endpoint = endpoint + "?" + params.Encode()
-	}
-
-	req, err := http.NewRequest("GET", endpoint, nil)
-	if err != nil {
-		logger.Error(err, "token validation request failed")
-		return false
-	}
-	req.Header = header
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		logger.Error(err, "token validation request failed")
-		return false
-	}
-
-	body, _ := ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
-	logger.Printf("%d GET %s %s", resp.StatusCode, stripToken(endpoint), body)
-
-	if resp.StatusCode == 200 {
-		return true
-	}
-	logger.WithHTTPStatus(resp.StatusCode).WithResponseBody(body).Info(
-		"token validation request failed")
-	return false
 }

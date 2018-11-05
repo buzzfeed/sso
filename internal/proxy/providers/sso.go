@@ -2,6 +2,9 @@ package providers
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -384,4 +387,42 @@ func (p *SSOProvider) ValidateSessionState(s *SessionState, allowedGroups []stri
 	logger.WithUser(s.Email).WithSessionValid(s.ValidDeadline).Info("validated session")
 
 	return true
+}
+
+// signRedirectURL signs the redirect url string, given a timestamp, and returns it
+func (p *SSOProvider) signRedirectURL(rawRedirect string, timestamp time.Time) string {
+	h := hmac.New(sha256.New, []byte(p.Data().ClientSecret))
+	h.Write([]byte(rawRedirect))
+	h.Write([]byte(fmt.Sprint(timestamp.Unix())))
+	return base64.URLEncoding.EncodeToString(h.Sum(nil))
+}
+
+// GetSignInURL with typical oauth parameters
+func (p *SSOProvider) GetSignInURL(redirectURL *url.URL, state string) *url.URL {
+	a := *p.Data().SignInURL
+	now := time.Now()
+	rawRedirect := redirectURL.String()
+	params, _ := url.ParseQuery(a.RawQuery)
+	params.Set("redirect_uri", rawRedirect)
+	params.Add("scope", p.Data().Scope)
+	params.Set("client_id", p.Data().ClientID)
+	params.Set("response_type", "code")
+	params.Add("state", state)
+	params.Set("ts", fmt.Sprint(now.Unix()))
+	params.Set("sig", p.signRedirectURL(rawRedirect, now))
+	a.RawQuery = params.Encode()
+	return &a
+}
+
+// GetSignOutURL creates and returns the sign out URL, given a redirectURL
+func (p *SSOProvider) GetSignOutURL(redirectURL *url.URL) *url.URL {
+	a := *p.Data().SignOutURL
+	now := time.Now()
+	rawRedirect := redirectURL.String()
+	params, _ := url.ParseQuery(a.RawQuery)
+	params.Add("redirect_uri", rawRedirect)
+	params.Set("ts", fmt.Sprint(now.Unix()))
+	params.Set("sig", p.signRedirectURL(rawRedirect, now))
+	a.RawQuery = params.Encode()
+	return &a
 }

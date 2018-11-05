@@ -438,51 +438,12 @@ func TestFavicon(t *testing.T) {
 	testutil.Equal(t, http.StatusNotFound, rw.Code)
 }
 
-type TestProvider struct {
-	*providers.ProviderData
-	EmailAddress string
-	ValidToken   bool
-}
-
-func NewTestProvider(providerURL *url.URL, emailAddress string) *TestProvider {
-	return &TestProvider{
-		ProviderData: &providers.ProviderData{
-			ProviderName: "Test Provider",
-			SignInURL: &url.URL{
-				Scheme: "http",
-				Host:   providerURL.Host,
-				Path:   "/oauth/authorize",
-			},
-			RedeemURL: &url.URL{
-				Scheme: "http",
-				Host:   providerURL.Host,
-				Path:   "/oauth/token",
-			},
-			ProfileURL: &url.URL{
-				Scheme: "http",
-				Host:   providerURL.Host,
-				Path:   "/api/v1/profile",
-			},
-			Scope: "profile.email",
-		},
-		EmailAddress: emailAddress,
-	}
-}
-
-func (tp *TestProvider) GetEmailAddress(session *providers.SessionState) (string, error) {
-	return tp.EmailAddress, nil
-}
-
-func (tp *TestProvider) ValidateSessionState(session *providers.SessionState, g []string) bool {
-	return tp.ValidToken
-}
-
 type ProcessCookieTest struct {
 	opts         *Options
 	proxy        *OAuthProxy
 	rw           *httptest.ResponseRecorder
 	req          *http.Request
-	provider     TestProvider
+	provider     providers.TestProvider
 	responseCode int
 	validateUser bool
 }
@@ -508,8 +469,8 @@ func NewProcessCookieTest(opts ProcessCookieTestOpts) *ProcessCookieTest {
 		return nil
 	})
 
-	pcTest.proxy.provider = &TestProvider{
-		ValidToken: opts.providerValidateCookieResponse,
+	pcTest.proxy.provider = &providers.TestProvider{
+		ValidateSessionFunc: func(*providers.SessionState, []string) bool { return opts.providerValidateCookieResponse },
 	}
 
 	pcTest.rw = httptest.NewRecorder()
@@ -695,7 +656,7 @@ func TestAuthSkippedForPreflightRequests(t *testing.T) {
 	opts.Validate()
 
 	upstreamURL, _ := url.Parse(upstream.URL)
-	opts.provider = NewTestProvider(upstreamURL, "")
+	opts.provider = providers.NewTestProvider(upstreamURL, "")
 
 	proxy, _ := NewOAuthProxy(opts)
 	rw := httptest.NewRecorder()
@@ -749,7 +710,7 @@ func TestAuthSkipRequests(t *testing.T) {
 	opts.Validate()
 
 	upstreamURL, _ := url.Parse(upstream.URL)
-	opts.provider = NewTestProvider(upstreamURL, "")
+	opts.provider = providers.NewTestProvider(upstreamURL, "")
 
 	proxy, _ := NewOAuthProxy(opts)
 
@@ -829,7 +790,7 @@ func TestMultiAuthSkipRequests(t *testing.T) {
 	opts.Validate()
 
 	upstreamFooURL, _ := url.Parse(upstreamFoo.URL)
-	opts.provider = NewTestProvider(upstreamFooURL, "")
+	opts.provider = providers.NewTestProvider(upstreamFooURL, "")
 
 	proxy, _ := NewOAuthProxy(opts)
 
@@ -921,7 +882,7 @@ func NewSignatureTest(key string) *SignatureTest {
 	}
 	provider := httptest.NewServer(http.HandlerFunc(providerHandler))
 	providerURL, _ := url.Parse(provider.URL)
-	opts.provider = NewTestProvider(providerURL, "email1@example.com")
+	opts.provider = providers.NewTestProvider(providerURL, "email1@example.com")
 	opts.upstreamConfigs = generateSignatureTestUpstreamConfigs(key, upstream.URL)
 	opts.Validate()
 
@@ -1041,7 +1002,7 @@ func TestHeadersSentToUpstreams(t *testing.T) {
 	opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL)
 	opts.Validate()
 	providerURL, _ := url.Parse("http://sso-auth.example.com/")
-	opts.provider = NewTestProvider(providerURL, "")
+	opts.provider = providers.NewTestProvider(providerURL, "")
 
 	state := testSession()
 	state.Email = "foo@example.com"
@@ -1096,20 +1057,6 @@ func TestHeadersSentToUpstreams(t *testing.T) {
 
 	}
 
-}
-
-type testAuthenticateProvider struct {
-	*providers.ProviderData
-	refreshSessionFunc  func(*providers.SessionState, []string) (bool, error)
-	validateSessionFunc func(*providers.SessionState, []string) bool
-}
-
-func (tap *testAuthenticateProvider) RefreshSession(s *providers.SessionState, g []string) (bool, error) {
-	return tap.refreshSessionFunc(s, g)
-}
-
-func (tap *testAuthenticateProvider) ValidateSessionState(s *providers.SessionState, g []string) bool {
-	return tap.validateSessionFunc(s, g)
 }
 
 func TestAuthenticate(t *testing.T) {
@@ -1261,9 +1208,9 @@ func TestAuthenticate(t *testing.T) {
 			opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev")
 			opts.Validate()
 			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true), testCookieCipher(tc.Cipher))
-			proxy.provider = &testAuthenticateProvider{
-				refreshSessionFunc:  tc.RefreshSessionFunc,
-				validateSessionFunc: tc.ValidateSessionFunc,
+			proxy.provider = &providers.TestProvider{
+				RefreshSessionFunc:  tc.RefreshSessionFunc,
+				ValidateSessionFunc: tc.ValidateSessionFunc,
 			}
 
 			value, err := providers.MarshalSession(tc.Session, proxy.CookieCipher)
@@ -1518,7 +1465,7 @@ func TestPing(t *testing.T) {
 	opts.Validate()
 
 	providerURL, _ := url.Parse("http://sso-auth.example.com/")
-	opts.provider = NewTestProvider(providerURL, "")
+	opts.provider = providers.NewTestProvider(providerURL, "")
 
 	proxy, _ := NewOAuthProxy(opts)
 	state := testSession()
@@ -1597,7 +1544,7 @@ func TestSecurityHeaders(t *testing.T) {
 	opts.Validate()
 
 	providerURL, _ := url.Parse("http://sso-auth.example.com/")
-	opts.provider = NewTestProvider(providerURL, "")
+	opts.provider = providers.NewTestProvider(providerURL, "")
 
 	proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true))
 
@@ -1741,7 +1688,7 @@ func TestHeaderOverrides(t *testing.T) {
 			opts.Validate()
 
 			providerURL, _ := url.Parse("http://sso-auth.example.com/")
-			opts.provider = NewTestProvider(providerURL, "")
+			opts.provider = providers.NewTestProvider(providerURL, "")
 
 			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true))
 
@@ -1785,7 +1732,7 @@ func TestHTTPSRedirect(t *testing.T) {
 	defer upstream.Close()
 
 	providerURL, _ := url.Parse("http://sso-auth.example.com/")
-	provider := NewTestProvider(providerURL, "")
+	provider := providers.NewTestProvider(providerURL, "")
 	state := testSession()
 
 	testCases := []struct {
