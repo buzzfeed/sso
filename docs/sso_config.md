@@ -2,8 +2,8 @@
 
 ### Proxy Config
 All services using `sso_proxy` are configured in a `upstream_config.yml` file.
-All config values can be templated from environmental variables with the prefix `BUZZFEED_SSO_CONFIG_`.
-For example, the following config would have the following environment variables configed:, `BUZZFEED_SSO_CONFIG_CLUSTER`, `BUZZFEED_SSO_CONFIG_ROOT_DOMAIN`.
+All config values can be templated from environmental variables with the prefix `SSO_CONFIG_`.
+For example, the following config would have the following environment variables configed:, `SSO_CONFIG_CLUSTER`, `SSO_CONFIG_ROOT_DOMAIN`.
 
 
 ```json
@@ -85,11 +85,11 @@ and proxy the request to that upstream.
 
 ### Request Signing
 SSO Proxy can sign requests using an HMAC shared-secret signing key specified per upstream. This must be of the form `algorithm:secret_value`, where `sha256` is preferred for the algorithm.
-To enable request signing, SSO Proxy looks for environment variables with the format `BUZZFEED_SSO_CONFIG_{{SERVICE}}_SIGNING_KEY` with the previous mentioned key.
+To enable request signing, SSO Proxy looks for environment variables with the format `SSO_CONFIG_{{SERVICE}}_SIGNING_KEY` with the previous mentioned key.
 
 For example:
 ```bash
-export BUZZFEED_SSO_CONFIG_FOOBAR_SIGNING_KEY="sha256:shared-secret-value"
+export SSO_CONFIG_FOOBAR_SIGNING_KEY="sha256:shared-secret-value"
 ```
 would be the signing key for the `foobar` upstream service, use the sha256 with the `shared-secret-value` as it's signing key value.
 
