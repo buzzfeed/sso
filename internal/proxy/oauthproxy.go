@@ -1037,6 +1037,7 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 	}
 
 	req.Header.Set("X-Forwarded-User", session.User)
+	req.Header.Set("X-Forwarded-AccessToken", session.AccessToken)
 	req.Header.Set("X-Forwarded-Email", session.Email)
 	req.Header.Set("X-Forwarded-Groups", strings.Join(session.Groups, ","))
 
