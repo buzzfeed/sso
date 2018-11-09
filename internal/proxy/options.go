@@ -36,6 +36,7 @@ import (
 // CookieExpire - expire timeframe for cookie
 // CookieSecure - set secure (HTTPS) cookie flag
 // CookieHTTPOnly - set HttpOnly cookie flag
+// PassAccessToken - send access token in the http headers
 // Provider - OAuth provider
 // Scope - OAuth scope specification
 // SessionLifetimeTTL - time to live for a session lifetime
@@ -70,6 +71,8 @@ type Options struct {
 	CookieExpire   time.Duration `envconfig:"COOKIE_EXPIRE" default:"168h"`
 	CookieSecure   bool          `envconfig:"COOKIE_SECURE" default:"true"`
 	CookieHTTPOnly bool          `envconfig:"COOKIE_HTTP_ONLY"`
+
+	PassAccessToken bool `envconfig:"PASS_ACCESS_TOKEN" default:"false"`
 
 	// These options allow for other providers besides Google, with potential overrides.
 	Provider string `envconfig:"PROVIDER" default:"google"`
@@ -106,6 +109,7 @@ func NewOptions() *Options {
 		SkipAuthPreflight:      false,
 		RequestLogging:         true,
 		DefaultUpstreamTimeout: time.Duration(1) * time.Second,
+		PassAccessToken:        false,
 	}
 }
 
