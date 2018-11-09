@@ -25,6 +25,7 @@ import (
 // Scheme - the default scheme, used for upstream configs
 // SkipAuthPreflight - will skip authentication for OPTIONS requests, default false
 // EmailDomains - csv list of emails with the specified domain to authenticate. Use * to authenticate any email
+// EmailAddresses - []string - authenticate emails with the specified email address (may be given multiple times). Use * to authenticate any email
 // ClientID - the OAuth Client ID: ie: "123456.apps.googleusercontent.com"
 // ClientSecret - The OAuth Client Secret
 // DefaultUpstreamTimeout - the default time period to wait for a response from an upstream
@@ -55,9 +56,10 @@ type Options struct {
 
 	SkipAuthPreflight bool `envconfig:"SKIP_AUTH_PREFLIGHT"`
 
-	EmailDomains []string `envconfig:"EMAIL_DOMAIN"`
-	ClientID     string   `envconfig:"CLIENT_ID"`
-	ClientSecret string   `envconfig:"CLIENT_SECRET"`
+	EmailDomains   []string `envconfig:"EMAIL_DOMAIN"`
+	EmailAddresses []string `envconfig:"EMAIL_ADDRESS"`
+	ClientID       string   `envconfig:"CLIENT_ID"`
+	ClientSecret   string   `envconfig:"CLIENT_SECRET"`
 
 	DefaultUpstreamTimeout time.Duration `envconfig:"DEFAULT_UPSTREAM_TIMEOUT" default:"10s"`
 
@@ -142,8 +144,8 @@ func (o *Options) Validate() error {
 	if o.ClientSecret == "" {
 		msgs = append(msgs, "missing setting: client-secret")
 	}
-	if len(o.EmailDomains) == 0 {
-		msgs = append(msgs, "missing setting: email-domain")
+	if len(o.EmailDomains) == 0 && len(o.EmailAddresses) == 0 {
+		msgs = append(msgs, "missing setting: email-domain or email-address")
 	}
 
 	if o.StatsdHost == "" {
