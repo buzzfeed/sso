@@ -5,9 +5,9 @@ import (
 	"strings"
 )
 
-// NewEmailValidator returns a function that checks whether a given email is valid based on a list
+// NewEmailDomainValidator returns a function that checks whether a given email is valid based on a list
 // of domains. The domain "*" is a wild card that matches any non-empty email.
-func NewEmailValidator(domains []string) func(string) bool {
+func NewEmailDomainValidator(domains []string) func(string) bool {
 	allowAll := false
 	for i, domain := range domains {
 		if domain == "*" {
