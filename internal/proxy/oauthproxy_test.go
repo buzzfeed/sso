@@ -999,6 +999,7 @@ func TestHeadersSentToUpstreams(t *testing.T) {
 	opts.ClientSecret = "foobar"
 	opts.CookieSecret = testEncodedCookieSecret
 	opts.CookieSecure = false
+	opts.PassAccessToken = true
 	opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL)
 	opts.Validate()
 	providerURL, _ := url.Parse("http://sso-auth.example.com/")
@@ -1007,6 +1008,7 @@ func TestHeadersSentToUpstreams(t *testing.T) {
 	state := testSession()
 	state.Email = "foo@example.com"
 	state.User = "foo"
+	state.AccessToken = "SupErSensItiveAccesSToken"
 	state.Groups = []string{"fooGroup"}
 	proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true))
 
@@ -1041,10 +1043,11 @@ func TestHeadersSentToUpstreams(t *testing.T) {
 			}
 
 			expectedHeaders := map[string]string{
-				"X-Forwarded-Email":  "foo@example.com",
-				"X-Forwarded-User":   "foo",
-				"X-Forwarded-Groups": "fooGroup",
-				"Cookie":             tc.expectedCookieHeader,
+				"X-Forwarded-Email":        "foo@example.com",
+				"X-Forwarded-User":         "foo",
+				"X-Forwarded-Groups":       "fooGroup",
+				"X-Forwarded-Access-Token": "SupErSensItiveAccesSToken",
+				"Cookie":                   tc.expectedCookieHeader,
 			}
 
 			for key, val := range expectedHeaders {

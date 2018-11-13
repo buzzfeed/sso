@@ -183,3 +183,11 @@ func TestValidateCookieBadName(t *testing.T) {
 	testutil.Equal(t, err.Error(), "Invalid configuration:\n"+
 		fmt.Sprintf("  invalid cookie name: %q", o.CookieName))
 }
+
+func TestPassAccessToken(t *testing.T) {
+	o := testOptions()
+	testutil.Equal(t, false, o.PassAccessToken)
+	o.PassAccessToken = true
+	testutil.Equal(t, nil, o.Validate())
+	testutil.Equal(t, true, o.PassAccessToken)
+}
