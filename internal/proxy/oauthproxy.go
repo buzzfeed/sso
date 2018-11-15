@@ -341,6 +341,10 @@ func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthPr
 	}
 
 	for _, upstreamConfig := range opts.upstreamConfigs {
+		logger.Printf("upstreamConfig.Route: %v", upstreamConfig.Route)
+		logger.Printf("upstreamConfig.RouteConfig: %v", upstreamConfig.RouteConfig)
+		logger.Printf("upstreamConfig.RouteConfig.Options: %v", upstreamConfig.RouteConfig.Options)
+
 		switch route := upstreamConfig.Route.(type) {
 		case *SimpleRoute:
 			reverseProxy := NewReverseProxy(route.ToURL, upstreamConfig)
@@ -468,6 +472,99 @@ func (p *OAuthProxy) redeemCode(host, code string) (*sessions.SessionState, erro
 		return s, errors.New("invalid email address")
 	}
 	return s, nil
+}
+
+// MakeSessionCookie constructs a session cookie given the request, an expiration time and the current time.
+func (p *OAuthProxy) MakeSessionCookie(req *http.Request, value string, expiration time.Duration, now time.Time) *http.Cookie {
+	return p.makeCookie(req, p.CookieName, value, expiration, now)
+}
+
+// MakeCSRFCookie creates a CSRF cookie given the request, an expiration time, and the current time.
+func (p *OAuthProxy) MakeCSRFCookie(req *http.Request, value string, expiration time.Duration, now time.Time) *http.Cookie {
+	return p.makeCookie(req, p.CSRFCookieName, value, expiration, now)
+}
+
+func (p *OAuthProxy) makeCookie(req *http.Request, name string, value string, expiration time.Duration, now time.Time) *http.Cookie {
+	logger := log.NewLogEntry()
+
+	domain := req.Host
+	if h, _, err := net.SplitHostPort(domain); err == nil {
+		domain = h
+	}
+	if p.CookieDomain != "" {
+		if !strings.HasSuffix(domain, p.CookieDomain) {
+			logger.WithRequestHost(domain).WithCookieDomain(p.CookieDomain).Warn(
+				"using configured cookie domain")
+		}
+		domain = p.CookieDomain
+	}
+
+	return &http.Cookie{
+		Name:     name,
+		Value:    value,
+		Path:     "/",
+		Domain:   domain,
+		HttpOnly: p.CookieHTTPOnly,
+		Secure:   p.CookieSecure,
+		Expires:  now.Add(expiration),
+	}
+}
+
+// ClearCSRFCookie clears the CSRF cookie from the request
+func (p *OAuthProxy) ClearCSRFCookie(rw http.ResponseWriter, req *http.Request) {
+	http.SetCookie(rw, p.MakeCSRFCookie(req, "", time.Hour*-1, time.Now()))
+}
+
+// SetCSRFCookie sets the CSRFCookie creates a CSRF cookie in a given request
+func (p *OAuthProxy) SetCSRFCookie(rw http.ResponseWriter, req *http.Request, val string) {
+	http.SetCookie(rw, p.MakeCSRFCookie(req, val, p.CookieExpire, time.Now()))
+}
+
+// ClearSessionCookie clears the session cookie from a request
+func (p *OAuthProxy) ClearSessionCookie(rw http.ResponseWriter, req *http.Request) {
+	http.SetCookie(rw, p.MakeSessionCookie(req, "", time.Hour*-1, time.Now()))
+}
+
+// SetSessionCookie creates a sesion cookie based on the value and the expiration time.
+func (p *OAuthProxy) SetSessionCookie(rw http.ResponseWriter, req *http.Request, val string) {
+	http.SetCookie(rw, p.MakeSessionCookie(req, val, p.CookieExpire, time.Now()))
+}
+
+// LoadCookiedSession returns a SessionState from the cookie in the request.
+func (p *OAuthProxy) LoadCookiedSession(req *http.Request) (*providers.SessionState, error) {
+	logger := log.NewLogEntry().WithRemoteAddress(getRemoteAddr(req))
+
+	c, err := req.Cookie(p.CookieName)
+	if err != nil {
+		// always http.ErrNoCookie
+		return nil, err
+	}
+
+	session, err := providers.UnmarshalSession(c.Value, p.CookieCipher)
+	if err != nil {
+		tags := []string{"error:unmarshaling_session"}
+		p.StatsdClient.Incr("application_error", tags, 1.0)
+		logger.Error(err, "unable to unmarshal session")
+		return nil, ErrInvalidSession
+	}
+
+	logger.Printf("session loaded: %v", session)
+
+	return session, nil
+}
+
+// SaveSession saves a session state to a request cookie.
+func (p *OAuthProxy) SaveSession(rw http.ResponseWriter, req *http.Request, s *providers.SessionState) error {
+	value, err := providers.MarshalSession(s, p.CookieCipher)
+	if err != nil {
+		return err
+	}
+
+	p.SetSessionCookie(rw, req, value)
+	logger := log.NewLogEntry().WithRemoteAddress(getRemoteAddr(req))
+	logger.Printf("session saved: %v", s)
+
+	return nil
 }
 
 // RobotsTxt sets the User-Agent header in the response to be "Disallow"
@@ -788,6 +885,12 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 	allowedGroups := route.upstreamConfig.AllowedGroups
 
 	inGroups, validGroup, err := p.provider.ValidateGroup(session.Email, allowedGroups)
+	logger.Printf("route: %v", route)
+	logger.Printf("route.upstreamConfig: %v", route.upstreamConfig)
+	logger.Printf("inGroups: %v", inGroups)
+	logger.Printf("allowedGroups: %v", allowedGroups)
+	logger.Printf("validGroup: %v", validGroup)
+	logger.Printf("err: %v", err)
 	if err != nil {
 		tags = append(tags, "error:user_group_failed")
 		p.StatsdClient.Incr("provider_error", tags, 1.0)
@@ -996,6 +1099,9 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 		logger.WithUser(session.Email).Error("not authorized")
 		return ErrUserNotAuthorized
 	}
+
+	logger.Printf("proxied full session: %v", session)
+	logger.Printf("proxied groups: %v", session.Groups)
 
 	req.Header.Set("X-Forwarded-User", session.User)
 

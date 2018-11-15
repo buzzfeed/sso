@@ -63,6 +63,8 @@ func (p *SingleFlightProvider) do(endpoint, key string, fn func() (interface{}, 
 func (p *SingleFlightProvider) AssignStatsdClient(StatsdClient *statsd.Client) {
 	p.StatsdClient = StatsdClient
 	switch v := p.provider.(type) {
+	case *AzureV2Provider:
+		v.SetStatsdClient(StatsdClient)
 	case *GoogleProvider:
 		v.SetStatsdClient(StatsdClient)
 	}

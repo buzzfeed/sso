@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/18F/hmacauth"
+	log "github.com/buzzfeed/sso/internal/pkg/logging"
 	"github.com/imdario/mergo"
 	"gopkg.in/yaml.v2"
 )
@@ -185,6 +186,9 @@ func loadServiceConfigs(raw []byte, cluster, scheme string, configVars map[strin
 		if err != nil {
 			return nil, err
 		}
+		logger := log.NewLogEntry()
+		logger.Printf("proxy.AllowedGroups: %v", proxy.AllowedGroups)
+
 	}
 
 	for _, proxy := range configs {

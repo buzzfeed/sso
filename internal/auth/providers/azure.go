@@ -9,12 +9,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bitly/oauth2_proxy/api"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
+	"github.com/datadog/datadog-go/statsd"
 	"golang.org/x/oauth2"
 
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
 	oidc "github.com/coreos/go-oidc"
+)
+
+var (
+	azureOIDCConfigURL  = "https://login.microsoftonline.com/{tenant}/v2.0"
+	azureOIDCProfileURL = "https://graph.microsoft.com/oidc/userinfo"
 )
 
 // AzureV2Provider is an Azure AD v2 specific implementation of the Provider interface.
@@ -22,14 +27,25 @@ type AzureV2Provider struct {
 	*ProviderData
 	*OIDCProvider
 
-	Tenant          string
-	PermittedGroups []string
+	Tenant string
+
+	StatsdClient *statsd.Client
+
+	GraphService GraphService
 }
 
 // NewAzureV2Provider creates a new AzureV2Provider struct
 func NewAzureV2Provider(p *ProviderData) *AzureV2Provider {
-	p.ProviderName = "Azure v2.0"
-	return &AzureV2Provider{ProviderData: p, OIDCProvider: &OIDCProvider{ProviderData: p}}
+	p.ProviderName = "Azure AD"
+	return &AzureV2Provider{
+		ProviderData: p,
+		OIDCProvider: &OIDCProvider{ProviderData: p},
+	}
+}
+
+// SetStatsdClient sets the azure provider statsd client
+func (p *AzureV2Provider) SetStatsdClient(statsdClient *statsd.Client) {
+	p.StatsdClient = statsdClient
 }
 
 // Redeem fulfills the Provider interface.
@@ -50,8 +66,17 @@ func (p *AzureV2Provider) Redeem(redirectURL, code string) (s *sessions.SessionS
 	}
 
 	rawIDToken, ok := token.Extra("id_token").(string)
-	if !ok {
+	// BUG?  rawIDToken is empty string here in current test cases. Test cases
+	// are shipping invalid ID tokens, but the Extra function doesn't seem to have
+	// code that would be affected by that.
+	if !ok || rawIDToken == "" {
+		fmt.Printf("token: %+v\n", token)
 		return nil, fmt.Errorf("token response did not contain an id_token")
+	}
+
+	// should only happen if oidc autodiscovery is broken
+	if p.OIDCProvider.Verifier == nil {
+		return nil, fmt.Errorf("oidc verifier missing")
 	}
 
 	// Parse and verify ID Token payload.
@@ -62,10 +87,8 @@ func (p *AzureV2Provider) Redeem(redirectURL, code string) (s *sessions.SessionS
 
 	// Extract custom claims.
 	var claims struct {
-		Email    string   `json:"email"`
-		UPN      string   `json:"upn"`
-		Roles    []string `json:"roles"`
-		Verified *bool    `json:"email_verified"`
+		Email string `json:"email"`
+		UPN   string `json:"upn"`
 	}
 	if err := idToken.Claims(&claims); err != nil {
 		return nil, fmt.Errorf("failed to parse id_token claims: %v", err)
@@ -73,72 +96,128 @@ func (p *AzureV2Provider) Redeem(redirectURL, code string) (s *sessions.SessionS
 	if claims.Email == "" {
 		return nil, fmt.Errorf("id_token did not contain an email")
 	}
-	if claims.Verified != nil && !*claims.Verified {
-		return nil, fmt.Errorf("email in id_token (%s) isn't verified", claims.Email)
-	}
+	// TODO: test this w/ an account that uses an alias and compare email claim
+	// with UPN claim; UPN has usually been what you want, but I think it's not
+	// rendered as a full email address here.
+	// FIXME: validate nonce against session
 
 	s = &sessions.SessionState{
-		AccessToken:     token.AccessToken,
-		RefreshToken:    token.RefreshToken,
-		RefreshDeadline: token.Expiry,
-		Email:           claims.Email,
-		User:            claims.UPN,
-		Groups:          claims.Roles,
+		AccessToken:  token.AccessToken,
+		RefreshToken: token.RefreshToken,
+
+		RefreshDeadline:  token.Expiry,
+		LifetimeDeadline: sessions.ExtendDeadline(p.SessionLifetimeTTL),
+
+		Email: claims.Email,
+		User:  claims.UPN,
 	}
 
+	if p.GraphService != nil {
+		groupNames, err := p.GraphService.GetGroups(claims.Email)
+		if err != nil {
+			return nil, fmt.Errorf("could not get groups: %v", err)
+		}
+		s.Groups = groupNames
+	}
 	return
 }
 
 // Configure sets the Azure tenant ID value for the provider
-func (p *AzureV2Provider) Configure(tenant string) {
+func (p *AzureV2Provider) Configure(tenant string) error {
 	p.Tenant = tenant
 	if tenant == "" {
 		p.Tenant = "common"
 	}
-	discoveryURL := fmt.Sprintf("https://login.microsoftonline.com/%s/v2.0", p.Tenant)
+	discoveryURL := strings.Replace(azureOIDCConfigURL, "{tenant}", p.Tenant, -1)
 
 	// Configure discoverable provider data.
 	oidcProvider, err := oidc.NewProvider(context.Background(), discoveryURL)
 	if err != nil {
-		return
+		// FIXME: this seems like it _should_ work for "common", but it doesn't
+		// Does anyone actually want to use this with "common" though?
+		return err
 	}
-
-	logger := log.NewLogEntry()
 
 	p.OIDCProvider.Verifier = oidcProvider.Verifier(&oidc.Config{
 		ClientID: p.ClientID,
 	})
-	p.SignInURL, err = url.Parse(oidcProvider.Endpoint().AuthURL)
-	if err != nil {
-		logger.Printf("Unable to parse OIDC Authentication URL: %v", err)
-		return
+	// Set these only if they haven't been overridden
+	if p.SignInURL == nil || p.SignInURL.String() == "" {
+		p.SignInURL, err = url.Parse(oidcProvider.Endpoint().AuthURL)
+		if err != nil {
+			return err
+		}
 	}
-	p.RedeemURL, err = url.Parse(oidcProvider.Endpoint().TokenURL)
-	if err != nil {
-		logger.Printf("Unable to parse OIDC Token URL: %v", err)
-		return
+	if p.RedeemURL == nil || p.RedeemURL.String() == "" {
+		p.RedeemURL, err = url.Parse(oidcProvider.Endpoint().TokenURL)
+		if err != nil {
+			return err
+		}
 	}
-	p.ProfileURL, err = url.Parse("https://graph.microsoft.com/oidc/userinfo")
+	if p.ProfileURL == nil || p.ProfileURL.String() == "" {
+		p.ProfileURL, err = url.Parse(azureOIDCProfileURL)
+	}
 	if err != nil {
-		logger.Printf("Unable to parse OIDC UserInfo URL: %v", err)
-		return
+		return err
 	}
 	if p.Scope == "" {
-		p.Scope = "openid email profile"
+		p.Scope = "openid email profile offline_access"
 	}
+	if p.RedeemURL.String() == "" {
+		return errors.New("redeem url must be set")
+	}
+	p.GraphService = NewAzureGraphService(p.ClientID, p.ClientSecret, p.RedeemURL.String())
+	return nil
 }
 
 // RefreshSessionIfNeeded takes in a SessionState and
 // returns false if the session is not refreshed and true if it is.
 func (p *AzureV2Provider) RefreshSessionIfNeeded(s *sessions.SessionState) (bool, error) {
-	if s == nil || s.RefreshDeadline.After(time.Now()) || s.RefreshToken == "" {
+	if s == nil || !s.RefreshPeriodExpired() || s.RefreshToken == "" {
 		return false, nil
+	}
+
+	newToken, duration, err := p.RefreshAccessToken(s.RefreshToken)
+	if err != nil {
+		return false, err
 	}
 	logger := log.NewLogEntry()
 
-	s.RefreshDeadline = time.Now().Add(time.Second).Truncate(time.Second)
+	s.AccessToken = newToken
+
+	s.RefreshDeadline = time.Now().Add(duration).Truncate(time.Second)
 	logger.WithUser(s.Email).WithRefreshDeadline(s.RefreshDeadline).Info("refreshed access token")
-	return false, nil
+
+	return true, nil
+}
+
+// RefreshAccessToken uses default OAuth2 TokenSource method to get a new
+// access token.
+func (p *AzureV2Provider) RefreshAccessToken(refreshToken string) (string, time.Duration, error) {
+	if refreshToken == "" {
+		return "", 0, errors.New("missing refresh token")
+	}
+	logger := log.NewLogEntry()
+	logger.Info("refreshing access token")
+
+	ctx := context.Background()
+	c := oauth2.Config{
+		ClientID:     p.ClientID,
+		ClientSecret: p.ClientSecret,
+		Endpoint: oauth2.Endpoint{
+			TokenURL: p.RedeemURL.String(),
+		},
+	}
+	t := oauth2.Token{
+		RefreshToken: refreshToken,
+	}
+	ts := c.TokenSource(ctx, &t)
+	newToken, err := ts.Token()
+	if err != nil {
+		return "", 0, fmt.Errorf("token exchange: %v", err)
+	}
+
+	return newToken.AccessToken, newToken.Expiry.Sub(time.Now()), nil
 }
 
 func getAzureHeader(accessToken string) http.Header {
@@ -147,57 +226,11 @@ func getAzureHeader(accessToken string) http.Header {
 	return header
 }
 
-// GetGroups lists groups user belongs to. Filter the desired names of groups (in case of huge group set)
-func (p *AzureV2Provider) GetGroups(s *sessions.SessionState, f string) ([]string, error) {
-	logger := log.NewLogEntry()
-	logger.Printf("[azure_v2] GetGroups")
-	if s.AccessToken == "" {
-		return []string{}, errors.New("missing access token")
-	}
-	logger.Printf("Access Token %v", s.AccessToken)
-
-	if s.IDToken == "" {
-		return []string{}, errors.New("missing id token")
-	}
-	logger.Printf("ID Token %v", s.IDToken)
-
-	groupNames := make([]string, 0)
-	requestURL := p.ProfileURL.String()
-	for {
-		req, err := http.NewRequest("GET", requestURL, nil)
-
-		if err != nil {
-			return []string{}, err
-		}
-		req.Header = getAzureHeader(s.AccessToken)
-		req.Header.Add("Content-Type", "application/json")
-
-		groupData, err := api.Request(req)
-		if err != nil {
-			return []string{}, err
-		}
-		logger.Printf("Got Graph response: %v", groupData)
-
-		for _, groupInfo := range groupData.Get("value").MustArray() {
-			v, ok := groupInfo.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			dname := v["displayName"].(string)
-			if strings.Contains(dname, f) {
-				groupNames = append(groupNames, dname)
-			}
-
-		}
-
-		if nextlink := groupData.Get("@odata.nextLink").MustString(); nextlink != "" {
-			requestURL = nextlink
-		} else {
-			break
-		}
-	}
-
-	return groupNames, nil
+// ValidateSessionState attempts to validate the session state's access token.
+func (p *AzureV2Provider) ValidateSessionState(s *sessions.SessionState) bool {
+	// return validateToken(p, s.AccessToken, nil)
+	// TODO Validate ID token
+	return true
 }
 
 // GetSignInURL returns the sign in url with typical oauth parameters
@@ -212,38 +245,39 @@ func (p *AzureV2Provider) GetSignInURL(redirectURI, state string) string {
 	params.Add("scope", p.Scope)
 	params.Add("state", state)
 	params.Set("prompt", p.ApprovalPrompt)
-	params.Set("nonce", "FIXME") // FIXME
+	params.Set("nonce", "FIXME") // FIXME, maybe change to session state struct
 	a.RawQuery = params.Encode()
 
 	return a.String()
 }
 
-// SetGroupRestriction limits which groups are allowed
-func (p *AzureV2Provider) SetGroupRestriction(groups []string) {
-	logger := log.NewLogEntry()
-	if len(groups) == 1 && strings.Index(groups[0], "|") >= 0 {
-		p.PermittedGroups = strings.Split(groups[0], "|")
-	} else {
-		p.PermittedGroups = groups
+// ValidateGroupMembership takes in an email and the allowed groups and returns the groups that the email is part of in that list.
+// If `allGroups` is an empty list it returns all the groups that the user belongs to.
+func (p *AzureV2Provider) ValidateGroupMembership(email string, allGroups []string) ([]string, error) {
+	if p.GraphService == nil {
+		panic("provider has not been configured")
 	}
-	logger.Printf("Set group restrictions. Allowed groups are:")
-	for _, pGroup := range p.PermittedGroups {
-		logger.Printf("\t'%s'", pGroup)
+
+	userGroups, err := p.GraphService.GetGroups(email)
+	if err != nil {
+		return nil, err
 	}
-}
 
-// ValidateGroup ensures that a user is a member of a permitted group
-func (p *AzureV2Provider) ValidateGroup(s *sessions.SessionState) bool {
-	if len(p.PermittedGroups) != 0 {
-		for _, pGroup := range p.PermittedGroups {
+	// if `allGroups` is empty use the groups resource
+	if len(allGroups) == 0 {
+		return userGroups, nil
+	}
 
-			if contains(s.Groups, pGroup) {
-				return true
+	filtered := []string{}
+	for _, userGroup := range userGroups {
+		for _, allowedGroup := range allGroups {
+			if userGroup == allowedGroup {
+				filtered = append(filtered, userGroup)
 			}
 		}
-		return false
 	}
-	return true
+
+	return filtered, nil
 }
 
 func contains(s []string, e string) bool {

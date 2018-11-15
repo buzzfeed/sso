@@ -2,11 +2,13 @@ package providers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"golang.org/x/oauth2"
 
+	log "github.com/buzzfeed/sso/internal/pkg/logging"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	oidc "github.com/coreos/go-oidc"
 )
@@ -81,12 +83,56 @@ func (p *OIDCProvider) Redeem(redirectURL, code string) (s *sessions.SessionStat
 // RefreshSessionIfNeeded takes in a SessionState and
 // returns false if the session is not refreshed and true if it is.
 func (p *OIDCProvider) RefreshSessionIfNeeded(s *sessions.SessionState) (bool, error) {
-	if s == nil || s.RefreshDeadline.After(time.Now()) || s.RefreshToken == "" {
+	// if s == nil || s.RefreshDeadline.After(time.Now()) || s.RefreshToken == "" {
+	// 	return false, nil
+	// }
+	//
+	// origExpiration := s.RefreshDeadline
+	// s.RefreshDeadline = time.Now().Add(time.Second).Truncate(time.Second)
+	// fmt.Printf("refreshed access token %s (expired on %s)\n", s, origExpiration)
+	// return false, nil
+
+	if s == nil || !s.RefreshPeriodExpired() || s.RefreshToken == "" {
 		return false, nil
 	}
 
-	origExpiration := s.RefreshDeadline
-	s.RefreshDeadline = time.Now().Add(time.Second).Truncate(time.Second)
-	fmt.Printf("refreshed access token %s (expired on %s)\n", s, origExpiration)
-	return false, nil
+	newToken, duration, err := p.RefreshAccessToken(s.RefreshToken)
+	if err != nil {
+		return false, err
+	}
+	logger := log.NewLogEntry()
+
+	s.AccessToken = newToken
+
+	s.RefreshDeadline = time.Now().Add(duration).Truncate(time.Second)
+	logger.WithUser(s.Email).WithRefreshDeadline(s.RefreshDeadline).Info("refreshed access token")
+
+	return true, nil
+}
+
+// RefreshAccessToken uses default OAuth2 TokenSource method to get a new
+// access token.
+func (p *OIDCProvider) RefreshAccessToken(refreshToken string) (string, time.Duration, error) {
+	if refreshToken == "" {
+		return "", 0, errors.New("missing refresh token")
+	}
+
+	ctx := context.Background()
+	c := oauth2.Config{
+		ClientID:     p.ClientID,
+		ClientSecret: p.ClientSecret,
+		Endpoint: oauth2.Endpoint{
+			TokenURL: p.RedeemURL.String(),
+		},
+	}
+	t := oauth2.Token{
+		RefreshToken: refreshToken,
+	}
+	ts := c.TokenSource(ctx, &t)
+	newToken, err := ts.Token()
+	if err != nil {
+		return "", 0, fmt.Errorf("token exchange: %v", err)
+	}
+
+	return newToken.AccessToken, newToken.Expiry.Sub(time.Now()), nil
 }

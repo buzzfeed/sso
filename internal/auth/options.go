@@ -313,6 +313,8 @@ func AssignStatsdClient(opts *Options) func(*Authenticator) error {
 
 		proxy.StatsdClient = StatsdClient
 		switch v := proxy.provider.(type) {
+		case *providers.AzureV2Provider:
+			v.SetStatsdClient(StatsdClient)
 		case *providers.GoogleProvider:
 			v.SetStatsdClient(StatsdClient)
 		case *providers.SingleFlightProvider:
