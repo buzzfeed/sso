@@ -4,7 +4,7 @@ This quickstart guide will walk you through the process of creating a set of
 Google OAuth credentials and using Docker Compose to run an example deployment
 of **sso** protecting two upstream services.
 
-To learn how to get started using SSO with Kubernetes, you can check out this [blog post](https://medium.com/@while1eq1/single-sign-on-for-internal-apps-in-kubernetes-using-google-oauth-sso-2386a34bc433) and [example](/quickstart/kubernetes), added and written by [Bill Broach](https://twitter.com/while1eq1), one our community contributors! 
+To learn how to get started using SSO with Kubernetes, you can check out this [blog post](https://medium.com/@while1eq1/single-sign-on-for-internal-apps-in-kubernetes-using-google-oauth-sso-2386a34bc433) and [example](/quickstart/kubernetes), added and written by [Bill Broach](https://twitter.com/while1eq1), one of our community contributors! 
 
 
 ## Prerequisites
