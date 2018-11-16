@@ -70,7 +70,7 @@ Here are the steps to running the tests for SSO:
 * Submit a [pull request against BuzzFeed's repository](https://akrabat.com/the-beginners-guide-to-contributing-to-a-github-project/#step-3-create-the-pr)
 * Comment in the pull request when you're ready for the changes to be reviewed: `"ready for review"`
 
-### Code review
+### Code Review
 
 Changes to `buzzfeed/sso` happen via GitHub pull requests, which is where at least one other engineer reviews and approves all code changes. Some tips for pull requests and code review:
 
@@ -84,3 +84,12 @@ Changes to `buzzfeed/sso` happen via GitHub pull requests, which is where at lea
 [begin-guide]: https://akrabat.com/the-beginners-guide-to-contributing-to-a-github-project/
 [mindful-comms]: https://kickstarter.engineering/a-guide-to-mindful-communication-in-code-reviews-48aab5282e5e
 [go]: https://golang.org/doc/install
+
+### Merge Policy
+
+In order to allow SSO to be the most useful, while balancing feature needs with security concerns, we take an [Optimistic Merge](http://hintjens.com/blog:106) approach, which means:
+
+* We will do our best to merge every contribution that enables a requested feature or solves an issue that blocks folks using SSO.
+* As we find more efficient, secure, or otherwise stronger solutions, we will deprecate old features and replace them.
+
+Our strategy will be to announce deprecation as part of a stable release, and remove functionality as part of the next stable release. While this is a very quick cycle, we believe it is the best approach for keeping SSO up to date and preventing reliance on outdated featuresets.
