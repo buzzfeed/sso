@@ -16,3 +16,4 @@ github.com/rakyll/statik                 v0.1.4
 github.com/coreos/go-oidc                v2.0.0
 gopkg.in/square/go-jose.v2               v2.1.9
 github.com/pquerna/cachecontrol          1555304b9b35fdd2b425bccf1a5613677705e7d0
+github.com/hashicorp/golang-lru          v0.5.0
