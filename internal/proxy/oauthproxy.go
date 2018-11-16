@@ -70,6 +70,8 @@ type OAuthProxy struct {
 	skipAuthPreflight bool
 	templates         *template.Template
 
+	PassAccessToken bool
+
 	StatsdClient *statsd.Client
 
 	mux         map[string]*route
@@ -303,6 +305,7 @@ func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthPr
 		redirectURL:       &url.URL{Path: "/oauth2/callback"},
 		skipAuthPreflight: opts.SkipAuthPreflight,
 		templates:         getTemplates(),
+		PassAccessToken:   opts.PassAccessToken,
 	}
 
 	for _, optFunc := range optFuncs {
@@ -1037,6 +1040,11 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 	}
 
 	req.Header.Set("X-Forwarded-User", session.User)
+
+	if p.PassAccessToken && session.AccessToken != "" {
+		req.Header.Set("X-Forwarded-Access-Token", session.AccessToken)
+	}
+
 	req.Header.Set("X-Forwarded-Email", session.Email)
 	req.Header.Set("X-Forwarded-Groups", strings.Join(session.Groups, ","))
 
