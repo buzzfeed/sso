@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buzzfeed/sso/internal/pkg/groups"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	"github.com/buzzfeed/sso/internal/pkg/testutil"
 
@@ -369,96 +368,133 @@ func (c *groupsClientMock) Do(req *http.Request) (*http.Response, error) {
 	return &http.Response{}, nil
 }
 
-func TestAzureV2ValidateGroupMembers(t *testing.T) {
+func TestAzureV2GetSignInURL(t *testing.T) {
 	testCases := []struct {
-		name                string
-		inputAllowedGroups  []string
-		groups              []string
-		groupsError         error
-		getMembersFunc      func(string) (groups.MemberSet, bool)
-		expectedGroups      []string
-		expectedErrorString string
+		name           string
+		redirectURI    string
+		state          string
+		expectedParams url.Values
 	}{
 		{
-			name:               "empty input groups should return an empty string",
-			inputAllowedGroups: []string{},
-			groups:             []string{"group1"},
-			expectedGroups:     []string{"group1"},
-			getMembersFunc:     func(string) (groups.MemberSet, bool) { return nil, false },
-		},
-		{
-			name:                "empty inputs and error on groups resource should return error",
-			inputAllowedGroups:  []string{},
-			getMembersFunc:      func(string) (groups.MemberSet, bool) { return nil, false },
-			groupsError:         fmt.Errorf("error"),
-			expectedErrorString: "error",
-		},
-		{
-			name:               "member exists in cache, should not call groups resource",
-			inputAllowedGroups: []string{"group1"},
-			groupsError:        fmt.Errorf("should not get here"),
-			getMembersFunc:     func(string) (groups.MemberSet, bool) { return groups.MemberSet{"email": {}}, true },
-			expectedGroups:     []string{"group1"},
-		},
-		{
-			name:               "member does not exist in cache, should still not call groups resource",
-			inputAllowedGroups: []string{"group1"},
-			groupsError:        fmt.Errorf("should not get here"),
-			getMembersFunc:     func(string) (groups.MemberSet, bool) { return groups.MemberSet{}, true },
-			expectedGroups:     []string{},
-		},
-		{
-			name:               "subset of groups are not cached, calls groups resource",
-			inputAllowedGroups: []string{"group1", "group2"},
-			groups:             []string{"group1", "group2", "group3"},
-			groupsError:        nil,
-			getMembersFunc: func(group string) (groups.MemberSet, bool) {
-				switch group {
-				case "group1":
-					return groups.MemberSet{"email": {}}, true
-				default:
-					return groups.MemberSet{}, false
-				}
+			name:        "nonce values passed to azure should be deterministic, pass one",
+			redirectURI: "https://example.com/oauth/callback",
+			state:       "1234",
+			expectedParams: url.Values{
+				"redirect_uri":  []string{"https://example.com/oauth/callback"},
+				"response_mode": []string{"form_post"},
+				"response_type": []string{"id_token code"},
+				"scope":         []string{"openid email profile offline_access"},
+				"state":         []string{"1234"},
+				"client_id":     []string{TestClientID},
+				"nonce":         []string{"KEB9Aopa"},
+				"prompt":        []string{"consent"},
 			},
-			expectedGroups: []string{"group1", "group2"},
 		},
 		{
-			name:               "subset of groups are not cached, calls groups resource with error",
-			inputAllowedGroups: []string{"group1", "group2"},
-			groupsError:        fmt.Errorf("error"),
-			getMembersFunc: func(group string) (groups.MemberSet, bool) {
-				switch group {
-				case "group1":
-					return groups.MemberSet{"email": {}}, true
-				default:
-					return groups.MemberSet{}, false
-				}
+			name:        "nonce values passed to azure should be deterministic, pass two",
+			redirectURI: "https://example.com/oauth/callback",
+			state:       "1234",
+			expectedParams: url.Values{
+				"redirect_uri":  []string{"https://example.com/oauth/callback"},
+				"response_mode": []string{"form_post"},
+				"response_type": []string{"id_token code"},
+				"scope":         []string{"openid email profile offline_access"},
+				"state":         []string{"1234"},
+				"client_id":     []string{TestClientID},
+				"nonce":         []string{"KEB9Aopa"},
+				"prompt":        []string{"consent"},
 			},
-			expectedErrorString: "error",
 		},
 		{
-			name:               "subset of groups not there, does not call groups resource",
-			inputAllowedGroups: []string{"group1", "group2"},
-			groups:             []string{"group1", "group2", "group3"},
-			groupsError:        fmt.Errorf("should not get here"),
-			getMembersFunc: func(group string) (groups.MemberSet, bool) {
-				switch group {
-				case "group1":
-					return groups.MemberSet{"email": {}}, true
-				default:
-					return groups.MemberSet{}, true
-				}
+			name:        "nonce values passed to azure should be deterministic, pass three",
+			redirectURI: "https://example.com/oauth/callback",
+			state:       "4321",
+			expectedParams: url.Values{
+				"redirect_uri":  []string{"https://example.com/oauth/callback"},
+				"response_mode": []string{"form_post"},
+				"response_type": []string{"id_token code"},
+				"scope":         []string{"openid email profile offline_access"},
+				"state":         []string{"4321"},
+				"client_id":     []string{TestClientID},
+				"nonce":         []string{"x_PhEN0K"},
+				"prompt":        []string{"consent"},
 			},
-			expectedGroups: []string{"group1"},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			p := newAzureV2Provider(nil)
-			p.GraphService = &MockAzureGraphService{Groups: tc.groups, GroupsError: tc.groupsError}
+			p.ClientID = TestClientID
+			p.ClientSecret = "456"
+			p.Scope = "openid email profile offline_access"
+			p.ApprovalPrompt = "consent"
 
-			groups, err := p.ValidateGroupMembership("email", tc.inputAllowedGroups)
+			signInURL := p.GetSignInURL(tc.redirectURI, tc.state)
+			parsedURL, err := url.Parse(signInURL)
+			if err != nil {
+				t.Error(err)
+			}
+
+			if !reflect.DeepEqual(tc.expectedParams, parsedURL.Query()) {
+				t.Logf("expected params %+v", tc.expectedParams)
+				t.Logf("got      params %+v", parsedURL.Query())
+				t.Errorf("unexpected params returned")
+			}
+		})
+	}
+}
+
+func TestAzureV2ValidateGroupMembers(t *testing.T) {
+	testCases := []struct {
+		name                string
+		allowedGroups       []string
+		mockedGroups        []string
+		mockedError         error
+		expectedGroups      []string
+		expectedErrorString string
+	}{
+		{
+			name:           "allowed groups and groups resource output exactly match should return all groups",
+			allowedGroups:  []string{"group1", "group2", "group3"},
+			mockedGroups:   []string{"group1", "group2", "group3"},
+			expectedGroups: []string{"group1", "group2", "group3"},
+		},
+		{
+			name:           "allowed groups should restrict to subset of groups",
+			allowedGroups:  []string{"group1", "group2"},
+			mockedGroups:   []string{"group1", "group2", "group3"},
+			expectedGroups: []string{"group1", "group2"},
+		},
+		{
+			name:           "allowed groups superset should not restrict to subset of groups",
+			allowedGroups:  []string{"group1", "group2", "group3"},
+			mockedGroups:   []string{"group1", "group2"},
+			expectedGroups: []string{"group1", "group2"},
+		},
+		{
+			name:           "groups allowed zero value should default to return all groups",
+			allowedGroups:  []string{},
+			mockedGroups:   []string{"group1"},
+			expectedGroups: []string{"group1"},
+		},
+		{
+			name:                "empty inputs and error on groups resource should return error",
+			allowedGroups:       []string{},
+			mockedError:         fmt.Errorf("error"),
+			expectedErrorString: "error",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := newAzureV2Provider(nil)
+			p.GraphService = &MockAzureGraphService{
+				Groups:      tc.mockedGroups,
+				GroupsError: tc.mockedError,
+			}
+
+			groups, err := p.ValidateGroupMembership("test@example.com", tc.allowedGroups)
 
 			if err != nil {
 				if tc.expectedErrorString != err.Error() {
@@ -470,7 +506,6 @@ func TestAzureV2ValidateGroupMembers(t *testing.T) {
 				t.Logf("got groups %v", groups)
 				t.Errorf("unexpected groups returned")
 			}
-
 		})
 	}
 }

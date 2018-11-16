@@ -2,6 +2,9 @@ package providers
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -99,7 +102,6 @@ func (p *AzureV2Provider) Redeem(redirectURL, code string) (s *sessions.SessionS
 	// TODO: test this w/ an account that uses an alias and compare email claim
 	// with UPN claim; UPN has usually been what you want, but I think it's not
 	// rendered as a full email address here.
-	// FIXME: validate nonce against session
 
 	s = &sessions.SessionState{
 		AccessToken:  token.AccessToken,
@@ -245,10 +247,22 @@ func (p *AzureV2Provider) GetSignInURL(redirectURI, state string) string {
 	params.Add("scope", p.Scope)
 	params.Add("state", state)
 	params.Set("prompt", p.ApprovalPrompt)
-	params.Set("nonce", "FIXME") // FIXME, maybe change to session state struct
+	params.Set("nonce", p.calculateNonce(state)) // required parameter
 	a.RawQuery = params.Encode()
 
 	return a.String()
+}
+
+// calculateNonce generates a deterministic nonce from the state value.
+// We don't have a session state pointer but we need to generate a nonce
+// that we can verify statelessly later. We can only use what's in the
+// params and provider struct to assemble a nonce. State is guaranteed to be
+// indistinguishable from random and will always change.
+func (p *AzureV2Provider) calculateNonce(state string) string {
+	key := []byte(p.ClientID + p.ClientSecret)
+	h := hmac.New(sha256.New, key)
+	h.Write([]byte(state))
+	return base64.URLEncoding.EncodeToString(h.Sum(nil))[:8]
 }
 
 // ValidateGroupMembership takes in an email and the allowed groups and returns the groups that the email is part of in that list.
