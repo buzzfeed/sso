@@ -57,13 +57,20 @@ func init() {
 func NewSSOProvider(p *ProviderData, sc *statsd.Client) *SSOProvider {
 	p.ProviderName = "SSO"
 	base := p.ProviderURL
+	internalBase := base
+
+	if p.ProviderURLInternal != nil {
+		internalBase = p.ProviderURLInternal
+	}
+
 	p.SignInURL = base.ResolveReference(&url.URL{Path: "/sign_in"})
 	p.SignOutURL = base.ResolveReference(&url.URL{Path: "/sign_out"})
-	p.RedeemURL = base.ResolveReference(&url.URL{Path: "/redeem"})
-	p.RefreshURL = base.ResolveReference(&url.URL{Path: "/refresh"})
-	p.ValidateURL = base.ResolveReference(&url.URL{Path: "/validate"})
-	p.ProfileURL = base.ResolveReference(&url.URL{Path: "/profile"})
-	p.ProxyRedeemURL = p.ProxyProviderURL.ResolveReference(&url.URL{Path: "/redeem"})
+
+	p.RedeemURL = internalBase.ResolveReference(&url.URL{Path: "/redeem"})
+	p.RefreshURL = internalBase.ResolveReference(&url.URL{Path: "/refresh"})
+	p.ValidateURL = internalBase.ResolveReference(&url.URL{Path: "/validate"})
+	p.ProfileURL = internalBase.ResolveReference(&url.URL{Path: "/profile"})
+
 	return &SSOProvider{
 		ProviderData: p,
 		StatsdClient: sc,
@@ -109,11 +116,11 @@ func (p *SSOProvider) Redeem(redirectURL, code string) (*SessionState, error) {
 	params.Add("code", code)
 	params.Add("grant_type", "authorization_code")
 
-	req, err := newRequest("POST", p.ProxyRedeemURL.String(), bytes.NewBufferString(params.Encode()))
+	req, err := newRequest("POST", p.RedeemURL.String(), bytes.NewBufferString(params.Encode()))
 	if err != nil {
 		return nil, err
 	}
-	req.Host = p.RedeemURL.Host
+	req.Host = p.ProviderData.ProviderURLInternal.Host
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -198,6 +205,7 @@ func (p *SSOProvider) UserGroups(email string, groups []string) ([]string, error
 	if err != nil {
 		return nil, err
 	}
+	req.Host = p.ProviderData.ProviderURLInternal.Host
 	req.Header.Set("X-Client-Secret", p.ClientSecret)
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -288,6 +296,7 @@ func (p *SSOProvider) redeemRefreshToken(refreshToken string) (token string, exp
 	if err != nil {
 		return
 	}
+	req.Host = p.ProviderData.ProviderURLInternal.Host
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -334,6 +343,7 @@ func (p *SSOProvider) ValidateSessionState(s *SessionState, allowedGroups []stri
 		logger.WithUser(s.Email).Error(err, "error validating session state")
 		return false
 	}
+	req.Host = p.ProviderData.ProviderURLInternal.Host
 	req.Header.Set("X-Client-Secret", p.ClientSecret)
 	req.Header.Set("X-Access-Token", s.AccessToken)
 

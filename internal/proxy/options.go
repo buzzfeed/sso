@@ -48,11 +48,11 @@ import (
 type Options struct {
 	Port int `envconfig:"PORT" default:"4180"`
 
-	ProviderURLString      string `envconfig:"PROVIDER_URL"`
-	ProxyProviderURLString string `envconfig:"PROXY_PROVIDER_URL"`
-	UpstreamConfigsFile    string `envconfig:"UPSTREAM_CONFIGS"`
-	Cluster                string `envconfig:"CLUSTER"`
-	Scheme                 string `envconfig:"SCHEME" default:"https"`
+	ProviderURLString         string `envconfig:"PROVIDER_URL"`
+	ProviderURLInternalString string `envconfig:"PROVIDER_URL_INTERNAL"`
+	UpstreamConfigsFile       string `envconfig:"UPSTREAM_CONFIGS"`
+	Cluster                   string `envconfig:"CLUSTER"`
+	Scheme                    string `envconfig:"SCHEME" default:"https"`
 
 	SkipAuthPreflight bool `envconfig:"SKIP_AUTH_PREFLIGHT"`
 
@@ -132,9 +132,6 @@ func (o *Options) Validate() error {
 	}
 	if o.ProviderURLString == "" {
 		msgs = append(msgs, "missing setting: provider-url")
-	}
-	if o.ProxyProviderURLString == "" {
-		o.ProxyProviderURLString = o.ProviderURLString
 	}
 	if o.UpstreamConfigsFile == "" {
 		msgs = append(msgs, "missing setting: upstream-configs")
@@ -226,23 +223,27 @@ func parseProviderInfo(o *Options) error {
 		return errors.New("provider-url must include scheme and host")
 	}
 
-	proxyProviderURL, err := url.Parse(o.ProxyProviderURLString)
-	if err != nil {
-		return err
-	}
-	if proxyProviderURL.Scheme == "" || proxyProviderURL.Host == "" {
-		return errors.New("proxy provider url must include scheme and host")
+	var providerURLInternal *url.URL
+
+	if o.ProviderURLInternalString != "" {
+		providerURLInternal, err = url.Parse(o.ProviderURLInternalString)
+		if err != nil {
+			return err
+		}
+		if providerURLInternal.Scheme == "" || providerURLInternal.Host == "" {
+			return errors.New("proxy provider url must include scheme and host")
+		}
 	}
 
 	providerData := &providers.ProviderData{
-		ClientID:           o.ClientID,
-		ClientSecret:       o.ClientSecret,
-		ProviderURL:        providerURL,
-		ProxyProviderURL:   proxyProviderURL,
-		Scope:              o.Scope,
-		SessionLifetimeTTL: o.SessionLifetimeTTL,
-		SessionValidTTL:    o.SessionValidTTL,
-		GracePeriodTTL:     o.GracePeriodTTL,
+		ClientID:            o.ClientID,
+		ClientSecret:        o.ClientSecret,
+		ProviderURL:         providerURL,
+		ProviderURLInternal: providerURLInternal,
+		Scope:               o.Scope,
+		SessionLifetimeTTL:  o.SessionLifetimeTTL,
+		SessionValidTTL:     o.SessionValidTTL,
+		GracePeriodTTL:      o.GracePeriodTTL,
 	}
 
 	p := providers.New(o.Provider, providerData, o.StatsdClient)

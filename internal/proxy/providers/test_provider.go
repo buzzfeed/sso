@@ -71,7 +71,12 @@ func (tp *TestProvider) ValidateGroup(email string, groups []string) ([]string, 
 
 // GetSignOutURL mocks GetSignOutURL function
 func (tp *TestProvider) GetSignOutURL(redirectURL *url.URL) *url.URL {
-	return tp.Data().SignOutURL
+	a := *tp.Data().SignOutURL
+	rawRedirect := redirectURL.String()
+	params, _ := url.ParseQuery(a.RawQuery)
+	params.Add("redirect_uri", rawRedirect)
+	a.RawQuery = params.Encode()
+	return &a
 }
 
 // GetSignInURL mocks GetSignInURL
