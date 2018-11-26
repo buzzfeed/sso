@@ -92,9 +92,6 @@ services:
       - STATSD_HOST=127.0.0.1
       - STATSD_PORT=8125
 
-      # TODO: remove the need for this config value
-      - OLD_COOKIE_SECRET=V2JBZk0zWGtsL29UcFUvWjVDWWQ2UHExNXJ0b2VhcDI=
-
       # Tells nginx-proxy service how to route requests to this service
       - VIRTUAL_HOST=sso-auth.localtest.me,host.docker.internal
     expose:
