@@ -38,7 +38,7 @@ func newSSOProvider() *SSOProvider {
 				Scheme: "https",
 				Host:   "auth.example.com",
 			},
-			ProxyProviderURL: &url.URL{
+			ProviderURLInternal: &url.URL{
 				Scheme: "http",
 				Host:   "auth-int.example.com",
 			},
@@ -96,17 +96,15 @@ func TestSSOProviderDefaults(t *testing.T) {
 	testutil.Equal(t, "SSO", data.ProviderName)
 
 	base := fmt.Sprintf("%s://%s", data.ProviderURL.Scheme, data.ProviderURL.Host)
+	internalBase := fmt.Sprintf("%s://%s", data.ProviderURLInternal.Scheme, data.ProviderURLInternal.Host)
+
 	testutil.Equal(t, fmt.Sprintf("%s/sign_in", base), data.SignInURL.String())
 	testutil.Equal(t, fmt.Sprintf("%s/sign_out", base), data.SignOutURL.String())
-	testutil.Equal(t, fmt.Sprintf("%s/redeem", base), data.RedeemURL.String())
-	testutil.Equal(t, fmt.Sprintf("%s/refresh", base), data.RefreshURL.String())
-	testutil.Equal(t, fmt.Sprintf("%s/validate", base), data.ValidateURL.String())
-	testutil.Equal(t, fmt.Sprintf("%s/profile", base), data.ProfileURL.String())
-	if data.ProxyProviderURL.String() == "" {
-		data.ProxyProviderURL = data.ProviderURL
-	}
-	proxybase := fmt.Sprintf("%s://%s", data.ProxyProviderURL.Scheme, data.ProxyProviderURL.Host)
-	testutil.Equal(t, fmt.Sprintf("%s/redeem", proxybase), data.ProxyRedeemURL.String())
+
+	testutil.Equal(t, fmt.Sprintf("%s/redeem", internalBase), data.RedeemURL.String())
+	testutil.Equal(t, fmt.Sprintf("%s/refresh", internalBase), data.RefreshURL.String())
+	testutil.Equal(t, fmt.Sprintf("%s/validate", internalBase), data.ValidateURL.String())
+	testutil.Equal(t, fmt.Sprintf("%s/profile", internalBase), data.ProfileURL.String())
 }
 
 type redeemResponse struct {
@@ -249,9 +247,9 @@ func TestSSOProviderRedeem(t *testing.T) {
 			if tc.RedeemResponse != nil {
 				body, err := json.Marshal(tc.RedeemResponse)
 				testutil.Equal(t, nil, err)
-				p.ProxyRedeemURL, redeemServer = newTestServer(http.StatusOK, body)
+				p.RedeemURL, redeemServer = newTestServer(http.StatusOK, body)
 			} else {
-				p.ProxyRedeemURL, redeemServer = newCodeTestServer(400)
+				p.RedeemURL, redeemServer = newCodeTestServer(400)
 			}
 			defer redeemServer.Close()
 
@@ -261,7 +259,7 @@ func TestSSOProviderRedeem(t *testing.T) {
 				testutil.Equal(t, nil, err)
 				p.ProfileURL, profileServer = newTestServer(http.StatusOK, body)
 			} else {
-				p.ProxyRedeemURL, profileServer = newCodeTestServer(400)
+				p.RedeemURL, profileServer = newCodeTestServer(400)
 			}
 			defer profileServer.Close()
 
@@ -324,20 +322,15 @@ func TestSSOProviderRedeemInternal(t *testing.T) {
 			p := newSSOProvider()
 
 			var redeemServer *httptest.Server
-			var redeemServerInternal *httptest.Server
 			// set up redemption resource
 			if tc.RedeemResponseInternal != nil {
-				body, err := json.Marshal(tc.RedeemResponse)
-				bodyInternal, err := json.Marshal(tc.RedeemResponseInternal)
+				body, err := json.Marshal(tc.RedeemResponseInternal)
 				testutil.Equal(t, nil, err)
 				p.RedeemURL, redeemServer = newTestServer(http.StatusOK, body)
-				p.ProxyRedeemURL, redeemServerInternal = newTestServer(http.StatusOK, bodyInternal)
 			} else {
 				p.RedeemURL, redeemServer = newCodeTestServer(500)
-				p.ProxyRedeemURL, redeemServerInternal = newCodeTestServer(400)
 			}
 			defer redeemServer.Close()
-			defer redeemServerInternal.Close()
 
 			var profileServer *httptest.Server
 			if tc.ProfileResponse != nil {
@@ -345,7 +338,7 @@ func TestSSOProviderRedeemInternal(t *testing.T) {
 				testutil.Equal(t, nil, err)
 				p.ProfileURL, profileServer = newTestServer(http.StatusOK, body)
 			} else {
-				p.ProxyRedeemURL, profileServer = newCodeTestServer(400)
+				p.RedeemURL, profileServer = newCodeTestServer(400)
 			}
 			defer profileServer.Close()
 
