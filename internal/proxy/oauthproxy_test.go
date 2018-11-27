@@ -2,6 +2,8 @@ package proxy
 
 import (
 	"crypto"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -422,6 +424,45 @@ func TestRobotsTxt(t *testing.T) {
 	testutil.Equal(t, "User-agent: *\nDisallow: /", rw.Body.String())
 }
 
+func TestCerts(t *testing.T) {
+	opts := NewOptions()
+	opts.ClientID = "bazquux"
+	opts.ClientSecret = "foobar"
+	opts.CookieSecret = testEncodedCookieSecret
+	opts.ProviderURLString = "https://auth.sso.dev"
+	opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev")
+
+	requestSigningKey, err := ioutil.ReadFile("testdata/private_key.pem")
+	testutil.Assert(t, err == nil, "could not read private key from testdata: %s", err)
+	opts.RequestSigningKey = string(requestSigningKey)
+	opts.Validate()
+
+	expectedPublicKey, err := ioutil.ReadFile("testdata/public_key.pub")
+	testutil.Assert(t, err == nil, "could not read public key from testdata: %s", err)
+
+	var keyHash []byte
+	hasher := sha256.New()
+	_, _ = hasher.Write(expectedPublicKey)
+	keyHash = hasher.Sum(keyHash)
+
+	proxy, err := NewOAuthProxy(opts)
+	if err != nil {
+		t.Errorf("unexpected error %s", err)
+		return
+	}
+	rw := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "https://foo.sso.dev/oauth2/v1/certs", nil)
+	proxy.Handler().ServeHTTP(rw, req)
+	testutil.Equal(t, 200, rw.Code)
+
+	var certs map[string]string
+	if err := json.Unmarshal([]byte(rw.Body.String()), &certs); err != nil {
+		t.Errorf("failed to unmarshal certs from json response: %s", err)
+		return
+	}
+	testutil.Equal(t, string(expectedPublicKey), certs[hex.EncodeToString(keyHash)])
+}
+
 func TestFavicon(t *testing.T) {
 	opts := NewOptions()
 	opts.ClientID = "bazquux"
@@ -729,6 +770,72 @@ func TestAuthSkipRequests(t *testing.T) {
 	testutil.Equal(t, "response", allowRW.Body.String())
 }
 
+func generateTestSkipRequestSigningConfig(to string) []*UpstreamConfig {
+	if !strings.Contains(to, "://") {
+		to = fmt.Sprintf("%s://%s", "http", to)
+	}
+	parsed, err := url.Parse(to)
+	if err != nil {
+		panic(err)
+	}
+	templateVars := map[string]string{
+		"root_domain": "dev",
+		"cluster":     "sso",
+	}
+	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
+- service: foo
+  default:
+    from: foo.sso.dev
+    to: %s
+    options:
+      skip_request_signing: true
+      skip_auth_regex:
+        - ^.*$
+`, parsed)), "sso", "http", templateVars)
+	if err != nil {
+		panic(err)
+	}
+	return upstreamConfigs
+}
+
+func TestSkipSigningRequest(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, ok := r.Header["Sso-Signature"]
+		testutil.Assert(t, !ok, "found unexpected SSO-Signature header in request")
+
+		_, ok = r.Header["kid"]
+		testutil.Assert(t, !ok, "found unexpected signing key id header in request")
+
+		w.WriteHeader(200)
+		w.Write([]byte("response"))
+	}))
+	defer upstream.Close()
+
+	signingKey, err := ioutil.ReadFile("testdata/private_key.pem")
+	testutil.Assert(t, err == nil, "could not read private key from testdata: %s", err)
+
+	opts := NewOptions()
+	opts.ClientID = "bazquux"
+	opts.ClientSecret = "foobar"
+	opts.CookieSecret = testEncodedCookieSecret
+	opts.SkipAuthPreflight = true
+	opts.RequestSigningKey = string(signingKey)
+	opts.upstreamConfigs = generateTestSkipRequestSigningConfig(upstream.URL)
+	opts.Validate()
+
+	upstreamURL, _ := url.Parse(upstream.URL)
+	opts.provider = providers.NewTestProvider(upstreamURL, "")
+
+	proxy, _ := NewOAuthProxy(opts)
+
+	// Expect OK
+	allowRW := httptest.NewRecorder()
+	allowReq, _ := http.NewRequest("GET", "https://foo.sso.dev/endpoint", nil)
+	proxy.Handler().ServeHTTP(allowRW, allowReq)
+	testutil.Equal(t, http.StatusOK, allowRW.Code)
+	testutil.Equal(t, "response", allowRW.Body.String())
+}
+
 func generateMultiTestAuthSkipConfigs(toFoo, toBar string) []*UpstreamConfig {
 	if !strings.Contains(toFoo, "://") {
 		toFoo = fmt.Sprintf("%s://%s", "http", toFoo)
@@ -936,7 +1043,7 @@ func (st *SignatureTest) MakeRequestWithExpectedKey(method, body, key string) {
 	req.AddCookie(cookie)
 	// This is used by the upstream to validate the signature.
 	st.authenticator.auth = hmacauth.NewHmacAuth(
-		crypto.SHA1, []byte(key), SignatureHeader, SignatureHeaders)
+		crypto.SHA1, []byte(key), HMACSignatureHeader, SignatureHeaders)
 	proxy.Handler().ServeHTTP(st.rw, req)
 }
 

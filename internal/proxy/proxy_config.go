@@ -57,6 +57,7 @@ type UpstreamConfig struct {
 	Timeout               time.Duration
 	FlushInterval         time.Duration
 	HeaderOverrides       map[string]string
+	SkipRequestSigning    bool
 }
 
 // RouteConfig maps to the yaml config fields,
@@ -77,12 +78,13 @@ type RouteConfig struct {
 // * timeout - duration before timing out request.
 // * flush_interval - interval at which the proxy should flush data to the browser
 type OptionsConfig struct {
-	HeaderOverrides map[string]string `yaml:"header_overrides"`
-	SkipAuthRegex   []string          `yaml:"skip_auth_regex"`
-	AllowedGroups   []string          `yaml:"allowed_groups"`
-	TLSSkipVerify   bool              `yaml:"tls_skip_verify"`
-	Timeout         time.Duration     `yaml:"timeout"`
-	FlushInterval   time.Duration     `yaml:"flush_interval"`
+	HeaderOverrides    map[string]string `yaml:"header_overrides"`
+	SkipAuthRegex      []string          `yaml:"skip_auth_regex"`
+	AllowedGroups      []string          `yaml:"allowed_groups"`
+	TLSSkipVerify      bool              `yaml:"tls_skip_verify"`
+	Timeout            time.Duration     `yaml:"timeout"`
+	FlushInterval      time.Duration     `yaml:"flush_interval"`
+	SkipRequestSigning bool              `yaml:"skip_request_signing"`
 }
 
 // ErrParsingConfig is an error specific to config parsing.
@@ -365,6 +367,7 @@ func parseOptionsConfig(proxy *UpstreamConfig) error {
 	proxy.FlushInterval = proxy.RouteConfig.Options.FlushInterval
 	proxy.HeaderOverrides = proxy.RouteConfig.Options.HeaderOverrides
 	proxy.TLSSkipVerify = proxy.RouteConfig.Options.TLSSkipVerify
+	proxy.SkipRequestSigning = proxy.RouteConfig.Options.SkipRequestSigning
 
 	proxy.RouteConfig.Options = nil
 
