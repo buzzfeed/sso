@@ -427,7 +427,7 @@ func TestRoundTrip(t *testing.T) {
 	}{
 		{
 			name: "no error",
-			url:  "https://www.example.com/",
+			url:  "http://www.example.com/",
 		},
 		{
 			name:          "with error",
