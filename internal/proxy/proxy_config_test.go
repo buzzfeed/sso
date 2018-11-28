@@ -292,6 +292,36 @@ func TestUpstreamConfigFlushInterval(t *testing.T) {
 	}
 }
 
+func TestUpstreamConfigPreserveHost(t *testing.T) {
+	wantPreserveHost := true
+	templateVars := map[string]string{
+		"cluster":     "sso",
+		"root_domain": "dev",
+	}
+	upstreamConfigs, err := loadServiceConfigs([]byte(`
+- service: foo
+  default:
+    from: foo.{{cluster}}.{{root_domain}}
+    to: foo-internal.{{cluster}}.{{root_domain}}
+    options:
+      preserve_host: true
+`), "sso", "http", templateVars)
+	if err != nil {
+		t.Fatalf("expected to parse upstream configs: %s", err)
+	}
+
+	if len(upstreamConfigs) == 0 {
+		t.Fatalf("expected service config")
+	}
+
+	upstreamConfig := upstreamConfigs[0]
+	if upstreamConfig.PreserveHost != wantPreserveHost {
+		t.Logf("want: %v", wantPreserveHost)
+		t.Logf(" got: %v", upstreamConfig.PreserveHost)
+		t.Errorf("got unexpected configured timeout")
+	}
+}
+
 func TestUpstreamConfigHeaderOverrides(t *testing.T) {
 	wantHeaders := map[string]string{
 		"X-Frame-Options": "DENY",
