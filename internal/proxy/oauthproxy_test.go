@@ -65,170 +65,89 @@ func testSession() *providers.SessionState {
 }
 
 func TestNewReverseProxy(t *testing.T) {
-	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		hostname, _, _ := net.SplitHostPort(r.Host)
-		w.Write([]byte(hostname))
-	}))
-	defer backend.Close()
-
-	backendURL, _ := url.Parse(backend.URL)
-	backendHostname, backendPort, _ := net.SplitHostPort(backendURL.Host)
-	backendHost := net.JoinHostPort(backendHostname, backendPort)
-	proxyURL, _ := url.Parse(backendURL.Scheme + "://" + backendHost + "/")
-
-	proxyHandler := NewReverseProxy(proxyURL, &UpstreamConfig{TLSSkipVerify: false, PreserveHost: false})
-	frontend := httptest.NewServer(proxyHandler)
-	defer frontend.Close()
-
-	getReq, _ := http.NewRequest("GET", frontend.URL, nil)
-	res, _ := http.DefaultClient.Do(getReq)
-	bodyBytes, _ := ioutil.ReadAll(res.Body)
-	if g, e := string(bodyBytes), backendHostname; g != e {
-		t.Errorf("got body %q; expected %q", g, e)
-	}
-}
-
-func TestNewRewriteReverseProxy(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		rw.WriteHeader(200)
-		rw.Write([]byte(req.Host))
-	}))
-	defer upstream.Close()
-
-	parsedUpstreamURL, err := url.Parse(upstream.URL)
-	if err != nil {
-		t.Fatalf("expected to parse upstream URL err:%q", err)
-	}
-
-	route := &RewriteRoute{
-		FromRegex: regexp.MustCompile("(.*)"),
-		ToTemplate: &url.URL{
-			Scheme: parsedUpstreamURL.Scheme,
-			Opaque: parsedUpstreamURL.Host,
-		},
-	}
-
-	rewriteProxy := NewRewriteReverseProxy(route, &UpstreamConfig{TLSSkipVerify: false, PreserveHost: false})
-
-	frontend := httptest.NewServer(rewriteProxy)
-	defer frontend.Close()
-
-	resp, err := http.Get(frontend.URL)
-	if err != nil {
-		t.Fatalf("expected to make successful request err:%q", err)
-	}
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("expected to read body err:%q", err)
-	}
-
-	if string(body) != parsedUpstreamURL.Host {
-		t.Logf("got  %v", string(body))
-		t.Logf("want %v", parsedUpstreamURL.Host)
-		t.Fatalf("got unexpected response from upstream")
-	}
-}
-
-func TestNewReverseProxyHostname(t *testing.T) {
 	type respStruct struct {
 		Host           string `json:"host"`
 		XForwardedHost string `json:"x-forwarded-host"`
 	}
 
-	to := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		body, err := json.Marshal(
-			&respStruct{
-				Host:           r.Host,
-				XForwardedHost: r.Header.Get("X-Forwarded-Host"),
-			},
-		)
-		if err != nil {
-			t.Fatalf("expected to marshal json: %s", err)
-		}
-		rw.Write(body)
-	}))
-	defer to.Close()
-
-	toURL, err := url.Parse(to.URL)
-	if err != nil {
-		t.Fatalf("expected to parse to url: %s", err)
-	}
-
-	reverseProxy := NewReverseProxy(toURL, &UpstreamConfig{TLSSkipVerify: false, PreserveHost: false})
-	from := httptest.NewServer(reverseProxy)
-	defer from.Close()
-
-	fromURL, err := url.Parse(from.URL)
-	if err != nil {
-		t.Fatalf("expected to parse from url: %s", err)
-	}
-
-	want := &respStruct{
-		Host:           toURL.Host,
-		XForwardedHost: fromURL.Host,
-	}
-
-	res, err := http.Get(from.URL)
-	if err != nil {
-		t.Fatalf("expected to be able to make req: %s", err)
-	}
-
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		t.Fatalf("expected to read body: %s", err)
-	}
-
-	got := &respStruct{}
-	err = json.Unmarshal(body, got)
-	if err != nil {
-		t.Fatalf("expected to decode json: %s", err)
-	}
-
-	if !reflect.DeepEqual(want, got) {
-		t.Logf(" got host: %v", got.Host)
-		t.Logf("want host: %v", want.Host)
-
-		t.Logf(" got X-Forwarded-Host: %v", got.XForwardedHost)
-		t.Logf("want X-Forwarded-Host: %v", want.XForwardedHost)
-
-		t.Errorf("got unexpected response for Host or X-Forwarded-Host header")
-	}
-	if res.Header.Get("Cookie") != "" {
-		t.Errorf("expected Cookie header to be empty but was %s", res.Header.Get("Cookie"))
-	}
-
-}
-
-func TestNewReverseProxyTLSSkipVerify(t *testing.T) {
-	type respStruct struct {
-		HandshakeComplete bool `json:"handshake-complete"`
-	}
-
 	testCases := []struct {
 		name           string
+		useTLS         bool
 		skipVerify     bool
+		preserveHost   bool
 		expectedStatus int
 	}{
 		{
-			name:           "skip verify true",
+			name:           "tls true skip verify false preserve host false",
+			useTLS:         true,
+			skipVerify:     false,
+			preserveHost:   false,
+			expectedStatus: 502,
+		},
+		{
+			name:           "tls true skip verify true preserve host false",
+			useTLS:         true,
 			skipVerify:     true,
+			preserveHost:   false,
 			expectedStatus: 200,
 		},
 		{
-			name:           "skip verify false",
+			name:           "tls true skip verify false preserve host true",
+			useTLS:         true,
 			skipVerify:     false,
+			preserveHost:   true,
 			expectedStatus: 502,
+		},
+		{
+			name:           "tls true skip verify true preserve host true",
+			useTLS:         true,
+			skipVerify:     true,
+			preserveHost:   true,
+			expectedStatus: 200,
+		},
+
+		{
+			name:           "tls false skip verify false preserve host false",
+			useTLS:         false,
+			skipVerify:     false,
+			preserveHost:   false,
+			expectedStatus: 200,
+		},
+		{
+			name:           "tls false skip verify true preserve host false",
+			useTLS:         false,
+			skipVerify:     true,
+			preserveHost:   false,
+			expectedStatus: 200,
+		},
+		{
+			name:           "tls false skip verify false preserve host true",
+			useTLS:         false,
+			skipVerify:     false,
+			preserveHost:   true,
+			expectedStatus: 200,
+		},
+		{
+			name:           "tls false skip verify true preserve host true",
+			useTLS:         false,
+			skipVerify:     true,
+			preserveHost:   true,
+			expectedStatus: 200,
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			to := httptest.NewTLSServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+			var newServer func(http.Handler) *httptest.Server
+			if tc.useTLS {
+				newServer = httptest.NewTLSServer
+			} else {
+				newServer = httptest.NewServer
+			}
+			to := newServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 				body, err := json.Marshal(
-					// Doesn't really matter what's sent since we should 502
 					&respStruct{
-						HandshakeComplete: r.TLS.HandshakeComplete,
+						Host:           r.Host,
+						XForwardedHost: r.Header.Get("X-Forwarded-Host"),
 					},
 				)
 				if err != nil {
@@ -243,13 +162,31 @@ func TestNewReverseProxyTLSSkipVerify(t *testing.T) {
 				t.Fatalf("expected to parse to url: %s", err)
 			}
 
-			reverseProxy := NewReverseProxy(toURL, &UpstreamConfig{TLSSkipVerify: tc.skipVerify})
+			reverseProxy := NewReverseProxy(toURL, &UpstreamConfig{TLSSkipVerify: tc.skipVerify, PreserveHost: tc.preserveHost})
 			from := httptest.NewServer(reverseProxy)
 			defer from.Close()
+
+			fromURL, err := url.Parse(from.URL)
+			if err != nil {
+				t.Fatalf("expected to parse from url: %s", err)
+			}
+
+			want := &respStruct{
+				Host:           toURL.Host,
+				XForwardedHost: fromURL.Host,
+			}
+			if tc.preserveHost {
+				want.Host = fromURL.Host
+			}
 
 			res, err := http.Get(from.URL)
 			if err != nil {
 				t.Fatalf("expected to be able to make req: %s", err)
+			}
+
+			body, err := ioutil.ReadAll(res.Body)
+			if err != nil {
+				t.Fatalf("expected to read body: %s", err)
 			}
 
 			if res.StatusCode != tc.expectedStatus {
@@ -258,133 +195,176 @@ func TestNewReverseProxyTLSSkipVerify(t *testing.T) {
 
 				t.Errorf("got unexpected response code for tls failure")
 			}
-			if res.Header.Get("Cookie") != "" {
-				t.Errorf("expected Cookie header to be empty but was %s", res.Header.Get("Cookie"))
+
+			if res.StatusCode >= 200 && res.StatusCode < 300 {
+				got := &respStruct{}
+				err = json.Unmarshal(body, got)
+				if err != nil {
+					t.Fatalf("expected to decode json: %s", err)
+				}
+
+				if !reflect.DeepEqual(want, got) {
+					t.Logf(" got host: %v", got.Host)
+					t.Logf("want host: %v", want.Host)
+
+					t.Logf(" got X-Forwarded-Host: %v", got.XForwardedHost)
+					t.Logf("want X-Forwarded-Host: %v", want.XForwardedHost)
+
+					t.Errorf("got unexpected response for Host or X-Forwarded-Host header")
+				}
+				if res.Header.Get("Cookie") != "" {
+					t.Errorf("expected Cookie header to be empty but was %s", res.Header.Get("Cookie"))
+				}
 			}
 		})
 	}
 }
 
-func TestNewReverseProxyPreserveHost(t *testing.T) {
+func TestNewRewriteReverseProxy(t *testing.T) {
 	type respStruct struct {
 		Host           string `json:"host"`
 		XForwardedHost string `json:"x-forwarded-host"`
 	}
 
-	to := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		body, err := json.Marshal(
-			&respStruct{
-				Host:           r.Host,
-				XForwardedHost: r.Header.Get("X-Forwarded-Host"),
-			},
-		)
-		if err != nil {
-			t.Fatalf("expected to marshal json: %s", err)
-		}
-		rw.Write(body)
-	}))
-	defer to.Close()
+	testCases := []struct {
+		name           string
+		useTLS         bool
+		skipVerify     bool
+		preserveHost   bool
+		expectedStatus int
+	}{
+		{
+			name:           "tls true skip verify false preserve host false",
+			useTLS:         true,
+			skipVerify:     false,
+			preserveHost:   false,
+			expectedStatus: 502,
+		},
+		{
+			name:           "tls true skip verify true preserve host false",
+			useTLS:         true,
+			skipVerify:     true,
+			preserveHost:   false,
+			expectedStatus: 200,
+		},
+		{
+			name:           "tls true skip verify false preserve host true",
+			useTLS:         true,
+			skipVerify:     false,
+			preserveHost:   true,
+			expectedStatus: 502,
+		},
+		{
+			name:           "tls true skip verify true preserve host true",
+			useTLS:         true,
+			skipVerify:     true,
+			preserveHost:   true,
+			expectedStatus: 200,
+		},
 
-	toURL, err := url.Parse(to.URL)
-	if err != nil {
-		t.Fatalf("expected to parse to url: %s", err)
-	}
-
-	reverseProxy := NewReverseProxy(toURL, &UpstreamConfig{PreserveHost: true})
-	from := httptest.NewServer(reverseProxy)
-	defer from.Close()
-
-	fromURL, err := url.Parse(from.URL)
-	if err != nil {
-		t.Fatalf("expected to parse from url: %s", err)
-	}
-
-	want := &respStruct{
-		Host:           fromURL.Host,
-		XForwardedHost: "something",
-	}
-
-	req, err := http.NewRequest("GET", from.URL, strings.NewReader(""))
-	if err != nil {
-		t.Fatalf("expected to be able to make req: %s", err)
-	}
-	req.Header.Set("X-Forwarded-Host", "something")
-
-	res, err := http.DefaultTransport.RoundTrip(req)
-	if err != nil {
-		t.Fatalf("expected to be able to get res: %s", err)
-	}
-
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		t.Fatalf("expected to read body: %s", err)
-	}
-
-	got := &respStruct{}
-	err = json.Unmarshal(body, got)
-	if err != nil {
-		t.Fatalf("expected to decode json: %s", err)
-	}
-
-	if !reflect.DeepEqual(want, got) {
-		t.Logf(" got host: %v", got.Host)
-		t.Logf("want host: %v", want.Host)
-
-		t.Logf(" got X-Forwarded-Host: %v", got.XForwardedHost)
-		t.Logf("want X-Forwarded-Host: %v", want.XForwardedHost)
-
-		t.Errorf("got unexpected response for Host or X-Forwarded-Host header")
-	}
-	if res.Header.Get("Cookie") != "" {
-		t.Errorf("expected Cookie header to be empty but was %s", res.Header.Get("Cookie"))
-	}
-
-}
-
-func TestNewRewriteReverseProxyPreserveHost(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		rw.WriteHeader(200)
-		rw.Write([]byte(req.Host))
-	}))
-	defer upstream.Close()
-
-	parsedUpstreamURL, err := url.Parse(upstream.URL)
-	if err != nil {
-		t.Fatalf("expected to parse upstream URL err:%q", err)
-	}
-
-	route := &RewriteRoute{
-		FromRegex: regexp.MustCompile("(.*)"),
-		ToTemplate: &url.URL{
-			Scheme: parsedUpstreamURL.Scheme,
-			Opaque: parsedUpstreamURL.Host,
+		{
+			name:           "tls false skip verify false preserve host false",
+			useTLS:         false,
+			skipVerify:     false,
+			preserveHost:   false,
+			expectedStatus: 200,
+		},
+		{
+			name:           "tls false skip verify true preserve host false",
+			useTLS:         false,
+			skipVerify:     true,
+			preserveHost:   false,
+			expectedStatus: 200,
+		},
+		{
+			name:           "tls false skip verify false preserve host true",
+			useTLS:         false,
+			skipVerify:     false,
+			preserveHost:   true,
+			expectedStatus: 200,
+		},
+		{
+			name:           "tls false skip verify true preserve host true",
+			useTLS:         false,
+			skipVerify:     true,
+			preserveHost:   true,
+			expectedStatus: 200,
 		},
 	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var newServer func(http.Handler) *httptest.Server
+			if tc.useTLS {
+				newServer = httptest.NewTLSServer
+			} else {
+				newServer = httptest.NewServer
+			}
+			upstream := newServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+				rw.WriteHeader(200)
+				rw.Write([]byte(req.Host))
+			}))
+			defer upstream.Close()
 
-	rewriteProxy := NewRewriteReverseProxy(route, &UpstreamConfig{PreserveHost: true})
+			parsedUpstreamURL, err := url.Parse(upstream.URL)
+			if err != nil {
+				t.Fatalf("expected to parse upstream URL err:%q", err)
+			}
 
-	frontend := httptest.NewServer(rewriteProxy)
-	defer frontend.Close()
+			route := &RewriteRoute{
+				FromRegex: regexp.MustCompile("(.*)"),
+				ToTemplate: &url.URL{
+					Scheme: parsedUpstreamURL.Scheme,
+					Opaque: parsedUpstreamURL.Host,
+				},
+			}
 
-	frontendURL, err := url.Parse(frontend.URL)
-	if err != nil {
-		t.Fatalf("expected to parse frontend url: %s", err)
-	}
+			rewriteProxy := NewRewriteReverseProxy(route, &UpstreamConfig{TLSSkipVerify: tc.skipVerify, PreserveHost: tc.preserveHost})
 
-	resp, err := http.Get(frontend.URL)
-	if err != nil {
-		t.Fatalf("expected to make successful request err:%q", err)
-	}
+			frontend := httptest.NewServer(rewriteProxy)
+			defer frontend.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("expected to read body err:%q", err)
-	}
+			frontendURL, err := url.Parse(frontend.URL)
+			if err != nil {
+				t.Fatalf("expected to parse frontend url: %s", err)
+			}
 
-	if string(body) != frontendURL.Host {
-		t.Logf("got  %v", string(body))
-		t.Logf("want %v", frontendURL.Host)
-		t.Fatalf("got unexpected response from upstream")
+			res, err := http.Get(frontend.URL)
+			if err != nil {
+				t.Fatalf("expected to make successful request err:%q", err)
+			}
+
+			body, err := ioutil.ReadAll(res.Body)
+			if err != nil {
+				t.Fatalf("expected to read body err:%q", err)
+			}
+
+			if res.StatusCode != tc.expectedStatus {
+				t.Logf(" got status code: %v", res.StatusCode)
+				t.Logf("want status code: %d", tc.expectedStatus)
+
+				t.Errorf("got unexpected response code for tls failure")
+			}
+
+			if res.StatusCode >= 200 && res.StatusCode < 300 {
+				if tc.preserveHost {
+					if string(body) != frontendURL.Host {
+						t.Logf("got  %v", string(body))
+						t.Logf("want %v", frontendURL.Host)
+						t.Fatalf("got unexpected response from upstream")
+					}
+				} else {
+					if string(body) != parsedUpstreamURL.Host {
+						t.Logf("got  %v", string(body))
+						t.Logf("want %v", parsedUpstreamURL.Host)
+						t.Fatalf("got unexpected response from upstream")
+					}
+				}
+
+				if res.Header.Get("Cookie") != "" {
+					t.Errorf("expected Cookie header to be empty but was %s", res.Header.Get("Cookie"))
+				}
+			}
+		})
 	}
 }
 
