@@ -29,7 +29,7 @@ services:
 
       - UPSTREAM_CONFIGS=/sso/upstream_configs.yml
       - PROVIDER_URL=http://sso-auth.localtest.me
-      - PROXY_PROVIDER_URL=http://host.docker.internal
+      - PROVIDER_URL_INTERNAL=http://host.docker.internal
 
       # CLIENT_ID and CLIENT_SECRET must match sso-auth's PROXY_CLIENT_ID and
       # PROXY_CLIENT_SECRET configuration
