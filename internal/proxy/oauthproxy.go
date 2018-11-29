@@ -214,9 +214,7 @@ func NewRewriteReverseProxy(route *RewriteRoute, config *UpstreamConfig) *httput
 		}
 		director := httputil.NewSingleHostReverseProxy(target).Director
 
-		if req.Header.Get("X-Forwarded-Host") == "" {
-			req.Header.Set("X-Forwarded-Host", req.Host)
-		}
+		req.Header.Add("X-Forwarded-Host", req.Host)
 		director(req)
 		if !config.PreserveHost {
 			req.Host = target.Host
