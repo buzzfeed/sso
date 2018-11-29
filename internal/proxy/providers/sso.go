@@ -120,7 +120,7 @@ func (p *SSOProvider) Redeem(redirectURL, code string) (*SessionState, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Host = p.ProviderData.ProviderURLInternal.Host
+	req.Host = p.ProviderData.ProviderURL.Host
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -205,7 +205,7 @@ func (p *SSOProvider) UserGroups(email string, groups []string) ([]string, error
 	if err != nil {
 		return nil, err
 	}
-	req.Host = p.ProviderData.ProviderURLInternal.Host
+	req.Host = p.ProviderData.ProviderURL.Host
 	req.Header.Set("X-Client-Secret", p.ClientSecret)
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -296,7 +296,7 @@ func (p *SSOProvider) redeemRefreshToken(refreshToken string) (token string, exp
 	if err != nil {
 		return
 	}
-	req.Host = p.ProviderData.ProviderURLInternal.Host
+	req.Host = p.ProviderData.ProviderURL.Host
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -343,7 +343,7 @@ func (p *SSOProvider) ValidateSessionState(s *SessionState, allowedGroups []stri
 		logger.WithUser(s.Email).Error(err, "error validating session state")
 		return false
 	}
-	req.Host = p.ProviderData.ProviderURLInternal.Host
+	req.Host = p.ProviderData.ProviderURL.Host
 	req.Header.Set("X-Client-Secret", p.ClientSecret)
 	req.Header.Set("X-Access-Token", s.AccessToken)
 
