@@ -64,12 +64,6 @@ spec:
               secretKeyRef:
                 name: auth-cookie-secret
                 key: auth-cookie-secret
-          # OLD_COOKIE_SECRET is the same as COOKIE_SECRET, not sure why its even needed at this point
-          - name: OLD_COOKIE_SECRET
-            valueFrom:
-              secretKeyRef:
-                name: auth-cookie-secret
-                key: auth-cookie-secret
           # STATSD_HOST and STATSD_PORT must be defined or the app wont launch, they dont need to be a real host / port
           - name: STATSD_HOST
             value: localhost
