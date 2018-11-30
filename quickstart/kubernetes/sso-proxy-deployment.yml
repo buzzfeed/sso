@@ -25,6 +25,8 @@ spec:
             value: /sso/upstream_configs.yml
           - name: PROVIDER_URL
             value: https://sso-auth.mydomain.com
+          - name: PROVIDER_URL_INTERNAL
+            value: http://sso-auth.sso.svc.cluster.local
           - name: CLIENT_ID
             valueFrom:
               secretKeyRef:

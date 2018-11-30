@@ -57,26 +57,34 @@ func init() {
 func NewSSOProvider(p *ProviderData, sc *statsd.Client) *SSOProvider {
 	p.ProviderName = "SSO"
 	base := p.ProviderURL
+	internalBase := base
+
+	if p.ProviderURLInternal != nil {
+		internalBase = p.ProviderURLInternal
+	}
+
 	p.SignInURL = base.ResolveReference(&url.URL{Path: "/sign_in"})
 	p.SignOutURL = base.ResolveReference(&url.URL{Path: "/sign_out"})
-	p.RedeemURL = base.ResolveReference(&url.URL{Path: "/redeem"})
-	p.RefreshURL = base.ResolveReference(&url.URL{Path: "/refresh"})
-	p.ValidateURL = base.ResolveReference(&url.URL{Path: "/validate"})
-	p.ProfileURL = base.ResolveReference(&url.URL{Path: "/profile"})
-	p.ProxyRedeemURL = p.ProxyProviderURL.ResolveReference(&url.URL{Path: "/redeem"})
+
+	p.RedeemURL = internalBase.ResolveReference(&url.URL{Path: "/redeem"})
+	p.RefreshURL = internalBase.ResolveReference(&url.URL{Path: "/refresh"})
+	p.ValidateURL = internalBase.ResolveReference(&url.URL{Path: "/validate"})
+	p.ProfileURL = internalBase.ResolveReference(&url.URL{Path: "/profile"})
+
 	return &SSOProvider{
 		ProviderData: p,
 		StatsdClient: sc,
 	}
 }
 
-func newRequest(method, url string, body io.Reader) (*http.Request, error) {
+func (p *SSOProvider) newRequest(method, url string, body io.Reader) (*http.Request, error) {
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", userAgentString)
 	req.Header.Set("Accept", "application/json")
+	req.Host = p.ProviderData.ProviderURL.Host
 	return req, nil
 }
 
@@ -109,11 +117,10 @@ func (p *SSOProvider) Redeem(redirectURL, code string) (*SessionState, error) {
 	params.Add("code", code)
 	params.Add("grant_type", "authorization_code")
 
-	req, err := newRequest("POST", p.ProxyRedeemURL.String(), bytes.NewBufferString(params.Encode()))
+	req, err := p.newRequest("POST", p.RedeemURL.String(), bytes.NewBufferString(params.Encode()))
 	if err != nil {
 		return nil, err
 	}
-	req.Host = p.RedeemURL.Host
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -194,7 +201,7 @@ func (p *SSOProvider) UserGroups(email string, groups []string) ([]string, error
 	params.Add("client_id", p.ClientID)
 	params.Add("groups", strings.Join(groups, ","))
 
-	req, err := newRequest("GET", fmt.Sprintf("%s?%s", p.ProfileURL.String(), params.Encode()), nil)
+	req, err := p.newRequest("GET", fmt.Sprintf("%s?%s", p.ProfileURL.String(), params.Encode()), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -284,7 +291,7 @@ func (p *SSOProvider) redeemRefreshToken(refreshToken string) (token string, exp
 	params.Add("client_secret", p.ClientSecret)
 	params.Add("refresh_token", refreshToken)
 	var req *http.Request
-	req, err = newRequest("POST", p.RefreshURL.String(), bytes.NewBufferString(params.Encode()))
+	req, err = p.newRequest("POST", p.RefreshURL.String(), bytes.NewBufferString(params.Encode()))
 	if err != nil {
 		return
 	}
@@ -329,7 +336,7 @@ func (p *SSOProvider) ValidateSessionState(s *SessionState, allowedGroups []stri
 	// we validate the user's access token is valid
 	params := url.Values{}
 	params.Add("client_id", p.ClientID)
-	req, err := newRequest("GET", fmt.Sprintf("%s?%s", p.ValidateURL.String(), params.Encode()), nil)
+	req, err := p.newRequest("GET", fmt.Sprintf("%s?%s", p.ValidateURL.String(), params.Encode()), nil)
 	if err != nil {
 		logger.WithUser(s.Email).Error(err, "error validating session state")
 		return false
