@@ -23,14 +23,6 @@ func newTestServer(status int, body []byte) (*url.URL, *httptest.Server) {
 	return u, s
 }
 
-func newCodeTestServer(code int) (*url.URL, *httptest.Server) {
-	s := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		rw.WriteHeader(code)
-	}))
-	u, _ := url.Parse(s.URL)
-	return u, s
-}
-
 func newSSOProvider() *SSOProvider {
 	return NewSSOProvider(
 		&ProviderData{
@@ -50,16 +42,25 @@ func TestNewRequest(t *testing.T) {
 		name          string
 		url           string
 		expectedError bool
+		expectedHost  string
 	}{
 		{
 			name:          "error on new request",
 			url:           ":",
 			expectedError: true,
+			expectedHost:  "",
 		},
 		{
 			name:          "optional headers set",
 			url:           "/",
 			expectedError: false,
+			expectedHost:  "auth.example.com",
+		},
+		{
+			name:          "host header set correctly",
+			url:           "/",
+			expectedError: false,
+			expectedHost:  "auth.example.com",
 		},
 	}
 	os.Setenv("RIG_IMAGE_VERSION", "testVersion")
@@ -69,7 +70,7 @@ func TestNewRequest(t *testing.T) {
 			if p == nil {
 				t.Fatalf("expected provider to not be nil but was")
 			}
-			req, err := newRequest("GET", tc.url, nil)
+			req, err := p.newRequest("GET", tc.url, nil)
 			if tc.expectedError && err == nil {
 				t.Errorf("expected error but error was nil")
 			}
@@ -82,10 +83,11 @@ func TestNewRequest(t *testing.T) {
 			if req.Header.Get("User-Agent") == "testVersion" {
 				t.Errorf("expected User-Agent header to be set but it was not")
 			}
-
+			if tc.expectedHost != req.Host {
+				t.Errorf("expected host header %s, got %s", tc.expectedHost, req.Host)
+			}
 		})
 	}
-
 }
 
 func TestSSOProviderDefaults(t *testing.T) {
@@ -249,7 +251,7 @@ func TestSSOProviderRedeem(t *testing.T) {
 				testutil.Equal(t, nil, err)
 				p.RedeemURL, redeemServer = newTestServer(http.StatusOK, body)
 			} else {
-				p.RedeemURL, redeemServer = newCodeTestServer(400)
+				p.RedeemURL, redeemServer = newTestServer(http.StatusBadRequest, []byte{})
 			}
 			defer redeemServer.Close()
 
@@ -259,7 +261,7 @@ func TestSSOProviderRedeem(t *testing.T) {
 				testutil.Equal(t, nil, err)
 				p.ProfileURL, profileServer = newTestServer(http.StatusOK, body)
 			} else {
-				p.RedeemURL, profileServer = newCodeTestServer(400)
+				p.RedeemURL, profileServer = newTestServer(http.StatusBadRequest, []byte{})
 			}
 			defer profileServer.Close()
 
@@ -277,86 +279,6 @@ func TestSSOProviderRedeem(t *testing.T) {
 		})
 	}
 }
-
-func TestSSOProviderRedeemInternal(t *testing.T) {
-	testCases := []struct {
-		Name                   string
-		Code                   string
-		ExpectedError          string
-		RedeemResponse         *redeemResponse
-		RedeemResponseInternal *redeemResponse
-		ProfileResponse        *profileResponse
-	}{
-		{
-			Name:          "redeem fails without code",
-			ExpectedError: "missing code",
-		},
-		{
-			Name:          "redeem fails if redemption server not responding",
-			Code:          "code1234",
-			ExpectedError: "got 400",
-		},
-		{
-			Name: "redeem successful",
-			Code: "code1234",
-			RedeemResponse: &redeemResponse{
-				AccessToken:  "x1234",
-				ExpiresIn:    10,
-				RefreshToken: "refreshexternal12345",
-				Email:        "michael.brand@gsa.gov",
-			},
-			RedeemResponseInternal: &redeemResponse{
-				AccessToken:  "i1234",
-				ExpiresIn:    10,
-				RefreshToken: "refreshinternal12345",
-				Email:        "michael.bland@gsa.gov",
-			},
-			ProfileResponse: &profileResponse{
-				Email:  "michael.bland@gsa.gov",
-				Groups: []string{"core@gsa.gov"},
-			},
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.Name, func(t *testing.T) {
-			p := newSSOProvider()
-
-			var redeemServer *httptest.Server
-			// set up redemption resource
-			if tc.RedeemResponseInternal != nil {
-				body, err := json.Marshal(tc.RedeemResponseInternal)
-				testutil.Equal(t, nil, err)
-				p.RedeemURL, redeemServer = newTestServer(http.StatusOK, body)
-			} else {
-				p.RedeemURL, redeemServer = newCodeTestServer(500)
-			}
-			defer redeemServer.Close()
-
-			var profileServer *httptest.Server
-			if tc.ProfileResponse != nil {
-				body, err := json.Marshal(tc.ProfileResponse)
-				testutil.Equal(t, nil, err)
-				p.ProfileURL, profileServer = newTestServer(http.StatusOK, body)
-			} else {
-				p.RedeemURL, profileServer = newCodeTestServer(400)
-			}
-			defer profileServer.Close()
-
-			session, err := p.Redeem("http://redirect/", tc.Code)
-			if tc.RedeemResponseInternal != nil {
-				testutil.Equal(t, nil, err)
-				testutil.NotEqual(t, session, nil)
-				testutil.Equal(t, tc.RedeemResponseInternal.Email, session.Email)
-				testutil.Equal(t, tc.RedeemResponseInternal.AccessToken, session.AccessToken)
-				testutil.Equal(t, tc.RedeemResponseInternal.RefreshToken, session.RefreshToken)
-			}
-			if tc.ExpectedError != "" && !strings.Contains(err.Error(), tc.ExpectedError) {
-				t.Errorf("got unexpected result.\nwant=%v\ngot=%v\n", tc.ExpectedError, err.Error())
-			}
-		})
-	}
-}
-
 func TestSSOProviderValidateSessionState(t *testing.T) {
 	testCases := []struct {
 		Name             string
@@ -614,7 +536,7 @@ func TestSSOProviderRefreshSession(t *testing.T) {
 				testutil.Equal(t, nil, err)
 				p.ProfileURL, groupsServer = newTestServer(http.StatusOK, body)
 			} else {
-				p.ProfileURL, groupsServer = newCodeTestServer(500)
+				p.ProfileURL, groupsServer = newTestServer(http.StatusInternalServerError, []byte{})
 			}
 			defer groupsServer.Close()
 
