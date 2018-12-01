@@ -185,7 +185,9 @@ func NewReverseProxy(to *url.URL, config *UpstreamConfig) *httputil.ReverseProxy
 	proxy.Director = func(req *http.Request) {
 		req.Header.Add("X-Forwarded-Host", req.Host)
 		director(req)
-		req.Host = to.Host
+		if !config.PreserveHost {
+			req.Host = to.Host
+		}
 	}
 	return proxy
 }
@@ -214,7 +216,9 @@ func NewRewriteReverseProxy(route *RewriteRoute, config *UpstreamConfig) *httput
 
 		req.Header.Add("X-Forwarded-Host", req.Host)
 		director(req)
-		req.Host = target.Host
+		if !config.PreserveHost {
+			req.Host = target.Host
+		}
 	}
 	return proxy
 }
