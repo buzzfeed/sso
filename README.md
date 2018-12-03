@@ -1,6 +1,6 @@
 # sso
-> See our launch [blog post](https://tech.buzzfeed.com/unleashing-the-a6a1a5da39d6) for more information!
 
+> See our launch [blog post](https://tech.buzzfeed.com/unleashing-the-a6a1a5da39d6) for more information!
 
 [![CircleCI](https://circleci.com/gh/buzzfeed/sso.svg?style=svg)](https://circleci.com/gh/buzzfeed/sso)
 [![MIT license](http://img.shields.io/badge/license-MIT-brightgreen.svg)](http://opensource.org/licenses/MIT)
@@ -8,6 +8,8 @@
 
 
 <img src="https://user-images.githubusercontent.com/10510566/44476420-a64e5980-a605-11e8-8ad9-2820109deb75.png" width="128px">
+
+> Please take the [SSO Community Survey][sso_survey] to let us know how we're doing, and to help us plan our roadmap!
 
 ----
 
@@ -68,3 +70,4 @@ If you come across any security vulnerabilities with the **sso** repo or softwar
 **sso** is actively maintained by the BuzzFeed Infrastructure teams.
 
 [docker_hub]: https://hub.docker.com/r/buzzfeed/sso/
+[sso_survey]: https://docs.google.com/forms/d/e/1FAIpQLSeRjf66ZSpMkSASMbYebx6QvECYRj9nUevOhUF2huw53sE6_g/viewform
