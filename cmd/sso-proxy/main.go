@@ -36,7 +36,7 @@ func main() {
 		return nil
 	}
 
-	oauthproxy, err := proxy.NewOAuthProxy(opts, validator)
+	oauthproxy, err := proxy.NewOAuthProxy(opts, validator, proxy.SetCookieStore(opts))
 	if err != nil {
 		logger.Error(err, "error creating oauthproxy")
 		os.Exit(1)

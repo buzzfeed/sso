@@ -168,6 +168,9 @@ func TestSignIn(t *testing.T) {
 			name: "another error that isn't no cookie",
 			mockSessionStore: &sessions.MockSessionStore{
 				LoadError: fmt.Errorf("another error"),
+				Session: &sessions.SessionState{
+					Email: "emailaddress",
+				},
 			},
 			expectedCode:          http.StatusInternalServerError,
 			expectedErrorResponse: &errResponse{"another error"},
