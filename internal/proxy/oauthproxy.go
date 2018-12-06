@@ -681,8 +681,20 @@ func (p *OAuthProxy) isXHR(req *http.Request) bool {
 // SignOut redirects the request to the provider's sign out url.
 func (p *OAuthProxy) SignOut(rw http.ResponseWriter, req *http.Request) {
 	p.ClearSessionCookie(rw, req)
+
+	var scheme string
+
+	// Build redirect URI from request host
+	if req.URL.Scheme == "" {
+		if p.CookieSecure {
+			scheme = "https"
+		} else {
+			scheme = "http"
+		}
+	}
+
 	redirectURL := &url.URL{
-		Scheme: "https",
+		Scheme: scheme,
 		Host:   req.Host,
 		Path:   "/",
 	}
