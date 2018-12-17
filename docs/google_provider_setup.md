@@ -63,7 +63,7 @@ You'll add these credentials to `quickstart/env` as instructed in [the guide](qu
 ## 3. Set up a service account for Google Groups-based authorization
 
 If desired, `sso` can be configured to use Google Groups membership for authorization, only granting
-access to an upstream to users that are members of particular groups.
+access to an upstream to users that are members of particular groups. *Note*: We do not support nested group authentication at this time. Groups must be made up of email addresses  associated with individual's accounts. See [#133](https://github.com/buzzfeed/sso/issues/133).
 
 ### Create a service account
 
