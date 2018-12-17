@@ -1,0 +1,10 @@
+- service: httpbin
+  default:
+    from: httpbin.sso.localtest.me
+    to: http://httpheader.net
+
+# - service: hello-world
+#   default:
+#     from: hello-world.sso.localtest.me
+#     to: http://httpheader.net
+
