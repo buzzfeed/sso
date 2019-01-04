@@ -1,10 +1,7 @@
 package devproxy
 
 import (
-	// "crypto"
-	// "encoding/base64"
 	"encoding/json"
-	// "errors"
 	"fmt"
 	"io"
 	"io/ioutil"

@@ -2,29 +2,17 @@ package devproxy
 
 import (
 	"encoding/json"
-	"time"
-
-	// "errors"
 	"fmt"
 	"html/template"
 	"io"
-
-	// "net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-
-	// "reflect"
 	"regexp"
 	"strings"
+	"time"
 
-	// "time"
-
-	// "github.com/buzzfeed/sso/internal/pkg/aead"
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
-	// "github.com/buzzfeed/sso/internal/dev/collector"
-	// "github.com/18F/hmacauth"
-	// "github.com/datadog/datadog-go/statsd"
 )
 
 // SignatureHeader is the header name where the signed request header is stored.
@@ -261,9 +249,6 @@ func (p *DevProxy) Handler() http.Handler {
 	// order as applied here (i.e., we want to validate the host _first_ when
 	// processing a request)
 	var handler http.Handler = mux
-	// if p.CookieSecure {
-	// 	handler = requireHTTPS(handler)
-	// }
 	handler = p.setResponseHeaderOverrides(handler)
 	handler = setSecurityHeaders(handler)
 	handler = p.validateHost(handler)
@@ -352,11 +337,6 @@ func (p *DevProxy) Proxy(rw http.ResponseWriter, req *http.Request) {
 func (p *DevProxy) UnknownHost(rw http.ResponseWriter, req *http.Request) {
 	logger := log.NewLogEntry()
 
-	// tags := []string{
-	// 	fmt.Sprintf("action:%s", GetActionTag(req)),
-	// 	"error:unknown_host",
-	// }
-	// p.StatsdClient.Incr("application_error", tags, 1.0)
 	logger.WithRequestHost(req.Host).Error("unknown host")
 	http.Error(rw, "", statusInvalidHost)
 }

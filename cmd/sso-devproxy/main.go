@@ -5,9 +5,8 @@ import (
 	"net/http"
 	"os"
 
-	log "github.com/buzzfeed/sso/internal/pkg/logging"
-	// "github.com/buzzfeed/sso/internal/pkg/options"
 	"github.com/buzzfeed/sso/internal/devproxy"
+	log "github.com/buzzfeed/sso/internal/pkg/logging"
 	"github.com/kelseyhightower/envconfig"
 )
 
@@ -42,7 +41,7 @@ func main() {
 		Addr:         fmt.Sprintf(":%d", opts.Port),
 		ReadTimeout:  opts.TCPReadTimeout,
 		WriteTimeout: opts.TCPWriteTimeout,
-		Handler:      devproxy.NewLoggingHandler(os.Stdout, proxy.Handler(), opts.RequestLogging), //, devproxy.StatsdClient),
+		Handler:      devproxy.NewLoggingHandler(os.Stdout, proxy.Handler(), opts.RequestLogging),
 	}
 	logger.Fatal(s.ListenAndServe())
 }

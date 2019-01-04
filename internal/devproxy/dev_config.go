@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	// "github.com/18F/hmacauth"
 	"github.com/imdario/mergo"
 	"gopkg.in/yaml.v2"
 )
@@ -48,10 +47,7 @@ type UpstreamConfig struct {
 	ExtraRoutes []*RouteConfig `yaml:"extra_routes"`
 
 	// Generated at Parse Time
-	Route interface{} // note: :/
-
-	// SkipAuthCompiledRegex []*regexp.Regexp
-	// AllowedGroups         []string
+	Route           interface{} // note: :/
 	Timeout         time.Duration
 	FlushInterval   time.Duration
 	HeaderOverrides map[string]string
@@ -76,10 +72,8 @@ type RouteConfig struct {
 // * flush_interval - interval at which the proxy should flush data to the browser
 type OptionsConfig struct {
 	HeaderOverrides map[string]string `yaml:"header_overrides"`
-	// SkipAuthRegex   []string          `yaml:"skip_auth_regex"`
-	// AllowedGroups   []string          `yaml:"allowed_groups"`
-	Timeout       time.Duration `yaml:"timeout"`
-	FlushInterval time.Duration `yaml:"flush_interval"`
+	Timeout         time.Duration     `yaml:"timeout"`
+	FlushInterval   time.Duration     `yaml:"flush_interval"`
 }
 
 // ErrParsingConfig is an error specific to config parsing.
@@ -179,23 +173,6 @@ func loadServiceConfigs(raw []byte, cluster, scheme string, configVars map[strin
 			return nil, err
 		}
 	}
-
-	// for _, proxy := range configs {
-	// 	key := fmt.Sprintf("%s_signing_key", proxy.Service)
-	// 	signingKey, ok := configVars[key]
-	// 	if !ok {
-	// 		continue
-	// 	}
-	// 	auth, err := generateHmacAuth(signingKey)
-	// 	if err != nil {
-	// 		return nil, &ErrParsingConfig{
-	// 			Message: fmt.Sprintf("unable to generate hmac auth for %s", proxy.Service),
-	// 			Err:     err,
-	// 		}
-	// 	}
-	// 	proxy.HMACAuth = auth
-
-	// }
 
 	return configs, nil
 }
@@ -345,19 +322,6 @@ func parseOptionsConfig(proxy *UpstreamConfig) error {
 		return nil
 	}
 
-	// We compile all the regexes in SkipAuth Regex
-	// for _, uncompiled := range proxy.RouteConfig.Options.SkipAuthRegex {
-	// 	compiled, err := regexp.Compile(uncompiled)
-	// 	if err != nil {
-	// 		return &ErrParsingConfig{
-	// 			Message: "unable to compile skip auth regex",
-	// 			Err:     err,
-	// 		}
-	// 	}
-	// 	proxy.SkipAuthCompiledRegex = append(proxy.SkipAuthCompiledRegex, compiled)
-	// }
-
-	// proxy.AllowedGroups = proxy.RouteConfig.Options.AllowedGroups
 	proxy.Timeout = proxy.RouteConfig.Options.Timeout
 	proxy.FlushInterval = proxy.RouteConfig.Options.FlushInterval
 	proxy.HeaderOverrides = proxy.RouteConfig.Options.HeaderOverrides
