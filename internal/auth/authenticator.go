@@ -533,8 +533,8 @@ func (p *Authenticator) OAuthStart(rw http.ResponseWriter, req *http.Request) {
 	// Here we validate the redirect that is nested within the redirect_uri.
 	// `authRedirectURL` points to step D, `proxyRedirectURL` points to step E.
 	//
-	// A*        B      C                 D           E
-	// /start -> IdP -> auth /callback -> /sign_in -> proxy /callback
+	// A*        B             C                 D           E
+	// /start -> IdProvider -> auth /callback -> /sign_in -> proxy /callback
 	//
 	// * you are here
 	proxyRedirectURL, err := url.Parse(authRedirectURL.Query().Get("redirect_uri"))
