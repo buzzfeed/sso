@@ -80,6 +80,8 @@ func (gs *AzureGraphService) GetGroups(email string) ([]string, error) {
 		}
 
 		groupData := struct {
+			// Link to next page of data, see:
+			// https://docs.microsoft.com/en-us/graph/query-parameters#skip-parameter
 			Next  string   `json:"@odata.nextLink"`
 			Value []string `json:"value"`
 		}{}
