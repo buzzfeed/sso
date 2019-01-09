@@ -107,8 +107,7 @@ func (gs *AzureGraphService) GetGroups(email string) ([]string, error) {
 
 				var name string
 				// check the cache for the group name first
-				cachedName, ok := gs.groupNameCache.Get(id)
-				if !ok {
+				if cachedName, ok := gs.groupNameCache.Get(id); !ok {
 					// didn't have the group name, make concurrent API call to fetch it
 					name, err = gs.getGroupName(id)
 					if err == nil {
