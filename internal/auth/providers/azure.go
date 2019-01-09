@@ -131,7 +131,9 @@ func (p *AzureV2Provider) Redeem(redirectURL, code string) (s *sessions.SessionS
 // Configure sets the Azure tenant ID value for the provider
 func (p *AzureV2Provider) Configure(tenant string) error {
 	p.Tenant = tenant
-	if tenant == "" {
+	if p.Tenant == "" {
+		// TODO: See below, "common" is the right default value, and while
+		// Azure AD docs suggest this should work, it results in an error.
 		p.Tenant = "common"
 	}
 	discoveryURL := strings.Replace(azureOIDCConfigURL, "{tenant}", p.Tenant, -1)
@@ -139,7 +141,7 @@ func (p *AzureV2Provider) Configure(tenant string) error {
 	// Configure discoverable provider data.
 	oidcProvider, err := oidc.NewProvider(context.Background(), discoveryURL)
 	if err != nil {
-		// FIXME: this seems like it _should_ work for "common", but it doesn't
+		// TODO: This seems like it _should_ work for "common", but it doesn't
 		// Does anyone actually want to use this with "common" though?
 		return err
 	}
