@@ -28,7 +28,7 @@ func NewOIDCProvider(p *ProviderData) *OIDCProvider {
 
 // Redeem fulfills the Provider interface.
 // The authenticator uses this method to redeem the code provided to /callback after the user logs into their OpenID Connect account.
-func (p *OIDCProvider) Redeem(redirectURL, code string) (s *sessions.SessionState, err error) {
+func (p *OIDCProvider) Redeem(redirectURL, code string) (*sessions.SessionState, error) {
 	ctx := context.Background()
 	c := oauth2.Config{
 		ClientID:     p.ClientID,
@@ -70,14 +70,14 @@ func (p *OIDCProvider) Redeem(redirectURL, code string) (s *sessions.SessionStat
 		return nil, fmt.Errorf("email in id_token (%s) isn't verified", claims.Email)
 	}
 
-	s = &sessions.SessionState{
+	s := &sessions.SessionState{
 		AccessToken:     token.AccessToken,
 		RefreshToken:    token.RefreshToken,
 		RefreshDeadline: token.Expiry,
 		Email:           claims.Email,
 	}
 
-	return
+	return s, nil
 }
 
 // RefreshSessionIfNeeded takes in a SessionState and
