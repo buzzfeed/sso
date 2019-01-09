@@ -159,7 +159,7 @@ func (gs *AzureGraphService) getGroupName(id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if groupMetaResponse.StatusCode >= 400 {
+	if groupMetaResponse.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("api error: %s", string(body))
 	}
 
