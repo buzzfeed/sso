@@ -15,7 +15,7 @@ import (
 
 var (
 	// This is a compile-time check to make sure our types correctly implement the interface:
-	// https://medium.com/@matryer/golang-tip-compile-time-checks-to-ensure-your-type-satisfies-an-interface-c167afed3aae
+	// https://medium.com/@matryer/c167afed3aae
 	_ Provider = &SingleFlightProvider{}
 )
 

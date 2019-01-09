@@ -23,6 +23,10 @@ import (
 var (
 	azureOIDCConfigURL  = "https://login.microsoftonline.com/{tenant}/v2.0"
 	azureOIDCProfileURL = "https://graph.microsoft.com/oidc/userinfo"
+
+	// This is a compile-time check to make sure our types correctly implement the interface:
+	// https://medium.com/@matryer/c167afed3aae
+	_ Provider = &AzureV2Provider{}
 )
 
 // AzureV2Provider is an Azure AD v2 specific implementation of the Provider interface.
