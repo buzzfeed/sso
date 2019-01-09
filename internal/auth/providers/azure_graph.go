@@ -60,10 +60,10 @@ func NewAzureGraphService(clientID string, clientSecret string, tokenURL string)
 // GetGroups lists groups user belongs to.
 func (gs *AzureGraphService) GetGroups(email string) ([]string, error) {
 	if gs.client == nil {
-		return []string{}, errors.New("oauth client must be configured")
+		return nil, errors.New("oauth client must be configured")
 	}
 	if email == "" {
-		return []string{}, errors.New("missing email")
+		return nil, errors.New("missing email")
 	}
 
 	var wg sync.WaitGroup
@@ -76,7 +76,7 @@ func (gs *AzureGraphService) GetGroups(email string) ([]string, error) {
 	for {
 		groupResponse, err := gs.client.Post(requestURL, "application/json", strings.NewReader(requestBody))
 		if err != nil {
-			return []string{}, err
+			return nil, err
 		}
 
 		groupData := struct {
@@ -88,15 +88,15 @@ func (gs *AzureGraphService) GetGroups(email string) ([]string, error) {
 
 		body, err := ioutil.ReadAll(groupResponse.Body)
 		if err != nil {
-			return []string{}, err
+			return nil, err
 		}
 		if groupResponse.StatusCode >= 400 {
-			return []string{}, fmt.Errorf("api error: %s", string(body))
+			return nil, fmt.Errorf("api error: %s", string(body))
 		}
 
 		err = json.Unmarshal(body, &groupData)
 		if err != nil {
-			return []string{}, err
+			return nil, err
 		}
 
 		for _, groupID := range groupData.Value {
@@ -133,7 +133,7 @@ func (gs *AzureGraphService) GetGroups(email string) ([]string, error) {
 	}
 	wg.Wait()
 	if err != nil {
-		return []string{}, err
+		return nil, err
 	}
 
 	return groupNames, nil
