@@ -19,6 +19,8 @@ import (
 const azureGroupCacheSize = 1024
 
 // GraphService wraps calls to provider admin APIs
+//
+// This interface allows the service to be more readily mocked in tests.
 type GraphService interface {
 	GetGroups(string) ([]string, error)
 }
