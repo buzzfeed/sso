@@ -20,8 +20,8 @@ import (
 )
 
 var (
-	azureOIDCConfigURL  = "https://login.microsoftonline.com/{tenant}/v2.0"
-	azureOIDCProfileURL = "https://graph.microsoft.com/oidc/userinfo"
+	azureOIDCConfigURLTemplate = "https://login.microsoftonline.com/{tenant}/v2.0"
+	azureOIDCProfileURL        = "https://graph.microsoft.com/oidc/userinfo"
 
 	// This is a compile-time check to make sure our types correctly implement the interface:
 	// https://medium.com/@matryer/c167afed3aae
@@ -135,7 +135,7 @@ func (p *AzureV2Provider) Configure(tenant string) error {
 		// Azure AD docs suggest this should work, it results in an error.
 		p.Tenant = "common"
 	}
-	discoveryURL := strings.Replace(azureOIDCConfigURL, "{tenant}", p.Tenant, -1)
+	discoveryURL := strings.Replace(azureOIDCConfigURLTemplate, "{tenant}", p.Tenant, -1)
 
 	// Configure discoverable provider data.
 	oidcProvider, err := oidc.NewProvider(context.Background(), discoveryURL)

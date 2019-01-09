@@ -299,7 +299,8 @@ func TestAzureV2ProviderRedeem(t *testing.T) {
 			// pointer to body to bypass chicken/egg issue w/ mock server urls
 			providerURL, server := newAzureProviderServer(&body, http.StatusOK, &privKey.PublicKey)
 			defer server.Close()
-			azureOIDCConfigURL = providerURL.String()
+			// swap the global OIDC URL template for a test provider URL
+			azureOIDCConfigURLTemplate = providerURL.String()
 
 			if tc.claims != nil {
 				// create an instance of Builder that uses the rsa signer
