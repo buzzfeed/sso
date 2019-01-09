@@ -198,8 +198,7 @@ func (p *AzureV2Provider) RefreshSessionIfNeeded(s *sessions.SessionState) (bool
 	return true, nil
 }
 
-// RefreshAccessToken uses default OAuth2 TokenSource method to get a new
-// access token.
+// RefreshAccessToken uses default OAuth2 TokenSource method to get a new access token.
 func (p *AzureV2Provider) RefreshAccessToken(refreshToken string) (string, time.Duration, error) {
 	if refreshToken == "" {
 		return "", 0, errors.New("missing refresh token")

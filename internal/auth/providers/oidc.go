@@ -101,8 +101,7 @@ func (p *OIDCProvider) RefreshSessionIfNeeded(s *sessions.SessionState) (bool, e
 	return true, nil
 }
 
-// RefreshAccessToken uses default OAuth2 TokenSource method to get a new
-// access token.
+// RefreshAccessToken uses default OAuth2 TokenSource method to get a new access token.
 func (p *OIDCProvider) RefreshAccessToken(refreshToken string) (string, time.Duration, error) {
 	if refreshToken == "" {
 		return "", 0, errors.New("missing refresh token")
