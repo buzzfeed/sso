@@ -90,7 +90,7 @@ func (gs *AzureGraphService) GetGroups(email string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		if groupResponse.StatusCode >= 400 {
+		if groupResponse.StatusCode != http.StatusOK {
 			return nil, fmt.Errorf("api error: %s", string(body))
 		}
 
