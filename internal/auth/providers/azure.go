@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -226,12 +225,6 @@ func (p *AzureV2Provider) RefreshAccessToken(refreshToken string) (string, time.
 	}
 
 	return newToken.AccessToken, newToken.Expiry.Sub(time.Now()), nil
-}
-
-func getAzureHeader(accessToken string) http.Header {
-	header := make(http.Header)
-	header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
-	return header
 }
 
 // ValidateSessionState attempts to validate the session state's access token.
