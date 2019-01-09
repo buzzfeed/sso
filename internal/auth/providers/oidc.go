@@ -83,15 +83,6 @@ func (p *OIDCProvider) Redeem(redirectURL, code string) (s *sessions.SessionStat
 // RefreshSessionIfNeeded takes in a SessionState and
 // returns false if the session is not refreshed and true if it is.
 func (p *OIDCProvider) RefreshSessionIfNeeded(s *sessions.SessionState) (bool, error) {
-	// if s == nil || s.RefreshDeadline.After(time.Now()) || s.RefreshToken == "" {
-	// 	return false, nil
-	// }
-	//
-	// origExpiration := s.RefreshDeadline
-	// s.RefreshDeadline = time.Now().Add(time.Second).Truncate(time.Second)
-	// fmt.Printf("refreshed access token %s (expired on %s)\n", s, origExpiration)
-	// return false, nil
-
 	if s == nil || !s.RefreshPeriodExpired() || s.RefreshToken == "" {
 		return false, nil
 	}
