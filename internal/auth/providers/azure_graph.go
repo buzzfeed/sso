@@ -67,7 +67,7 @@ func (gs *AzureGraphService) GetGroups(email string) ([]string, error) {
 	}
 
 	var wg sync.WaitGroup
-	var mtx sync.Mutex
+	var mux sync.Mutex
 	var err error
 	groupNames := make([]string, 0)
 	// See: https://developer.microsoft.com/en-us/graph/docs/api-reference/beta/api/user_getmembergroups
@@ -119,9 +119,9 @@ func (gs *AzureGraphService) GetGroups(email string) ([]string, error) {
 					// cache hit
 					name = cachedName.(string)
 				}
-				mtx.Lock()
+				mux.Lock()
 				groupNames = append(groupNames, name)
-				mtx.Unlock()
+				mux.Unlock()
 			}(&wg)
 		}
 
