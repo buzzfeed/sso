@@ -15,8 +15,8 @@ import (
 	"golang.org/x/oauth2/clientcredentials"
 )
 
-// AzureGroupCacheSize controls the size of the caches of AD group info
-const AzureGroupCacheSize = 1024
+// azureGroupCacheSize controls the size of the caches of AD group info
+const azureGroupCacheSize = 1024
 
 // GraphService wraps calls to provider admin APIs
 type GraphService interface {
@@ -42,13 +42,13 @@ func NewAzureGraphService(clientID string, clientSecret string, tokenURL string)
 	}
 	ctx := context.Background()
 	client := clientConfig.Client(ctx)
-	memberCache, err := lru.New(AzureGroupCacheSize)
+	memberCache, err := lru.New(azureGroupCacheSize)
 	if err != nil {
-		panic(err) // Should only happen if AzureGroupCacheSize is a negative number
+		panic(err) // Should only happen if azureGroupCacheSize is a negative number
 	}
-	nameCache, err := lru.New(AzureGroupCacheSize)
+	nameCache, err := lru.New(azureGroupCacheSize)
 	if err != nil {
-		panic(err) // Should only happen if AzureGroupCacheSize is a negative number
+		panic(err) // Should only happen if azureGroupCacheSize is a negative number
 	}
 	return &AzureGraphService{
 		client:               client,

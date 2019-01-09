@@ -22,8 +22,10 @@ import (
 	"gopkg.in/square/go-jose.v2/jwt"
 )
 
-const MicrosoftTenantID = "9188040d-6c67-4c5b-b112-36a304b66dad"
-const TestClientID = "a4c35c92-e858-41e8-bd2c-ade04cb622b1"
+const (
+	microsoftTenantID = "9188040d-6c67-4c5b-b112-36a304b66dad"
+	testClientID      = "a4c35c92-e858-41e8-bd2c-ade04cb622b1"
+)
 
 func newAzureProviderServer(redeemBody *[]byte, redeemCode int, pubKey *rsa.PublicKey) (*url.URL, *httptest.Server) {
 	var u *url.URL
@@ -127,7 +129,7 @@ func TestAzureV2ProviderDefaults(t *testing.T) {
 	for _, expected := range expectedResults {
 		t.Run(expected.name, func(t *testing.T) {
 			p := newAzureV2Provider(expected.providerData)
-			err := p.Configure(MicrosoftTenantID)
+			err := p.Configure(microsoftTenantID)
 			if err != nil {
 				t.Error(err)
 			}
@@ -215,7 +217,7 @@ func TestAzureV2ProviderRedeem(t *testing.T) {
 			name: "redeem",
 			claims: &claims{
 				Issuer:   "{mock-issuer}",
-				Audience: TestClientID,
+				Audience: testClientID,
 				Expiry:   jwt.NewNumericDate(time.Now().Add(10 * time.Second)),
 				Name:     "Michael Bland",
 				Email:    "michael.bland@gsa.gov",
@@ -234,7 +236,7 @@ func TestAzureV2ProviderRedeem(t *testing.T) {
 		{
 			name: "missing issuer",
 			claims: &claims{
-				Audience: TestClientID,
+				Audience: testClientID,
 				Expiry:   jwt.NewNumericDate(time.Now().Add(10 * time.Second)),
 				Name:     "Michael Bland",
 				Email:    "michael.bland@gsa.gov",
@@ -250,7 +252,7 @@ func TestAzureV2ProviderRedeem(t *testing.T) {
 			name: "invalid issuer",
 			claims: &claims{
 				Issuer:   "https://example.com/bogus/issuer",
-				Audience: TestClientID,
+				Audience: testClientID,
 				Expiry:   jwt.NewNumericDate(time.Now().Add(10 * time.Second)),
 				Name:     "Michael Bland",
 				Email:    "michael.bland@gsa.gov",
@@ -319,9 +321,9 @@ func TestAzureV2ProviderRedeem(t *testing.T) {
 			testutil.Equal(t, nil, err)
 
 			p := newAzureV2Provider(nil)
-			p.ClientID = TestClientID
+			p.ClientID = testClientID
 			p.ClientSecret = "456"
-			err = p.Configure(MicrosoftTenantID)
+			err = p.Configure(microsoftTenantID)
 			if err != nil {
 				t.Error(err)
 			}
@@ -385,7 +387,7 @@ func TestAzureV2GetSignInURL(t *testing.T) {
 				"response_type": []string{"id_token code"},
 				"scope":         []string{"openid email profile offline_access"},
 				"state":         []string{"1234"},
-				"client_id":     []string{TestClientID},
+				"client_id":     []string{testClientID},
 				"nonce":         []string{"KEB9Aopa"},
 				"prompt":        []string{"consent"},
 			},
@@ -400,7 +402,7 @@ func TestAzureV2GetSignInURL(t *testing.T) {
 				"response_type": []string{"id_token code"},
 				"scope":         []string{"openid email profile offline_access"},
 				"state":         []string{"1234"},
-				"client_id":     []string{TestClientID},
+				"client_id":     []string{testClientID},
 				"nonce":         []string{"KEB9Aopa"},
 				"prompt":        []string{"consent"},
 			},
@@ -415,7 +417,7 @@ func TestAzureV2GetSignInURL(t *testing.T) {
 				"response_type": []string{"id_token code"},
 				"scope":         []string{"openid email profile offline_access"},
 				"state":         []string{"4321"},
-				"client_id":     []string{TestClientID},
+				"client_id":     []string{testClientID},
 				"nonce":         []string{"x_PhEN0K"},
 				"prompt":        []string{"consent"},
 			},
@@ -425,7 +427,7 @@ func TestAzureV2GetSignInURL(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			p := newAzureV2Provider(nil)
-			p.ClientID = TestClientID
+			p.ClientID = testClientID
 			p.ClientSecret = "456"
 			p.Scope = "openid email profile offline_access"
 			p.ApprovalPrompt = "consent"
