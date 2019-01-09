@@ -56,7 +56,7 @@ func (p *AzureV2Provider) SetStatsdClient(statsdClient *statsd.Client) {
 
 // Redeem fulfills the Provider interface.
 // The authenticator uses this method to redeem the code provided to /callback after the user logs into their Azure AD account.
-func (p *AzureV2Provider) Redeem(redirectURL, code string) (s *sessions.SessionState, err error) {
+func (p *AzureV2Provider) Redeem(redirectURL, code string) (*sessions.SessionState, error) {
 	ctx := context.Background()
 	c := oauth2.Config{
 		ClientID:     p.ClientID,
@@ -106,7 +106,7 @@ func (p *AzureV2Provider) Redeem(redirectURL, code string) (s *sessions.SessionS
 	// with UPN claim; UPN has usually been what you want, but I think it's not
 	// rendered as a full email address here.
 
-	s = &sessions.SessionState{
+	s := &sessions.SessionState{
 		AccessToken:  token.AccessToken,
 		RefreshToken: token.RefreshToken,
 
@@ -124,7 +124,7 @@ func (p *AzureV2Provider) Redeem(redirectURL, code string) (s *sessions.SessionS
 		}
 		s.Groups = groupNames
 	}
-	return
+	return s, nil
 }
 
 // Configure sets the Azure tenant ID value for the provider
