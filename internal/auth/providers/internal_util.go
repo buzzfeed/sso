@@ -50,7 +50,6 @@ func stripParam(param, endpoint string) string {
 func validateToken(p Provider, accessToken string, header http.Header) bool {
 	logger := log.NewLogEntry()
 
-	logger.Info(p.Data().ValidateURL)
 	if accessToken == "" || p.Data().ValidateURL == nil {
 		return false
 	}
