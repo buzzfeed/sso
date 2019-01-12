@@ -15,6 +15,9 @@ import (
 	"golang.org/x/oauth2/clientcredentials"
 )
 
+// The Microsoft Graph API provides a mechanism to obtain group membership
+// information for users authenticated with the Azure AD provider.
+
 // azureGroupCacheSize controls the size of the caches of AD group info
 const azureGroupCacheSize = 1024
 
@@ -25,15 +28,15 @@ type GraphService interface {
 	GetGroups(string) ([]string, error)
 }
 
-// AzureGraphService implements graph API calls for the Azure provider
-type AzureGraphService struct {
+// MSGraphService implements graph API calls for the Azure provider
+type MSGraphService struct {
 	client               *http.Client
 	groupMembershipCache *lru.Cache
 	groupNameCache       *lru.Cache
 }
 
-// NewAzureGraphService creates a new graph service for getting groups
-func NewAzureGraphService(clientID string, clientSecret string, tokenURL string) *AzureGraphService {
+// NewMSGraphService creates a new graph service for getting groups
+func NewMSGraphService(clientID string, clientSecret string, tokenURL string) *MSGraphService {
 	clientConfig := &clientcredentials.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
@@ -52,7 +55,7 @@ func NewAzureGraphService(clientID string, clientSecret string, tokenURL string)
 	if err != nil {
 		panic(err) // Should only happen if azureGroupCacheSize is a negative number
 	}
-	return &AzureGraphService{
+	return &MSGraphService{
 		client:               client,
 		groupMembershipCache: memberCache,
 		groupNameCache:       nameCache,
@@ -60,7 +63,7 @@ func NewAzureGraphService(clientID string, clientSecret string, tokenURL string)
 }
 
 // GetGroups lists groups user belongs to.
-func (gs *AzureGraphService) GetGroups(email string) ([]string, error) {
+func (gs *MSGraphService) GetGroups(email string) ([]string, error) {
 	if gs.client == nil {
 		return nil, errors.New("oauth client must be configured")
 	}
@@ -141,7 +144,7 @@ func (gs *AzureGraphService) GetGroups(email string) ([]string, error) {
 }
 
 // getGroupName returns the group name, preferentially pulling from cache
-func (gs *AzureGraphService) getGroupName(id string) (string, error) {
+func (gs *MSGraphService) getGroupName(id string) (string, error) {
 	if gs.client == nil {
 		return "", errors.New("oauth client must be configured")
 	}

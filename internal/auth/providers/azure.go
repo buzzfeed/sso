@@ -193,7 +193,7 @@ func (p *AzureV2Provider) Configure(tenant string) error {
 	if p.RedeemURL.String() == "" {
 		return errors.New("redeem url must be set")
 	}
-	p.GraphService = NewAzureGraphService(p.ClientID, p.ClientSecret, p.RedeemURL.String())
+	p.GraphService = NewMSGraphService(p.ClientID, p.ClientSecret, p.RedeemURL.String())
 	return nil
 }
 
