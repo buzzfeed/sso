@@ -262,7 +262,10 @@ func newProvider(o *Options) (providers.Provider, error) {
 	var singleFlightProvider providers.Provider
 	switch o.Provider {
 	case providers.AzureProviderName:
-		azureProvider := providers.NewAzureV2Provider(p)
+		azureProvider, err := providers.NewAzureV2Provider(p)
+		if err != nil {
+			return nil, err
+		}
 		azureProvider.Configure(o.AzureTenant)
 		singleFlightProvider = providers.NewSingleFlightProvider(azureProvider)
 	case providers.GoogleProviderName:

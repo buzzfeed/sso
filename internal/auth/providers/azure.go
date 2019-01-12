@@ -2,7 +2,6 @@ package providers
 
 import (
 	"context"
-	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
@@ -11,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/buzzfeed/sso/internal/pkg/aead"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	"github.com/datadog/datadog-go/statsd"
 	"golang.org/x/oauth2"
@@ -36,17 +36,30 @@ type AzureV2Provider struct {
 	Tenant string
 
 	StatsdClient *statsd.Client
-
+	NonceCipher  aead.Cipher
 	GraphService GraphService
 }
 
 // NewAzureV2Provider creates a new AzureV2Provider struct
-func NewAzureV2Provider(p *ProviderData) *AzureV2Provider {
+func NewAzureV2Provider(p *ProviderData) (*AzureV2Provider, error) {
 	p.ProviderName = "Azure AD"
+
+	if p.ClientSecret == "" {
+		return nil, errors.New("client secret cannot be empty")
+	}
+	// Can't guarantee the client secret will be 32 or 64 bytes in length,
+	// hash to derive a key, error on empty string to avoid silent failure.
+	key := sha256.Sum256([]byte(p.ClientSecret))
+	nonceCipher, err := aead.NewMiscreantCipher(key[:])
+	if err != nil {
+		return nil, err
+	}
+
 	return &AzureV2Provider{
 		ProviderData: p,
+		NonceCipher:  nonceCipher,
 		OIDCProvider: &OIDCProvider{ProviderData: p},
-	}
+	}, nil
 }
 
 // SetStatsdClient sets the azure provider statsd client
@@ -95,12 +108,19 @@ func (p *AzureV2Provider) Redeem(redirectURL, code string) (*sessions.SessionSta
 	var claims struct {
 		Email string `json:"email"`
 		UPN   string `json:"upn"`
+		Nonce string `json:"nonce"`
 	}
 	if err := idToken.Claims(&claims); err != nil {
 		return nil, fmt.Errorf("failed to parse id_token claims: %v", err)
 	}
 	if claims.Email == "" {
 		return nil, fmt.Errorf("id_token did not contain an email")
+	}
+	if claims.Nonce == "" {
+		return nil, fmt.Errorf("id_token did not contain a nonce")
+	}
+	if !p.validateNonce(claims.Nonce) {
+		return nil, fmt.Errorf("unable to validate id_token nonce")
 	}
 	// TODO: test this w/ an account that uses an alias and compare email claim
 	// with UPN claim; UPN has usually been what you want, but I think it's not
@@ -251,16 +271,34 @@ func (p *AzureV2Provider) GetSignInURL(redirectURI, state string) string {
 	return a.String()
 }
 
-// calculateNonce generates a deterministic nonce from the state value.
-// We don't have a session state pointer but we need to generate a nonce
-// that we can verify statelessly later. We can only use what's in the
-// params and provider struct to assemble a nonce. State is guaranteed to be
-// indistinguishable from random and will always change.
+// calculateNonce generates a verifiable nonce from the state value.
+// A nonce can be subsequently validated by attempting to decrypt it.
 func (p *AzureV2Provider) calculateNonce(state string) string {
-	key := []byte(p.ClientID + p.ClientSecret)
-	h := hmac.New(sha256.New, key)
-	h.Write([]byte(state))
-	return base64.URLEncoding.EncodeToString(h.Sum(nil))[:8]
+	rawNonce, err := p.NonceCipher.Encrypt([]byte(state))
+	if err != nil {
+		// GetSignInURL can't return an error and this shouldn't fail silently
+		panic(err)
+	}
+	return base64.URLEncoding.EncodeToString(rawNonce)
+}
+
+// validateNonce attempts to decrypt the nonce value. If it decrypts
+// successfully, the nonce is considered valid.
+func (p *AzureV2Provider) validateNonce(nonce string) bool {
+	rawNonce, err := base64.URLEncoding.DecodeString(nonce)
+	if err != nil {
+		return false
+	}
+	state, err := p.NonceCipher.Decrypt(rawNonce)
+	if err != nil {
+		return false
+	}
+	// Sanity check to ensure state contains roughly what we expect
+	_, err = base64.URLEncoding.DecodeString(string(state))
+	if err != nil {
+		return false
+	}
+	return true
 }
 
 // ValidateGroupMembership takes in an email and the allowed groups and returns the groups that the email is part of in that list.
