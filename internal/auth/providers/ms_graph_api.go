@@ -115,6 +115,8 @@ func (gs *MSGraphService) GetGroups(email string) ([]string, error) {
 				if cachedName, ok := gs.groupNameCache.Get(id); !ok {
 					// didn't have the group name, make concurrent API call to fetch it
 					name, err = gs.getGroupName(id)
+					// the err value is not shadowed in the goroutine, so if this isn't
+					// nil, it will return the err value after wg.Wait() is called
 					if err == nil {
 						// got the name ok, populate the cache
 						gs.groupNameCache.Add(id, name)
@@ -136,6 +138,7 @@ func (gs *MSGraphService) GetGroups(email string) ([]string, error) {
 		}
 	}
 	wg.Wait()
+	// any err value set above will cause this to fail
 	if err != nil {
 		return nil, err
 	}
