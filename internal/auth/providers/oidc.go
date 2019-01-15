@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -21,9 +22,52 @@ type OIDCProvider struct {
 }
 
 // NewOIDCProvider creates a new generic OpenID Connect provider
-func NewOIDCProvider(p *ProviderData) *OIDCProvider {
-	p.ProviderName = "OpenID Connect"
-	return &OIDCProvider{ProviderData: p}
+func NewOIDCProvider(p *ProviderData, discoveryURL string) (*OIDCProvider, error) {
+	provider := &OIDCProvider{
+		ProviderData: p,
+	}
+	if p.ProviderName == "" {
+		p.ProviderName = "OpenID Connect"
+	}
+
+	// Configure discoverable provider data.
+	oidcProvider, err := oidc.NewProvider(context.Background(), discoveryURL)
+	if err != nil {
+		// TODO: This seems like it _should_ work for "common", but it doesn't
+		// Does anyone actually want to use this with "common" though?
+		return nil, err
+	}
+
+	provider.Verifier = oidcProvider.Verifier(&oidc.Config{
+		ClientID: p.ClientID,
+	})
+	// Set these only if they haven't been overridden
+	if p.SignInURL == nil || p.SignInURL.String() == "" {
+		p.SignInURL, err = url.Parse(oidcProvider.Endpoint().AuthURL)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if p.RedeemURL == nil || p.RedeemURL.String() == "" {
+		p.RedeemURL, err = url.Parse(oidcProvider.Endpoint().TokenURL)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if p.ProfileURL == nil || p.ProfileURL.String() == "" {
+		p.ProfileURL, err = url.Parse(azureOIDCProfileURL)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if p.Scope == "" {
+		p.Scope = "openid email profile offline_access"
+	}
+	if p.RedeemURL.String() == "" {
+		return nil, errors.New("redeem url must be set")
+	}
+
+	return provider, nil
 }
 
 // Redeem fulfills the Provider interface.

@@ -16,7 +16,6 @@ import (
 	"golang.org/x/oauth2"
 
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
-	oidc "github.com/coreos/go-oidc"
 )
 
 var (
@@ -42,7 +41,9 @@ type AzureV2Provider struct {
 
 // NewAzureV2Provider creates a new AzureV2Provider struct
 func NewAzureV2Provider(p *ProviderData) (*AzureV2Provider, error) {
-	p.ProviderName = "Azure AD"
+	if p.ProviderName == "" {
+		p.ProviderName = "Azure AD"
+	}
 
 	if p.ClientSecret == "" {
 		return nil, errors.New("client secret cannot be empty")
@@ -58,7 +59,7 @@ func NewAzureV2Provider(p *ProviderData) (*AzureV2Provider, error) {
 	return &AzureV2Provider{
 		ProviderData: p,
 		NonceCipher:  nonceCipher,
-		OIDCProvider: &OIDCProvider{ProviderData: p},
+		OIDCProvider: nil,
 	}, nil
 }
 
@@ -93,8 +94,8 @@ func (p *AzureV2Provider) Redeem(redirectURL, code string) (*sessions.SessionSta
 		return nil, fmt.Errorf("token response did not contain an id_token")
 	}
 
-	// should only happen if oidc autodiscovery is broken
-	if p.OIDCProvider.Verifier == nil {
+	// should only happen if oidc autodiscovery is broken or unconfigured
+	if p.OIDCProvider == nil || p.OIDCProvider.Verifier == nil {
 		return nil, fmt.Errorf("oidc verifier missing")
 	}
 
@@ -158,41 +159,12 @@ func (p *AzureV2Provider) Configure(tenant string) error {
 	discoveryURL := strings.Replace(azureOIDCConfigURLTemplate, "{tenant}", p.Tenant, -1)
 
 	// Configure discoverable provider data.
-	oidcProvider, err := oidc.NewProvider(context.Background(), discoveryURL)
+	var err error
+	p.OIDCProvider, err = NewOIDCProvider(p.ProviderData, discoveryURL)
 	if err != nil {
-		// TODO: This seems like it _should_ work for "common", but it doesn't
-		// Does anyone actually want to use this with "common" though?
 		return err
 	}
 
-	p.OIDCProvider.Verifier = oidcProvider.Verifier(&oidc.Config{
-		ClientID: p.ClientID,
-	})
-	// Set these only if they haven't been overridden
-	if p.SignInURL == nil || p.SignInURL.String() == "" {
-		p.SignInURL, err = url.Parse(oidcProvider.Endpoint().AuthURL)
-		if err != nil {
-			return err
-		}
-	}
-	if p.RedeemURL == nil || p.RedeemURL.String() == "" {
-		p.RedeemURL, err = url.Parse(oidcProvider.Endpoint().TokenURL)
-		if err != nil {
-			return err
-		}
-	}
-	if p.ProfileURL == nil || p.ProfileURL.String() == "" {
-		p.ProfileURL, err = url.Parse(azureOIDCProfileURL)
-	}
-	if err != nil {
-		return err
-	}
-	if p.Scope == "" {
-		p.Scope = "openid email profile offline_access"
-	}
-	if p.RedeemURL.String() == "" {
-		return errors.New("redeem url must be set")
-	}
 	p.GraphService = NewMSGraphService(p.ClientID, p.ClientSecret, p.RedeemURL.String())
 	return nil
 }

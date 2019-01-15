@@ -47,7 +47,9 @@ func NewGoogleProvider(p *ProviderData, adminEmail, credsFilePath string) (*Goog
 		}
 	}
 
-	p.ProviderName = "Google"
+	if p.ProviderName == "" {
+		p.ProviderName = "Google"
+	}
 	if p.SignInURL.String() == "" {
 		p.SignInURL = &url.URL{Scheme: "https",
 			Host: "accounts.google.com",
