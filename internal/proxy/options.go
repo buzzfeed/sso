@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	"github.com/buzzfeed/sso/internal/proxy/providers"
 
 	"github.com/datadog/datadog-go/statsd"
@@ -291,4 +292,28 @@ func parseEnvironment(environ []string) map[string]string {
 		env[key] = split[1]
 	}
 	return env
+}
+
+// SetCookieStore sets the session and csrf stores as a functional option
+func SetCookieStore(opts *Options) func(*OAuthProxy) error {
+	return func(a *OAuthProxy) error {
+		cookieStore, err := sessions.NewCookieStore(opts.CookieName,
+			sessions.CreateMiscreantCookieCipher(opts.decodedCookieSecret),
+			func(c *sessions.CookieStore) error {
+				c.CookieDomain = opts.CookieDomain
+				c.CookieHTTPOnly = opts.CookieHTTPOnly
+				c.CookieExpire = opts.CookieExpire
+				c.CookieSecure = opts.CookieSecure
+				return nil
+			})
+
+		if err != nil {
+			return err
+		}
+
+		a.csrfStore = cookieStore
+		a.sessionStore = cookieStore
+		a.CookieCipher = cookieStore.CookieCipher
+		return nil
+	}
 }

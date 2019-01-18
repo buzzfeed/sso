@@ -22,6 +22,7 @@ import (
 
 	"github.com/18F/hmacauth"
 	"github.com/buzzfeed/sso/internal/pkg/aead"
+	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	"github.com/buzzfeed/sso/internal/pkg/testutil"
 	"github.com/buzzfeed/sso/internal/proxy/providers"
 )
@@ -42,6 +43,21 @@ func testValidatorFunc(valid bool) func(*OAuthProxy) error {
 	}
 }
 
+func setCSRFStore(s sessions.CSRFStore) func(*OAuthProxy) error {
+	return func(p *OAuthProxy) error {
+		p.csrfStore = s
+		return nil
+	}
+}
+
+func setSessionStore(s sessions.SessionStore) func(*OAuthProxy) error {
+	return func(p *OAuthProxy) error {
+		p.sessionStore = s
+		return nil
+	}
+}
+
+// testCookieCipher is specifically for testing marshaling outside of the cookie store
 func testCookieCipher(a aead.Cipher) func(*OAuthProxy) error {
 	return func(p *OAuthProxy) error {
 		if a != nil {
@@ -51,10 +67,10 @@ func testCookieCipher(a aead.Cipher) func(*OAuthProxy) error {
 	}
 }
 
-func testSession() *providers.SessionState {
+func testSession() *sessions.SessionState {
 	theFuture := time.Now().AddDate(100, 0, 0)
 
-	return &providers.SessionState{
+	return &sessions.SessionState{
 		Email:       "michael.bland@gsa.gov",
 		AccessToken: "my_access_token",
 
@@ -575,242 +591,95 @@ func TestFavicon(t *testing.T) {
 	opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev")
 	opts.Validate()
 
-	proxy, _ := NewOAuthProxy(opts)
+	proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true),
+		setSessionStore(&sessions.MockSessionStore{LoadError: http.ErrNoCookie}), setCSRFStore(&sessions.MockCSRFStore{}))
 	rw := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "https://foo.sso.dev/favicon.ico", nil)
 	proxy.Handler().ServeHTTP(rw, req)
 	testutil.Equal(t, http.StatusNotFound, rw.Code)
 }
 
-type ProcessCookieTest struct {
-	opts         *Options
-	proxy        *OAuthProxy
-	rw           *httptest.ResponseRecorder
-	req          *http.Request
-	provider     providers.TestProvider
-	responseCode int
-	validateUser bool
-}
-
-type ProcessCookieTestOpts struct {
-	providerValidateCookieResponse bool
-}
-
-func NewProcessCookieTest(opts ProcessCookieTestOpts) *ProcessCookieTest {
-	var pcTest ProcessCookieTest
-
-	pcTest.opts = NewOptions()
-	pcTest.opts.ClientID = "bazquux"
-	pcTest.opts.ClientSecret = "xyzzyplugh"
-	pcTest.opts.CookieSecret = testEncodedCookieSecret
-	pcTest.opts.ProviderURLString = "https://auth.sso.dev"
-	pcTest.opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev")
-	pcTest.opts.Validate()
-	pcTest.proxy, _ = NewOAuthProxy(pcTest.opts, func(p *OAuthProxy) error {
-		p.EmailValidator = func(string) bool {
-			return pcTest.validateUser
-		}
-		return nil
-	})
-
-	pcTest.proxy.provider = &providers.TestProvider{
-		ValidateSessionFunc: func(*providers.SessionState, []string) bool { return opts.providerValidateCookieResponse },
-	}
-
-	pcTest.rw = httptest.NewRecorder()
-	pcTest.req, _ = http.NewRequest("GET", "https://foo.sso.dev/", strings.NewReader(""))
-	pcTest.validateUser = true
-	return &pcTest
-}
-
-func NewProcessCookieTestWithDefaults() *ProcessCookieTest {
-	return NewProcessCookieTest(ProcessCookieTestOpts{
-		providerValidateCookieResponse: true,
-	})
-}
-
-func (p *ProcessCookieTest) SaveSession(s *providers.SessionState, ref time.Time) error {
-	value, err := providers.MarshalSession(s, p.proxy.CookieCipher)
-	if err != nil {
-		return err
-	}
-	c := p.proxy.MakeSessionCookie(p.req, value, p.proxy.CookieExpire, ref)
-	p.req.AddCookie(c)
-	return nil
-}
-
-func (p *ProcessCookieTest) MakeCookie(value string, ref time.Time) *http.Cookie {
-	return p.proxy.MakeSessionCookie(p.req, value, p.proxy.CookieExpire, ref)
-}
-
-func (p *ProcessCookieTest) LoadCookiedSession() (*providers.SessionState, error) {
-	return p.proxy.LoadCookiedSession(p.req)
-}
-
-func TestLoadCookiedSession(t *testing.T) {
-
+func TestAuthOnlyEndpoint(t *testing.T) {
 	testCases := []struct {
-		name          string
-		want          *providers.SessionState
-		expectedError error
+		name         string
+		validEmail   bool
+		sessionStore *sessions.MockSessionStore
+		expectedBody string
+		expectedCode int
 	}{
 		{
-			name: "normal load with new cookie cipher",
-			want: testSession(),
+			name: "accepted",
+			sessionStore: &sessions.MockSessionStore{
+				Session: testSession(),
+			},
+			validEmail:   true,
+			expectedBody: "",
+			expectedCode: http.StatusAccepted,
 		},
 		{
-			name:          "no cookie in session",
-			expectedError: http.ErrNoCookie,
-			want:          nil,
+			name:         "unauthorized on no cookie set",
+			expectedBody: "unauthorized request\n",
+			sessionStore: &sessions.MockSessionStore{},
+			validEmail:   true,
+			expectedCode: http.StatusUnauthorized,
+		},
+		{
+			name: "unauthorized on expiration",
+			sessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					LifetimeDeadline: time.Now().Add(-1 * time.Hour),
+				},
+			},
+			validEmail:   true,
+			expectedBody: "unauthorized request\n",
+			expectedCode: http.StatusUnauthorized,
+		},
+		{
+			name: "unauthorized on email validation failure",
+			sessionStore: &sessions.MockSessionStore{
+				Session: testSession(),
+			},
+			expectedBody: "unauthorized request\n",
+			expectedCode: http.StatusUnauthorized,
 		},
 	}
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			pcTest := NewProcessCookieTestWithDefaults()
+			req := httptest.NewRequest("GET", "https://foo.sso.dev/oauth2/auth", nil)
+			resp := httptest.NewRecorder()
 
-			value, err := providers.MarshalSession(tc.want, pcTest.proxy.CookieCipher)
-			if err != nil {
-				t.Errorf("error marshaling session, value=%s error=%s", value, err)
+			opts := NewOptions()
+			opts.CookieSecret = testEncodedCookieSecret
+			opts.CookieExpire = time.Duration(72) * time.Hour
+			opts.ClientID = "client ID"
+			opts.ClientSecret = "client secret"
+			opts.EmailDomains = []string{"example.com"}
+			opts.ProviderURLString = "https://auth.sso.dev"
+			opts.GracePeriodTTL = time.Duration(3) * time.Hour
+			opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev")
+			opts.Validate()
+
+			proxy, err := NewOAuthProxy(opts, setSessionStore(tc.sessionStore), setCSRFStore(&sessions.MockCSRFStore{}), func(p *OAuthProxy) error {
+				p.EmailValidator = func(string) bool { return tc.validEmail }
+				return nil
+			})
+			proxy.provider = &providers.TestProvider{
+				RefreshSessionFunc:  func(*sessions.SessionState, []string) (bool, error) { return true, nil },
+				ValidateSessionFunc: func(*sessions.SessionState, []string) bool { return true },
 			}
 
-			c := pcTest.proxy.MakeSessionCookie(pcTest.req, value, pcTest.proxy.CookieExpire, time.Now().Add(24*time.Hour))
-			if tc.want != nil {
-				pcTest.req.AddCookie(c)
-			}
-			got, err := pcTest.proxy.LoadCookiedSession(pcTest.req)
-
-			if tc.expectedError != err {
-				t.Logf("want error %s", tc.expectedError)
-				t.Logf("got error %s", err)
-				t.Errorf("unexpected error for LoadCookiedSession")
-			}
-
-			if tc.expectedError != nil && tc.want == nil {
-				return
-			}
-
-			if tc.want.Email != got.Email {
-				t.Logf(" got: %v", got.Email)
-				t.Logf("want: %v", tc.want.Email)
-				t.Errorf("got unexpected value for Email")
-			}
-
-			if tc.want.AccessToken != got.AccessToken {
-				t.Logf("got: %v", got.AccessToken)
-				t.Logf("want: %v", tc.want.AccessToken)
-				t.Errorf("got unexpected value for AccessToken")
-			}
-
-			if !tc.want.RefreshDeadline.Equal(got.RefreshDeadline) {
-				t.Logf(" got: %v", got.RefreshDeadline)
-				t.Logf("want: %v", tc.want.RefreshDeadline)
-				t.Errorf("got unexpected value for RefreshDeadline")
-			}
-
-			if !tc.want.LifetimeDeadline.Equal(got.LifetimeDeadline) {
-				t.Logf(" got: %v", got.LifetimeDeadline)
-				t.Logf("want: %v", tc.want.LifetimeDeadline)
-				t.Errorf("got unexpected value for LifetimeDeadline")
-			}
-
-			if !tc.want.ValidDeadline.Equal(got.ValidDeadline) {
-				t.Logf(" got: %v", got.ValidDeadline)
-				t.Logf("want: %v", tc.want.ValidDeadline)
-				t.Errorf("got unexpected value for ValidDeadline")
-			}
+			testutil.Ok(t, err)
+			proxy.AuthenticateOnly(resp, req)
+			testutil.Equal(t, tc.expectedCode, resp.Code)
+			bodyBytes, _ := ioutil.ReadAll(resp.Body)
+			testutil.Equal(t, tc.expectedBody, string(bodyBytes))
 		})
+
 	}
 }
 
-func TestProcessCookieNoCookieError(t *testing.T) {
-	pcTest := NewProcessCookieTestWithDefaults()
-
-	session, err := pcTest.LoadCookiedSession()
-	testutil.Equal(t, "http: named cookie not present", err.Error())
-	if session != nil {
-		t.Errorf("expected nil session. got %#v", session)
-	}
-}
-
-func NewAuthOnlyEndpointTest() *ProcessCookieTest {
-	pcTest := NewProcessCookieTestWithDefaults()
-	pcTest.req, _ = http.NewRequest("GET", "https://foo.sso.dev/oauth2/auth", nil)
-	return pcTest
-}
-
-func TestAuthOnlyEndpointAccepted(t *testing.T) {
-	test := NewAuthOnlyEndpointTest()
-	startSession := testSession()
-	test.SaveSession(startSession, time.Now())
-
-	test.proxy.Handler().ServeHTTP(test.rw, test.req)
-	testutil.Equal(t, http.StatusAccepted, test.rw.Code)
-	bodyBytes, _ := ioutil.ReadAll(test.rw.Body)
-	testutil.Equal(t, "", string(bodyBytes))
-}
-
-func TestAuthOnlyEndpointUnauthorizedOnNoCookieSetError(t *testing.T) {
-	test := NewAuthOnlyEndpointTest()
-
-	test.proxy.Handler().ServeHTTP(test.rw, test.req)
-	testutil.Equal(t, http.StatusUnauthorized, test.rw.Code)
-	bodyBytes, _ := ioutil.ReadAll(test.rw.Body)
-	testutil.Equal(t, "unauthorized request\n", string(bodyBytes))
-}
-
-func TestAuthOnlyEndpointUnauthorizedOnExpiration(t *testing.T) {
-	test := NewAuthOnlyEndpointTest()
-	test.proxy.CookieExpire = time.Duration(24) * time.Hour
-	reference := time.Now().Add(time.Duration(25) * time.Hour * -1)
-	startSession := testSession()
-	startSession.LifetimeDeadline = reference
-	test.SaveSession(startSession, reference)
-
-	test.proxy.Handler().ServeHTTP(test.rw, test.req)
-	testutil.Equal(t, http.StatusUnauthorized, test.rw.Code)
-	bodyBytes, _ := ioutil.ReadAll(test.rw.Body)
-	testutil.Equal(t, "unauthorized request\n", string(bodyBytes))
-}
-
-func TestAuthOnlyEndpointUnauthorizedOnEmailValidationFailure(t *testing.T) {
-	test := NewAuthOnlyEndpointTest()
-	startSession := testSession()
-	test.SaveSession(startSession, time.Now())
-	test.validateUser = false
-
-	test.proxy.Handler().ServeHTTP(test.rw, test.req)
-	testutil.Equal(t, http.StatusUnauthorized, test.rw.Code)
-	bodyBytes, _ := ioutil.ReadAll(test.rw.Body)
-	testutil.Equal(t, "unauthorized request\n", string(bodyBytes))
-}
-
-func TestAuthSkippedForPreflightRequests(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Write([]byte("response"))
-	}))
-	defer upstream.Close()
-
-	opts := NewOptions()
-	opts.ClientID = "bazquux"
-	opts.ClientSecret = "foobar"
-	opts.CookieSecret = testEncodedCookieSecret
-	opts.SkipAuthPreflight = true
-	opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL)
-	opts.Validate()
-
-	upstreamURL, _ := url.Parse(upstream.URL)
-	opts.provider = providers.NewTestProvider(upstreamURL, "")
-
-	proxy, _ := NewOAuthProxy(opts)
-	rw := httptest.NewRecorder()
-	req, _ := http.NewRequest("OPTIONS", "https://foo.sso.dev/preflight-request", nil)
-	proxy.Handler().ServeHTTP(rw, req)
-
-	testutil.Equal(t, 200, rw.Code)
-	testutil.Equal(t, "response", rw.Body.String())
-}
-
+// TODO: move this into a separate yaml file so that it's more accessible to understand the config
 func generateTestAuthSkipConfigs(to string) []*UpstreamConfig {
 	if !strings.Contains(to, "://") {
 		to = fmt.Sprintf("%s://%s", "http", to)
@@ -838,39 +707,72 @@ func generateTestAuthSkipConfigs(to string) []*UpstreamConfig {
 	return upstreamConfigs
 }
 
-func TestAuthSkipRequests(t *testing.T) {
+func TestSkipAuthRequest(t *testing.T) {
+	// start an upstream server
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 		w.Write([]byte("response"))
 	}))
 	defer upstream.Close()
 
-	opts := NewOptions()
-	opts.ClientID = "bazquux"
-	opts.ClientSecret = "foobar"
-	opts.CookieSecret = testEncodedCookieSecret
-	opts.SkipAuthPreflight = true
-	opts.upstreamConfigs = generateTestAuthSkipConfigs(upstream.URL)
-	opts.Validate()
+	testCases := []struct {
+		name                 string
+		method               string
+		url                  string
+		expectedCode         int
+		expectedResponseBody string
+	}{
+		{
+			name:                 "skip auth on preflight requests",
+			method:               "OPTIONS",
+			url:                  "https://foo.sso.dev/preflight-request",
+			expectedCode:         http.StatusOK,
+			expectedResponseBody: "response",
+		},
+		{
+			name:   "rejected request",
+			method: "GET",
+			url:    "https://foo.sso.dev/rejected",
+			// We get a 302 here, status found, and attempt to authenticate
+			expectedCode:         http.StatusOK,
+			expectedResponseBody: "response",
+		},
+		{
+			name:                 "allowed request",
+			method:               "GET",
+			url:                  "https://foo.sso.dev/allow",
+			expectedCode:         http.StatusOK,
+			expectedResponseBody: "response",
+		},
+	}
 
-	upstreamURL, _ := url.Parse(upstream.URL)
-	opts.provider = providers.NewTestProvider(upstreamURL, "")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := NewOptions()
+			opts.ClientID = "bazquux"
+			opts.ClientSecret = "foobar"
+			opts.CookieSecret = testEncodedCookieSecret
+			opts.SkipAuthPreflight = true
+			opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL)
+			opts.Validate()
 
-	proxy, _ := NewOAuthProxy(opts)
+			providerURL, _ := url.Parse("https://foo-auth.sso.dev")
+			opts.provider = providers.NewTestProvider(providerURL, "")
 
-	// expect to get rejected
-	rejectedRW := httptest.NewRecorder()
-	rejectedReq, _ := http.NewRequest("GET", "https://foo.sso.dev/rejected", nil)
-	proxy.Handler().ServeHTTP(rejectedRW, rejectedReq)
-	// We get a 302 here, status found, and attempt to authenticate
-	testutil.Equal(t, http.StatusFound, rejectedRW.Code)
+			proxy, _ := NewOAuthProxy(opts, setSessionStore(&sessions.MockSessionStore{Session: testSession()}), func(p *OAuthProxy) error {
+				p.EmailValidator = func(string) bool { return true }
+				return nil
+			})
 
-	// Expect OK
-	allowRW := httptest.NewRecorder()
-	allowReq, _ := http.NewRequest("GET", "https://foo.sso.dev/allow", nil)
-	proxy.Handler().ServeHTTP(allowRW, allowReq)
-	testutil.Equal(t, http.StatusOK, allowRW.Code)
-	testutil.Equal(t, "response", allowRW.Body.String())
+			rw := httptest.NewRecorder()
+			req, _ := http.NewRequest(tc.method, tc.url, nil)
+
+			proxy.Handler().ServeHTTP(rw, req)
+
+			testutil.Equal(t, tc.expectedCode, rw.Code)
+			testutil.Equal(t, tc.expectedResponseBody, rw.Body.String())
+		})
+	}
 }
 
 func generateTestSkipRequestSigningConfig(to string) []*UpstreamConfig {
@@ -1002,7 +904,11 @@ func TestMultiAuthSkipRequests(t *testing.T) {
 	upstreamFooURL, _ := url.Parse(upstreamFoo.URL)
 	opts.provider = providers.NewTestProvider(upstreamFooURL, "")
 
-	proxy, _ := NewOAuthProxy(opts)
+	proxy, _ := NewOAuthProxy(opts, setSessionStore(&sessions.MockSessionStore{}), setCSRFStore(&sessions.MockCSRFStore{}), func(p *OAuthProxy) error {
+		p.EmailValidator = func(string) bool { return true }
+		return nil
+	})
+	proxy.CookieCipher = &aead.MockCipher{}
 
 	// expect to get rejected
 	rejectedRW := httptest.NewRecorder()
@@ -1129,7 +1035,7 @@ func (fnc *fakeNetConn) Read(p []byte) (n int, err error) {
 }
 
 func (st *SignatureTest) MakeRequestWithExpectedKey(method, body, key string) {
-	proxy, _ := NewOAuthProxy(st.opts, testValidatorFunc(true))
+	proxy, _ := NewOAuthProxy(st.opts, testValidatorFunc(true), setSessionStore(&sessions.MockSessionStore{Session: testSession()}))
 	var bodyBuf io.ReadCloser
 	if body != "" {
 		bodyBuf = ioutil.NopCloser(&fakeNetConn{reqBody: body})
@@ -1137,13 +1043,6 @@ func (st *SignatureTest) MakeRequestWithExpectedKey(method, body, key string) {
 	req := httptest.NewRequest(method, "https://foo.sso.dev/foo/bar", bodyBuf)
 	req.Header = st.header
 
-	state := testSession()
-	value, err := providers.MarshalSession(state, proxy.CookieCipher)
-	if err != nil {
-		panic(err)
-	}
-	cookie := proxy.MakeSessionCookie(req, value, proxy.CookieExpire, time.Now())
-	req.AddCookie(cookie)
 	// This is used by the upstream to validate the signature.
 	st.authenticator.auth = hmacauth.NewHmacAuth(
 		crypto.SHA1, []byte(key), HMACSignatureHeader, SignatureHeaders)
@@ -1220,21 +1119,13 @@ func TestHeadersSentToUpstreams(t *testing.T) {
 	state.User = "foo"
 	state.AccessToken = "SupErSensItiveAccesSToken"
 	state.Groups = []string{"fooGroup"}
-	proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true))
-
+	proxy, err := NewOAuthProxy(opts, testValidatorFunc(true), setSessionStore(&sessions.MockSessionStore{Session: state}))
+	testutil.Ok(t, err)
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 
 			rw := httptest.NewRecorder()
 			req, _ := http.NewRequest("GET", "http://foo.sso.dev/bar", nil)
-
-			value, err := providers.MarshalSession(state, proxy.CookieCipher)
-			if err != nil {
-				panic(err)
-			}
-
-			cookie := proxy.MakeSessionCookie(req, value, proxy.CookieExpire, time.Now())
-			req.AddCookie(cookie)
 
 			for _, c := range tc.otherCookies {
 				req.AddCookie(c)
@@ -1282,129 +1173,157 @@ func TestAuthenticate(t *testing.T) {
 
 	var (
 		ErrRefreshFailed = errors.New("refresh failed")
+		LoadCookieFailed = errors.New("load cookie fail")
+		SaveCookieFailed = errors.New("save cookie fail")
 	)
 	testCases := []struct {
-		Name                string
-		Session             *providers.SessionState
+		Name string
+
+		SessionStore        *sessions.MockSessionStore
 		ExpectedErr         error
 		CookieExpectation   int // One of: {NewCookie, ClearCookie, KeepCookie}
-		RefreshSessionFunc  func(*providers.SessionState, []string) (bool, error)
-		ValidateSessionFunc func(*providers.SessionState, []string) bool
-		Cipher              aead.Cipher
+		RefreshSessionFunc  func(*sessions.SessionState, []string) (bool, error)
+		ValidateSessionFunc func(*sessions.SessionState, []string) bool
 	}{
 		{
 			Name: "redirect if deadlines are blank",
-			Session: &providers.SessionState{
-				Email:       "email1@example.com",
-				AccessToken: "my_access_token",
+			SessionStore: &sessions.MockSessionStore{
+
+				Session: &sessions.SessionState{
+					Email:       "email1@example.com",
+					AccessToken: "my_access_token",
+				},
 			},
 			ExpectedErr:       ErrLifetimeExpired,
 			CookieExpectation: ClearCookie,
 		},
 		{
-			Name: "session unmarshaling fails, get ErrInvalidSession",
-			Session: &providers.SessionState{
-				Email:            "email1@example.com",
-				AccessToken:      "my_access_token",
-				LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
-				RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
-				ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+			Name: "session unmarshaling fails, get error",
+			SessionStore: &sessions.MockSessionStore{
+				Session:   &sessions.SessionState{},
+				LoadError: LoadCookieFailed,
 			},
-			ExpectedErr:       ErrInvalidSession,
+			ExpectedErr:       LoadCookieFailed,
 			CookieExpectation: ClearCookie,
-			Cipher: &aead.MockCipher{
-				MarshalString:  "randomstring",
-				UnmarshalError: errors.New("siv: authentication failed"),
-			},
 		},
 		{
 			Name: "authenticate successfully",
-			Session: &providers.SessionState{
-				Email:            "email1@example.com",
-				AccessToken:      "my_access_token",
-				LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
-				RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
-				ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+			SessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					Email:            "email1@example.com",
+					AccessToken:      "my_access_token",
+					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
+					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+				},
 			},
 			ExpectedErr:       nil,
 			CookieExpectation: KeepCookie,
 		},
 		{
 			Name: "lifetime expired, do not authenticate",
-			Session: &providers.SessionState{
-				Email:            "email1@example.com",
-				AccessToken:      "my_access_token",
-				LifetimeDeadline: time.Now().Add(time.Duration(-24) * time.Hour),
-				RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
-				ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+			SessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					Email:            "email1@example.com",
+					AccessToken:      "my_access_token",
+					LifetimeDeadline: time.Now().Add(time.Duration(-24) * time.Hour),
+					RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
+					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+				},
 			},
 			ExpectedErr:       ErrLifetimeExpired,
 			CookieExpectation: ClearCookie,
 		},
 		{
 			Name: "refresh expired, refresh fails, do not authenticate",
-			Session: &providers.SessionState{
-				Email:            "email1@example.com",
-				AccessToken:      "my_access_token",
-				LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
-				RefreshDeadline:  time.Now().Add(time.Duration(-1) * time.Hour),
-				ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+			SessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					Email:            "email1@example.com",
+					AccessToken:      "my_access_token",
+					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:  time.Now().Add(time.Duration(-1) * time.Hour),
+					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+				},
 			},
 			ExpectedErr:        ErrRefreshFailed,
 			CookieExpectation:  ClearCookie,
-			RefreshSessionFunc: func(s *providers.SessionState, g []string) (bool, error) { return false, ErrRefreshFailed },
+			RefreshSessionFunc: func(s *sessions.SessionState, g []string) (bool, error) { return false, ErrRefreshFailed },
 		},
 		{
 			Name: "refresh expired, user not OK, do not authenticate",
-			Session: &providers.SessionState{
-				Email:            "email1@example.com",
-				AccessToken:      "my_access_token",
-				LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
-				RefreshDeadline:  time.Now().Add(time.Duration(-1) * time.Hour),
-				ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+			SessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					Email:            "email1@example.com",
+					AccessToken:      "my_access_token",
+					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:  time.Now().Add(time.Duration(-1) * time.Hour),
+					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+				},
 			},
 			ExpectedErr:        ErrUserNotAuthorized,
 			CookieExpectation:  ClearCookie,
-			RefreshSessionFunc: func(s *providers.SessionState, g []string) (bool, error) { return false, nil },
+			RefreshSessionFunc: func(s *sessions.SessionState, g []string) (bool, error) { return false, nil },
 		},
 		{
 			Name: "refresh expired, user OK, authenticate",
-			Session: &providers.SessionState{
-				Email:            "email1@example.com",
-				AccessToken:      "my_access_token",
-				LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
-				RefreshDeadline:  time.Now().Add(time.Duration(-1) * time.Hour),
-				ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+			SessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					Email:            "email1@example.com",
+					AccessToken:      "my_access_token",
+					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:  time.Now().Add(time.Duration(-1) * time.Hour),
+					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+				},
 			},
 			ExpectedErr:        nil,
 			CookieExpectation:  NewCookie,
-			RefreshSessionFunc: func(s *providers.SessionState, g []string) (bool, error) { return true, nil },
+			RefreshSessionFunc: func(s *sessions.SessionState, g []string) (bool, error) { return true, nil },
+		},
+		{
+			Name: "refresh expired, refresh and user OK, error saving session",
+			SessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					Email:            "email1@example.com",
+					AccessToken:      "my_access_token",
+					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:  time.Now().Add(time.Duration(-1) * time.Hour),
+					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+				},
+				SaveError: SaveCookieFailed,
+			},
+			ExpectedErr:        SaveCookieFailed,
+			CookieExpectation:  ClearCookie,
+			RefreshSessionFunc: func(s *sessions.SessionState, g []string) (bool, error) { return true, nil },
 		},
 		{
 			Name: "validation expired, user not OK, do not authenticate",
-			Session: &providers.SessionState{
-				Email:            "email1@example.com",
-				AccessToken:      "my_access_token",
-				LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
-				RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
-				ValidDeadline:    time.Now().Add(time.Duration(-1) * time.Minute),
+			SessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					Email:            "email1@example.com",
+					AccessToken:      "my_access_token",
+					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
+					ValidDeadline:    time.Now().Add(time.Duration(-1) * time.Minute),
+				},
 			},
 			ExpectedErr:         ErrUserNotAuthorized,
 			CookieExpectation:   ClearCookie,
-			ValidateSessionFunc: func(s *providers.SessionState, g []string) bool { return false },
+			ValidateSessionFunc: func(s *sessions.SessionState, g []string) bool { return false },
 		},
 		{
 			Name: "validation expired, user OK, authenticate",
-			Session: &providers.SessionState{
-				Email:            "email1@example.com",
-				AccessToken:      "my_access_token",
-				LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
-				RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
-				ValidDeadline:    time.Now().Add(time.Duration(-1) * time.Minute),
+			SessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					Email:            "email1@example.com",
+					AccessToken:      "my_access_token",
+					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
+					ValidDeadline:    time.Now().Add(time.Duration(-1) * time.Minute),
+				},
 			},
 			ExpectedErr:         nil,
 			CookieExpectation:   NewCookie,
-			ValidateSessionFunc: func(s *providers.SessionState, g []string) bool { return true },
+			ValidateSessionFunc: func(s *sessions.SessionState, g []string) bool { return true },
 		},
 	}
 	for _, tc := range testCases {
@@ -1420,56 +1339,37 @@ func TestAuthenticate(t *testing.T) {
 			opts.GracePeriodTTL = time.Duration(3) * time.Hour
 			opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev")
 			opts.Validate()
-			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true), testCookieCipher(tc.Cipher))
+
+			mockCSRF := &sessions.MockCSRFStore{}
+			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true),
+				setSessionStore(tc.SessionStore), setCSRFStore(mockCSRF))
 			proxy.provider = &providers.TestProvider{
 				RefreshSessionFunc:  tc.RefreshSessionFunc,
 				ValidateSessionFunc: tc.ValidateSessionFunc,
-			}
-
-			value, err := providers.MarshalSession(tc.Session, proxy.CookieCipher)
-			if err != nil {
-				t.Fatalf("unexpected err encoding session err:%s", err)
 			}
 
 			req, err := http.NewRequest("GET", "https://foo.sso.dev/", strings.NewReader(""))
 			if err != nil {
 				t.Fatalf("unexpected err creating request err:%s", err)
 			}
-			c := proxy.MakeSessionCookie(req, value, proxy.CookieExpire, time.Now())
-			req.AddCookie(c)
 
 			rw := httptest.NewRecorder()
 
 			gotErr := proxy.Authenticate(rw, req)
 
-			// Extract cookie from response.
-			cookieBehavior := func() int {
-				cookies := strings.Split(rw.Header().Get("Set-Cookie"), ";")
-				for _, cookie := range cookies {
-					if strings.HasPrefix(cookie, "_sso_proxy=") {
-						if len(cookie) == len("_sso_proxy=") {
-							// Empty value for "_sso_proxy" in header.
-							// Clear the session cookie on the client.
-							return ClearCookie
-						}
-						// Non-empty value given to "_sso_proxy" in header.
-						// Assign new value to session cookie on client.
-						return NewCookie
-					}
-				}
-				// No "_sso_proxy" in Set-Cookie header. Keep cookie as is.
-				return KeepCookie
-			}()
+			switch tc.CookieExpectation {
+			case ClearCookie:
+				testutil.Equal(t, tc.SessionStore.ResponseSession, "")
+			case NewCookie:
+				testutil.NotEqual(t, tc.SessionStore.ResponseSession, "")
+			case KeepCookie:
+				testutil.Equal(t, tc.SessionStore.ResponseSession, "")
+			}
 
 			if gotErr != tc.ExpectedErr {
 				t.Logf(" got error: %#v", gotErr)
 				t.Logf("want error: %#v", tc.ExpectedErr)
 				t.Error("unexpected error value for authenticate")
-			}
-			if cookieBehavior != tc.CookieExpectation {
-				t.Logf(" got cookie behavior: %d", cookieBehavior)
-				t.Logf("want cookie behavior: %d", tc.CookieExpectation)
-				t.Error("unexpected session cookie behavior for authenticate")
 			}
 		})
 	}
@@ -1484,14 +1384,14 @@ func TestProxyXHRErrorHandling(t *testing.T) {
 	defer upstream.Close()
 	testCases := []struct {
 		Name         string
-		Session      *providers.SessionState
+		Session      *sessions.SessionState
 		Method       string
 		ExpectedCode int
 		Header       map[string]string
 	}{
 		{
 			Name: "expired session should redirect on normal request (GET)",
-			Session: &providers.SessionState{
+			Session: &sessions.SessionState{
 				LifetimeDeadline: time.Now().Add(time.Duration(-24) * time.Hour),
 			},
 			Method:       "GET",
@@ -1499,15 +1399,15 @@ func TestProxyXHRErrorHandling(t *testing.T) {
 		},
 		{
 			Name: "expired session should proxy preflight request (OPTIONS)",
-			Session: &providers.SessionState{
+			Session: &sessions.SessionState{
 				LifetimeDeadline: time.Now().Add(time.Duration(-24) * time.Hour),
 			},
 			Method:       "OPTIONS",
-			ExpectedCode: http.StatusOK,
+			ExpectedCode: http.StatusFound,
 		},
 		{
 			Name: "expired session should return error code when XMLHttpRequest",
-			Session: &providers.SessionState{
+			Session: &sessions.SessionState{
 				LifetimeDeadline: time.Now().Add(time.Duration(-24) * time.Hour),
 			},
 			Method: "GET",
@@ -1527,7 +1427,7 @@ func TestProxyXHRErrorHandling(t *testing.T) {
 		},
 		{
 			Name: "valid session should proxy as normal when XMLHttpRequest",
-			Session: &providers.SessionState{
+			Session: &sessions.SessionState{
 				LifetimeDeadline: time.Now().Add(time.Duration(1) * time.Hour),
 				RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
 				ValidDeadline:    time.Now().Add(time.Duration(1) * time.Hour),
@@ -1552,27 +1452,17 @@ func TestProxyXHRErrorHandling(t *testing.T) {
 			opts.ProviderURLString = "https://auth.sso.dev"
 			opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL)
 			opts.Validate()
-			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true))
+			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true), setSessionStore(&sessions.MockSessionStore{
+				Session: tc.Session,
+			}), setCSRFStore(&sessions.MockCSRFStore{}))
+			proxy.CookieCipher = &aead.MockCipher{}
 
-			// save our session
-			value, err := providers.MarshalSession(tc.Session, proxy.CookieCipher)
-			if err != nil {
-				t.Fatalf("unexpected err encoding session err:%s", err)
-			}
-
-			req, err := http.NewRequest(tc.Method, "https://foo.sso.dev/", strings.NewReader(""))
-			if err != nil {
-				t.Fatalf("unexpected err creating request err:%s", err)
-			}
-			c := proxy.MakeSessionCookie(req, value, proxy.CookieExpire, time.Now())
-			req.AddCookie(c)
-
+			req := httptest.NewRequest("GET", "http://foo.sso.dev", nil)
 			for k, v := range tc.Header {
 				req.Header.Set(k, v)
 			}
 
 			rw := httptest.NewRecorder()
-
 			proxy.Proxy(rw, req)
 
 			if tc.ExpectedCode != rw.Code {
@@ -1584,14 +1474,23 @@ func TestProxyXHRErrorHandling(t *testing.T) {
 
 func TestOAuthStart(t *testing.T) {
 	testCases := []struct {
-		Name string
+		name               string
+		isXHR              bool
+		expectedStatusCode int
 	}{
 		{
-			Name: "OAuthStart returns successfully",
+			name:               "OAuthStart returns successfully",
+			expectedStatusCode: http.StatusFound,
+		},
+		{
+
+			name:               "XHR request returns an error",
+			isXHR:              true,
+			expectedStatusCode: http.StatusUnauthorized,
 		},
 	}
 	for _, tc := range testCases {
-		t.Run(tc.Name, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			// setup deafults
 			opts := NewOptions()
 			opts.CookieSecret = testEncodedCookieSecret
@@ -1602,7 +1501,21 @@ func TestOAuthStart(t *testing.T) {
 			opts.ProviderURLString = "https://auth.sso.dev"
 			opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev")
 			opts.Validate()
-			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true))
+
+			csrfStore := &sessions.MockCSRFStore{}
+			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true), setSessionStore(&sessions.MockSessionStore{}), setCSRFStore(csrfStore))
+
+			s := &StateParameter{
+				SessionID:   "abcdefg123",
+				RedirectURI: "example.com/redirect",
+			}
+			marshaled, err := json.Marshal(s)
+			testutil.Ok(t, err)
+
+			proxy.CookieCipher = &aead.MockCipher{
+				MarshalString:  string(marshaled),
+				UnmarshalBytes: marshaled,
+			}
 
 			srv := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 				proxy.OAuthStart(rw, r, []string{})
@@ -1614,6 +1527,10 @@ func TestOAuthStart(t *testing.T) {
 				t.Fatalf("expected req to succeeded err:%v", err)
 			}
 
+			if tc.isXHR {
+				req.Header.Add("X-Requested-With", "XMLHttpRequest")
+			}
+
 			client := &http.Client{
 				CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
 			}
@@ -1622,8 +1539,12 @@ func TestOAuthStart(t *testing.T) {
 				t.Fatalf("expected req to succeeded err:%v", err)
 			}
 
-			if res.StatusCode != http.StatusFound {
+			if res.StatusCode != tc.expectedStatusCode {
 				t.Fatalf("unexpected status code response")
+			}
+
+			if tc.expectedStatusCode != http.StatusFound {
+				return
 			}
 
 			location, err := res.Location()
@@ -1631,25 +1552,16 @@ func TestOAuthStart(t *testing.T) {
 				t.Fatalf("expected req to succeeded err:%v", err)
 			}
 
-			cookies := res.Cookies()
-			if len(cookies) != 1 {
-				t.Fatalf("unexpected number of cookies")
-			}
-			c := cookies[0]
-
 			state := location.Query().Get("state")
-			if state == c.Value {
-				t.Fatalf("expected state to not be equal to cookie value")
-			}
 
 			cookieParameter := &StateParameter{}
-			err = proxy.CookieCipher.Unmarshal(c.Value, cookieParameter)
+			err = json.Unmarshal([]byte(csrfStore.ResponseCSRF), cookieParameter)
 			if err != nil {
 				t.Fatalf("unexpected err during unmarshal: %v", err)
 			}
 
 			stateParameter := &StateParameter{}
-			err = proxy.CookieCipher.Unmarshal(state, stateParameter)
+			err = json.Unmarshal([]byte(state), stateParameter)
 			if err != nil {
 				t.Fatalf("unexpected err during unmarshal: %v", err)
 			}
@@ -1679,9 +1591,6 @@ func TestPing(t *testing.T) {
 
 	providerURL, _ := url.Parse("http://sso-auth.example.com/")
 	opts.provider = providers.NewTestProvider(providerURL, "")
-
-	proxy, _ := NewOAuthProxy(opts)
-	state := testSession()
 
 	testCases := []struct {
 		name          string
@@ -1714,15 +1623,11 @@ func TestPing(t *testing.T) {
 			rw := httptest.NewRecorder()
 			req, _ := http.NewRequest("GET", tc.url, nil)
 
+			var state *sessions.SessionState
 			if tc.authenticated {
-				value, err := providers.MarshalSession(state, proxy.CookieCipher)
-				if err != nil {
-					t.Fatalf("unexpected err encoding session err:%s", err)
-				}
-				cookie := proxy.MakeSessionCookie(req, value, proxy.CookieExpire, time.Now())
-				req.AddCookie(cookie)
+				state = testSession()
 			}
-
+			proxy, _ := NewOAuthProxy(opts, setSessionStore(&sessions.MockSessionStore{Session: state}))
 			proxy.Handler().ServeHTTP(rw, req)
 
 			if tc.expectedCode != rw.Code {
@@ -1758,10 +1663,6 @@ func TestSecurityHeaders(t *testing.T) {
 
 	providerURL, _ := url.Parse("http://sso-auth.example.com/")
 	opts.provider = providers.NewTestProvider(providerURL, "")
-
-	proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true))
-
-	state := testSession()
 
 	testCases := []struct {
 		name            string
@@ -1808,15 +1709,14 @@ func TestSecurityHeaders(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			rw := httptest.NewRecorder()
 			req, _ := http.NewRequest("GET", fmt.Sprintf("http://foo.sso.dev%s", tc.path), nil)
+			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true), setSessionStore(&sessions.MockSessionStore{}),
+				setCSRFStore(&sessions.MockCSRFStore{}))
 
 			if tc.authenticated {
-				value, err := providers.MarshalSession(state, proxy.CookieCipher)
-				if err != nil {
-					t.Fatalf("unexpected err encoding session err:%s", err)
-				}
-				cookie := proxy.MakeSessionCookie(req, value, proxy.CookieExpire, time.Now())
-				req.AddCookie(cookie)
+				proxy, _ = NewOAuthProxy(opts, testValidatorFunc(true),
+					setSessionStore(&sessions.MockSessionStore{Session: testSession()}), setCSRFStore(&sessions.MockCSRFStore{}))
 			}
+			proxy.CookieCipher = &aead.MockCipher{}
 
 			proxy.Handler().ServeHTTP(rw, req)
 
@@ -1903,7 +1803,8 @@ func TestHeaderOverrides(t *testing.T) {
 			providerURL, _ := url.Parse("http://sso-auth.example.com/")
 			opts.provider = providers.NewTestProvider(providerURL, "")
 
-			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true))
+			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true), setSessionStore(&sessions.MockSessionStore{}), setCSRFStore(&sessions.MockCSRFStore{}))
+			proxy.CookieCipher = &aead.MockCipher{}
 
 			// Check Foo
 			rw := httptest.NewRecorder()
@@ -1946,7 +1847,6 @@ func TestHTTPSRedirect(t *testing.T) {
 
 	providerURL, _ := url.Parse("http://sso-auth.example.com/")
 	provider := providers.NewTestProvider(providerURL, "")
-	state := testSession()
 
 	testCases := []struct {
 		name                 string
@@ -2077,7 +1977,8 @@ func TestHTTPSRedirect(t *testing.T) {
 			opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL)
 			opts.Validate()
 
-			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true))
+			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true), setSessionStore(&sessions.MockSessionStore{}), setCSRFStore(&sessions.MockCSRFStore{}))
+			proxy.CookieCipher = &aead.MockCipher{}
 
 			rw := httptest.NewRecorder()
 			req, _ := http.NewRequest("GET", tc.url, nil)
@@ -2091,12 +1992,8 @@ func TestHTTPSRedirect(t *testing.T) {
 			}
 
 			if tc.authenticated {
-				value, err := providers.MarshalSession(state, proxy.CookieCipher)
-				if err != nil {
-					t.Fatalf("unexpected err encoding session err:%s", err)
-				}
-				cookie := proxy.MakeSessionCookie(req, value, proxy.CookieExpire, time.Now())
-				req.AddCookie(cookie)
+				proxy, _ = NewOAuthProxy(opts, testValidatorFunc(true),
+					setSessionStore(&sessions.MockSessionStore{Session: testSession()}))
 			}
 
 			proxy.Handler().ServeHTTP(rw, req)
@@ -2290,7 +2187,7 @@ func TestRewriteRoutingHandling(t *testing.T) {
 
 	testCases := []struct {
 		Name             string
-		Session          *providers.SessionState
+		Session          *sessions.SessionState
 		TestHost         string
 		FromRegex        string
 		ToTemplate       string
@@ -2300,7 +2197,7 @@ func TestRewriteRoutingHandling(t *testing.T) {
 		{
 			Name:     "everything should work in the normal case",
 			TestHost: "foo.sso.dev",
-			Session: &providers.SessionState{
+			Session: &sessions.SessionState{
 				LifetimeDeadline: time.Now().Add(time.Duration(1) * time.Hour),
 				RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
 				ValidDeadline:    time.Now().Add(time.Duration(1) * time.Hour),
@@ -2316,7 +2213,7 @@ func TestRewriteRoutingHandling(t *testing.T) {
 		{
 			Name:     "it should not match a non-matching regex",
 			TestHost: "foo.sso.dev",
-			Session: &providers.SessionState{
+			Session: &sessions.SessionState{
 				LifetimeDeadline: time.Now().Add(time.Duration(1) * time.Hour),
 				RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
 				ValidDeadline:    time.Now().Add(time.Duration(1) * time.Hour),
@@ -2328,7 +2225,7 @@ func TestRewriteRoutingHandling(t *testing.T) {
 		{
 			Name:     "it should match and replace using regex/template to find port in embeded domain",
 			TestHost: fmt.Sprintf("somedomain--%s", upstreamPort),
-			Session: &providers.SessionState{
+			Session: &sessions.SessionState{
 				LifetimeDeadline: time.Now().Add(time.Duration(1) * time.Hour),
 				RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
 				ValidDeadline:    time.Now().Add(time.Duration(1) * time.Hour),
@@ -2354,23 +2251,15 @@ func TestRewriteRoutingHandling(t *testing.T) {
 			opts.ProviderURLString = "https://auth.sso.dev"
 			opts.upstreamConfigs = generateTestRewriteUpstreamConfigs(tc.FromRegex, tc.ToTemplate)
 			opts.Validate()
-			proxy, err := NewOAuthProxy(opts, testValidatorFunc(true))
+			proxy, err := NewOAuthProxy(opts, testValidatorFunc(true), setSessionStore(&sessions.MockSessionStore{Session: tc.Session}))
 			if err != nil {
 				t.Fatalf("unexpected err provisioning oauth proxy err:%q", err)
-			}
-
-			// save our session
-			value, err := providers.MarshalSession(tc.Session, proxy.CookieCipher)
-			if err != nil {
-				t.Fatalf("unexpected err encoding session err:%s", err)
 			}
 
 			req, err := http.NewRequest("GET", fmt.Sprintf("https://%s/", tc.TestHost), strings.NewReader(""))
 			if err != nil {
 				t.Fatalf("unexpected err creating request err:%s", err)
 			}
-			c := proxy.MakeSessionCookie(req, value, proxy.CookieExpire, time.Now())
-			req.AddCookie(c)
 
 			rw := httptest.NewRecorder()
 

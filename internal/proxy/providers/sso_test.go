@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	"github.com/buzzfeed/sso/internal/pkg/testutil"
 )
 
@@ -282,7 +283,7 @@ func TestSSOProviderRedeem(t *testing.T) {
 func TestSSOProviderValidateSessionState(t *testing.T) {
 	testCases := []struct {
 		Name             string
-		SessionState     *SessionState
+		SessionState     *sessions.SessionState
 		ProviderResponse int
 		Groups           []string
 		ProxyGroupIds    []string
@@ -290,7 +291,7 @@ func TestSSOProviderValidateSessionState(t *testing.T) {
 	}{
 		{
 			Name: "valid when no group id set",
-			SessionState: &SessionState{
+			SessionState: &sessions.SessionState{
 				AccessToken: "abc",
 				Email:       "michael.bland@gsa.gov",
 			},
@@ -301,7 +302,7 @@ func TestSSOProviderValidateSessionState(t *testing.T) {
 		},
 		{
 			Name: "invalid when response is is not 200",
-			SessionState: &SessionState{
+			SessionState: &sessions.SessionState{
 				AccessToken: "abc",
 				Email:       "michael.bland@gsa.gov",
 			},
@@ -312,7 +313,7 @@ func TestSSOProviderValidateSessionState(t *testing.T) {
 		},
 		{
 			Name: "valid when the group id exists",
-			SessionState: &SessionState{
+			SessionState: &sessions.SessionState{
 				AccessToken: "abc",
 				Email:       "michael.bland@gsa.gov",
 			},
@@ -323,7 +324,7 @@ func TestSSOProviderValidateSessionState(t *testing.T) {
 		},
 		{
 			Name: "invalid when the group id isn't in user groups",
-			SessionState: &SessionState{
+			SessionState: &sessions.SessionState{
 				AccessToken: "abc",
 				Email:       "michael.bland@gsa.gov",
 			},
@@ -334,7 +335,7 @@ func TestSSOProviderValidateSessionState(t *testing.T) {
 		},
 		{
 			Name: "valid when provider unavailable, but grace period active",
-			SessionState: &SessionState{
+			SessionState: &sessions.SessionState{
 				GracePeriodStart: time.Now().Add(time.Duration(-1) * time.Hour),
 			},
 			ProviderResponse: http.StatusTooManyRequests,
@@ -342,7 +343,7 @@ func TestSSOProviderValidateSessionState(t *testing.T) {
 		},
 		{
 			Name: "invalid when provider unavailable and grace period inactive",
-			SessionState: &SessionState{
+			SessionState: &sessions.SessionState{
 				GracePeriodStart: time.Now().Add(time.Duration(-4) * time.Hour),
 			},
 			ProviderResponse: http.StatusServiceUnavailable,
@@ -387,7 +388,7 @@ func TestSSOProviderValidateSessionState(t *testing.T) {
 func TestSSOProviderRefreshSession(t *testing.T) {
 	testCases := []struct {
 		Name            string
-		SessionState    *SessionState
+		SessionState    *sessions.SessionState
 		UserGroups      []string
 		ProxyGroups     []string
 		RefreshResponse *refreshResponse
@@ -396,7 +397,7 @@ func TestSSOProviderRefreshSession(t *testing.T) {
 	}{
 		{
 			Name: "no refresh if no refresh token",
-			SessionState: &SessionState{
+			SessionState: &sessions.SessionState{
 				Email:           "user@domain.com",
 				AccessToken:     "token1234",
 				RefreshDeadline: time.Now().Add(time.Duration(-1) * time.Hour),
@@ -408,7 +409,7 @@ func TestSSOProviderRefreshSession(t *testing.T) {
 		},
 		{
 			Name: "no refresh if not yet expired",
-			SessionState: &SessionState{
+			SessionState: &sessions.SessionState{
 				Email:           "user@domain.com",
 				AccessToken:     "token1234",
 				RefreshDeadline: time.Now().Add(time.Duration(1) * time.Hour),
@@ -421,7 +422,7 @@ func TestSSOProviderRefreshSession(t *testing.T) {
 		},
 		{
 			Name: "no refresh if redeem not responding",
-			SessionState: &SessionState{
+			SessionState: &sessions.SessionState{
 				Email:           "user@domain.com",
 				AccessToken:     "token1234",
 				RefreshDeadline: time.Now().Add(time.Duration(-1) * time.Hour),
@@ -435,7 +436,7 @@ func TestSSOProviderRefreshSession(t *testing.T) {
 		},
 		{
 			Name: "no refresh if profile not responding",
-			SessionState: &SessionState{
+			SessionState: &sessions.SessionState{
 				Email:           "user@domain.com",
 				AccessToken:     "token1234",
 				RefreshDeadline: time.Now().Add(time.Duration(-1) * time.Hour),
@@ -452,7 +453,7 @@ func TestSSOProviderRefreshSession(t *testing.T) {
 		},
 		{
 			Name: "no refresh if user no longer in group",
-			SessionState: &SessionState{
+			SessionState: &sessions.SessionState{
 				Email:           "user@domain.com",
 				AccessToken:     "token1234",
 				RefreshDeadline: time.Now().Add(time.Duration(-1) * time.Hour),
@@ -470,7 +471,7 @@ func TestSSOProviderRefreshSession(t *testing.T) {
 		},
 		{
 			Name: "successful refresh if can redeem and user in group",
-			SessionState: &SessionState{
+			SessionState: &sessions.SessionState{
 				Email:           "user@domain.com",
 				AccessToken:     "token1234",
 				RefreshDeadline: time.Now().Add(time.Duration(-1) * time.Hour),
@@ -487,7 +488,7 @@ func TestSSOProviderRefreshSession(t *testing.T) {
 		},
 		{
 			Name: "successful refresh if provider unavailable but within grace period",
-			SessionState: &SessionState{
+			SessionState: &sessions.SessionState{
 				GracePeriodStart: time.Now().Add(time.Duration(-1) * time.Hour),
 				RefreshToken:     "refresh1234",
 			},
@@ -498,7 +499,7 @@ func TestSSOProviderRefreshSession(t *testing.T) {
 		},
 		{
 			Name: "failed refresh if provider unavailable and outside grace period",
-			SessionState: &SessionState{
+			SessionState: &sessions.SessionState{
 				GracePeriodStart: time.Now().Add(time.Duration(-4) * time.Hour),
 				RefreshToken:     "refresh1234",
 			},
