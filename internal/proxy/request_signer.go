@@ -96,8 +96,8 @@ func NewRequestSigner(signingKeyPemStr string) (*RequestSigner, error) {
 //   <URL>
 //   <BODY>
 //  where:
-//    <HEADER.k> is the ','-joined concatenation of all header values of `signedHeaders[k]`; all
-//      other headers in the request are ignored,
+//    <HEADER.k> is the ','-joined concatenation of all header values of `signedHeaders[k]`; empty
+//      values such as '' and all other headers in the request are ignored,
 //    <URL> is the string "<PATH>(?<QUERY>)(#FRAGMENT)", where "?<QUERY>" and "#<FRAGMENT>" are
 //      ommitted if the associated components are absent from the request URL,
 //    <BODY> is the body of the Request (may be `nil`; e.g. for GET requests).
@@ -109,7 +109,8 @@ func mapRequestToHashInput(req *http.Request) (string, error) {
 
 	// Add signed headers.
 	for _, hdr := range signedHeaders {
-		if hdrValues := req.Header[hdr]; len(hdrValues) > 0 {
+		hdrValues := removeEmpty(req.Header[hdr])
+		if len(hdrValues) > 0 {
 			entries = append(entries, strings.Join(hdrValues, ","))
 		}
 	}
@@ -188,4 +189,14 @@ func (signer RequestSigner) Sign(req *http.Request) error {
 //   - Key is the (PEM+PKCS1)-encoding of a public key, usable for validating signed requests.
 func (signer RequestSigner) PublicKey() (string, string) {
 	return signer.publicKeyID, signer.publicKeyStr
+}
+
+func removeEmpty(s []string) []string {
+	r := []string{}
+	for _, str := range s {
+		if len(str) > 0 {
+			r = append(r, str)
+		}
+	}
+	return r
 }

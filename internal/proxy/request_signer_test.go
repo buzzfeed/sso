@@ -27,6 +27,7 @@ func addHeaders(req *http.Request, examples []string, extras map[string][]string
 		"Content-Type":       {"application/json"},
 		"Date":               {"2018-11-08"},
 		"Authorization":      {"Bearer ab12cd34"},
+		"Cookie":             {""},
 		"X-Forwarded-User":   {"octoboi"},
 		"X-Forwarded-Email":  {"octoboi@example.com"},
 		"X-Forwarded-Groups": {"molluscs", "security_applications"},

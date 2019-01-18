@@ -112,6 +112,14 @@ func deleteSSOCookieHeader(req *http.Request, cookieName string) {
 			headers = append(headers, cookie.String())
 		}
 	}
+
+	if len(headers) == 0 {
+		// there are no cookies other then session cookie so we delete the header entirely
+		req.Header.Del("Cookie")
+		return
+	}
+
+	// if there are other headers to keep, we set them minus the session cookie
 	req.Header.Set("Cookie", strings.Join(headers, ";"))
 }
 
