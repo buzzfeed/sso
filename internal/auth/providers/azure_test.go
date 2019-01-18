@@ -376,7 +376,7 @@ func TestAzureV2ProviderRedeem(t *testing.T) {
 			testutil.Equal(t, nil, err)
 
 			// graph service mock has to be set after p.Configure
-			p.GraphService = &MockAzureGraphService{}
+			p.GraphService = &MockMSGraphService{}
 
 			session, err := p.Redeem("http://redirect/", "code1234")
 			if tc.expectedError && err == nil {
@@ -540,7 +540,7 @@ func TestAzureV2ValidateGroupMembers(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			p := newAzureV2Provider(nil)
-			p.GraphService = &MockAzureGraphService{
+			p.GraphService = &MockMSGraphService{
 				Groups:      tc.mockedGroups,
 				GroupsError: tc.mockedError,
 			}
