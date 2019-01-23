@@ -26,6 +26,6 @@ RUN cd cmd/sso-proxy && go build -o /bin/sso-proxy
 # add static assets and copy binaries from build stage
 # =============================================================================
 FROM debian:stable-slim
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y ca-certificates curl && rm -rf /var/lib/apt/lists/*
 WORKDIR /sso
 COPY --from=build /bin/sso-* /bin/
