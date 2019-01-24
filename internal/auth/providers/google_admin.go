@@ -19,8 +19,8 @@ import (
 
 // AdminService wraps calls to provider admin APIs
 type AdminService interface {
-	GetMembers(string) ([]string, error)
-	GetGroups(string) ([]string, error)
+	ListMemberships(string, int) ([]string, error)
+	CheckMemberships([]string, string) ([]string, error)
 }
 
 // GoogleAdminService is an AdminService for the google provider
@@ -51,12 +51,18 @@ func getAdminService(adminEmail string, credentialsReader io.Reader) *admin.Serv
 	return adminService
 }
 
-// GetMembers returns the members of a google group
-func (gs *GoogleAdminService) GetMembers(groupName string) ([]string, error) {
+// ListMemberships returns a slice of the members of a google group
+func (gs *GoogleAdminService) ListMemberships(groupName string, maxDepth int) ([]string, error) {
+	return gs.listMemberships(groupName, maxDepth, 0)
+}
+
+func (gs *GoogleAdminService) listMemberships(groupName string, maxDepth, currentDepth int) ([]string, error) {
+	logger := log.NewLogEntry()
+
 	var members []string
 	tags := []string{
 		"provider:google",
-		"action:members_resource",
+		"action:list_members_resource",
 		fmt.Sprintf("group:%s", groupName),
 	}
 
@@ -108,7 +114,24 @@ func (gs *GoogleAdminService) GetMembers(groupName string) ([]string, error) {
 		gs.StatsdClient.Incr("provider.response", tags, 1.0)
 
 		for _, member := range r.Members {
-			members = append(members, member.Email)
+			switch member.Type {
+			case "USER":
+				members = append(members, member.Email)
+			case "GROUP":
+				// this is a group, recursively walk down the nested group, up to maxDepth
+				if currentDepth >= maxDepth {
+					continue
+				}
+				groupMembers, err := gs.listMemberships(member.Email, maxDepth, currentDepth+1)
+				if err != nil {
+					return nil, err
+				}
+				members = append(members, groupMembers...)
+			default:
+				err := fmt.Errorf("unknown member type %s", member.Type)
+				logger.WithError(err).Error("not adding member to group list")
+				continue
+			}
 		}
 		if r.NextPageToken == "" {
 			break
@@ -118,22 +141,20 @@ func (gs *GoogleAdminService) GetMembers(groupName string) ([]string, error) {
 	return members, nil
 }
 
-// GetGroups gets the groups that a user with a given email address belongs to.
-func (gs *GoogleAdminService) GetGroups(email string) ([]string, error) {
-	var groups []string
+// CheckMemberships given a list of groups and a user email, returns a string slice of the groups the user is a member of.
+// This func leverages the google HasMember endpoint to verify if a user has membership of the given groups.
+func (gs *GoogleAdminService) CheckMemberships(groups []string, email string) ([]string, error) {
 	tags := []string{
 		"provider:google",
-		"action:groups_resource",
+		"action:check_memberships_resource",
 	}
-	pageToken := ""
-	for {
+	inGroups := []string{}
+
+	for _, group := range groups {
 		startTS := time.Now()
 
-		// get pages of 200 groups for an email
-		req := gs.adminService.Groups.List().MaxResults(200).UserKey(email)
-		if pageToken != "" {
-			req.PageToken(pageToken)
-		}
+		// This call includes nested groups so no recursive resolving is required
+		req := gs.adminService.Members.HasMember(group, email)
 		gs.StatsdClient.Incr("provider.request", tags, 1.0)
 
 		resp, err := gs.cb.Call(func() (interface{}, error) {
@@ -166,19 +187,16 @@ func (gs *GoogleAdminService) GetGroups(email string) ([]string, error) {
 			return nil, err
 		}
 
-		r := resp.(*admin.Groups)
+		r := resp.(*admin.MembersHasMember)
 
 		tags = append(tags, fmt.Sprintf("status_code:%d", r.HTTPStatusCode))
 		gs.StatsdClient.Timing("provider.latency", time.Now().Sub(startTS), tags, 1.0)
 		gs.StatsdClient.Incr("provider.response", tags, 1.0)
 
-		for _, group := range r.Groups {
-			groups = append(groups, group.Email)
+		if r.IsMember {
+			inGroups = append(inGroups, group)
 		}
-		if r.NextPageToken == "" {
-			break
-		}
-		pageToken = r.NextPageToken
 	}
-	return groups, nil
+
+	return inGroups, nil
 }
