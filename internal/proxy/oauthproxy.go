@@ -245,18 +245,13 @@ func NewReverseProxyHandler(reverseProxy *httputil.ReverseProxy, opts *Options, 
 	if config.FlushInterval != 0 {
 		return NewStreamingHandler(upstreamProxy, opts, config), []string{"handler:streaming"}
 	}
-	return NewTimeoutHandler(upstreamProxy, opts, config), []string{"handler:timeout"}
+	return NewTimeoutHandler(upstreamProxy, config), []string{"handler:timeout"}
 }
 
 // NewTimeoutHandler creates a new handler with a configure timeout.
-func NewTimeoutHandler(handler http.Handler, opts *Options, config *UpstreamConfig) http.Handler {
-	timeout := opts.DefaultUpstreamTimeout
-	if config.Timeout != 0 {
-		timeout = config.Timeout
-	}
-	timeoutMsg := fmt.Sprintf(
-		"%s failed to respond within the %s timeout period", config.Service, timeout)
-	return http.TimeoutHandler(handler, timeout, timeoutMsg)
+func NewTimeoutHandler(handler http.Handler, config *UpstreamConfig) http.Handler {
+	timeoutMsg := fmt.Sprintf("%s failed to respond within the %s timeout period", config.Service, config.Timeout)
+	return http.TimeoutHandler(handler, config.Timeout, timeoutMsg)
 }
 
 // NewStreamingHandler creates a new handler capable of proxying a stream

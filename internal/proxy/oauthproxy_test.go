@@ -511,12 +511,13 @@ func generateTestUpstreamConfigs(to string) []*UpstreamConfig {
 		"root_domain": "dev",
 		"cluster":     "sso",
 	}
+	defaultUpstreamOpts := &OptionsConfig{Timeout: time.Duration(1) * time.Second}
 	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
 - service: foo
   default:
     from: foo.sso.dev
     to: %s
-`, parsed)), "sso", "http", templateVars)
+`, parsed)), "sso", "http", templateVars, defaultUpstreamOpts)
 	if err != nil {
 		panic(err)
 	}
@@ -692,6 +693,7 @@ func generateTestAuthSkipConfigs(to string) []*UpstreamConfig {
 		"root_domain": "dev",
 		"cluster":     "sso",
 	}
+	defaultUpstreamOpts := &OptionsConfig{Timeout: time.Duration(1) * time.Second}
 	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
 - service: foo
   default:
@@ -700,7 +702,7 @@ func generateTestAuthSkipConfigs(to string) []*UpstreamConfig {
     options:
       skip_auth_regex:
         - ^\/allow$
-`, parsed)), "sso", "http", templateVars)
+`, parsed)), "sso", "http", templateVars, defaultUpstreamOpts)
 	if err != nil {
 		panic(err)
 	}
@@ -787,6 +789,7 @@ func generateTestSkipRequestSigningConfig(to string) []*UpstreamConfig {
 		"root_domain": "dev",
 		"cluster":     "sso",
 	}
+	defaultUpstreamOpts := &OptionsConfig{Timeout: time.Duration(1) * time.Second}
 	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
 - service: foo
   default:
@@ -796,7 +799,7 @@ func generateTestSkipRequestSigningConfig(to string) []*UpstreamConfig {
       skip_request_signing: true
       skip_auth_regex:
         - ^.*$
-`, parsed)), "sso", "http", templateVars)
+`, parsed)), "sso", "http", templateVars, defaultUpstreamOpts)
 	if err != nil {
 		panic(err)
 	}
@@ -861,6 +864,7 @@ func generateMultiTestAuthSkipConfigs(toFoo, toBar string) []*UpstreamConfig {
 		"root_domain": "dev",
 		"cluster":     "sso",
 	}
+	defaultUpstreamOpts := &OptionsConfig{Timeout: time.Duration(1) * time.Second}
 	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
 - service: foo
   default:
@@ -873,7 +877,7 @@ func generateMultiTestAuthSkipConfigs(toFoo, toBar string) []*UpstreamConfig {
   default:
     from: bar.sso.dev
     to: %s
-`, parsedFoo, parsedBar)), "sso", "http", templateVars)
+`, parsedFoo, parsedBar)), "sso", "http", templateVars, defaultUpstreamOpts)
 	if err != nil {
 		panic(err)
 	}
@@ -968,12 +972,13 @@ func generateSignatureTestUpstreamConfigs(key, to string) []*UpstreamConfig {
 		"cluster":         "sso",
 		"foo_signing_key": key,
 	}
+	defaultUpstreamOpts := &OptionsConfig{Timeout: time.Duration(1) * time.Second}
 	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
 - service: foo
   default:
     from: foo.{{cluster}}.{{root_domain}}
     to: %s
-`, parsed)), "sso", "http", templateVars)
+`, parsed)), "sso", "http", templateVars, defaultUpstreamOpts)
 	if err != nil {
 		panic(err)
 	}
@@ -1747,6 +1752,7 @@ func makeUpstreamConfigWithHeaderOverrides(overrides map[string]string) []*Upstr
 		"root_domain": "dev",
 		"cluster":     "sso",
 	}
+	defaultUpstreamOpts := &OptionsConfig{Timeout: time.Duration(1) * time.Second}
 	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
 - service: foo
   default:
@@ -1757,7 +1763,7 @@ func makeUpstreamConfigWithHeaderOverrides(overrides map[string]string) []*Upstr
   default:
     from: bar.sso.dev
     to: bar-internal.sso.dev
-`)), "sso", "http", templateVars)
+`)), "sso", "http", templateVars, defaultUpstreamOpts)
 	if err != nil {
 		panic(err)
 	}
@@ -2035,7 +2041,6 @@ func TestTimeoutHandler(t *testing.T) {
 	testCases := []struct {
 		name               string
 		config             *UpstreamConfig
-		defaultTimeout     time.Duration
 		globalTimeout      time.Duration
 		ExpectedStatusCode int
 		ExpectedBody       string
@@ -2046,7 +2051,6 @@ func TestTimeoutHandler(t *testing.T) {
 			config: &UpstreamConfig{
 				Timeout: time.Duration(100) * time.Millisecond,
 			},
-			defaultTimeout:     time.Duration(100) * time.Millisecond,
 			globalTimeout:      time.Duration(100) * time.Millisecond,
 			ExpectedStatusCode: 200,
 			ExpectedBody:       "OK",
@@ -2057,17 +2061,6 @@ func TestTimeoutHandler(t *testing.T) {
 				Service: "service-test",
 				Timeout: time.Duration(10) * time.Millisecond,
 			},
-			defaultTimeout:     time.Duration(100) * time.Millisecond,
-			globalTimeout:      time.Duration(100) * time.Millisecond,
-			ExpectedStatusCode: 503,
-			ExpectedBody:       fmt.Sprintf("service-test failed to respond within the 10ms timeout period"),
-		},
-		{
-			name: "times out using default upstream config timeout",
-			config: &UpstreamConfig{
-				Service: "service-test",
-			},
-			defaultTimeout:     time.Duration(10) * time.Millisecond,
 			globalTimeout:      time.Duration(100) * time.Millisecond,
 			ExpectedStatusCode: 503,
 			ExpectedBody:       fmt.Sprintf("service-test failed to respond within the 10ms timeout period"),
@@ -2076,9 +2069,9 @@ func TestTimeoutHandler(t *testing.T) {
 			name: "times out using global write timeout",
 			config: &UpstreamConfig{
 				Service: "service-test",
+				Timeout: time.Duration(100) * time.Millisecond,
 			},
-			defaultTimeout: time.Duration(100) * time.Millisecond,
-			globalTimeout:  time.Duration(10) * time.Millisecond,
+			globalTimeout: time.Duration(10) * time.Millisecond,
 			ExpectedErr: &url.Error{
 				Err: io.EOF,
 			},
@@ -2086,15 +2079,12 @@ func TestTimeoutHandler(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			opts := NewOptions()
-			opts.DefaultUpstreamTimeout = tc.defaultTimeout
-
 			baseHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				timer := time.NewTimer(time.Duration(50) * time.Millisecond)
 				<-timer.C
 				w.Write([]byte("OK"))
 			})
-			timeoutHandler := NewTimeoutHandler(baseHandler, opts, tc.config)
+			timeoutHandler := NewTimeoutHandler(baseHandler, tc.config)
 
 			srv := httptest.NewUnstartedServer(timeoutHandler)
 			srv.Config.WriteTimeout = tc.globalTimeout
@@ -2142,13 +2132,14 @@ func generateTestRewriteUpstreamConfigs(fromRegex, toTemplate string) []*Upstrea
 		"root_domain": "dev",
 		"cluster":     "sso",
 	}
+	defaultUpstreamOpts := &OptionsConfig{Timeout: time.Duration(1) * time.Second}
 	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
 - service: foo
   default:
     from: %s
     to: %s
     type: rewrite
-`, fromRegex, toTemplate)), "sso", "http", templateVars)
+`, fromRegex, toTemplate)), "sso", "http", templateVars, defaultUpstreamOpts)
 	if err != nil {
 		panic(err)
 	}

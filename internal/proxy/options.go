@@ -26,6 +26,7 @@ import (
 // Scheme - the default scheme, used for upstream configs
 // SkipAuthPreflight - will skip authentication for OPTIONS requests, default false
 // EmailDomains - csv list of emails with the specified domain to authenticate. Use * to authenticate any email
+// DefaultAllowedGroups - csv list of default allowed groups that are applied to authorize access to upstreams. Will be overriden by groups specified in upstream configs.
 // ClientID - the OAuth Client ID: ie: "123456.apps.googleusercontent.com"
 // ClientSecret - The OAuth Client Secret
 // DefaultUpstreamTimeout - the default time period to wait for a response from an upstream
@@ -57,9 +58,11 @@ type Options struct {
 
 	SkipAuthPreflight bool `envconfig:"SKIP_AUTH_PREFLIGHT"`
 
-	EmailDomains []string `envconfig:"EMAIL_DOMAIN"`
-	ClientID     string   `envconfig:"CLIENT_ID"`
-	ClientSecret string   `envconfig:"CLIENT_SECRET"`
+	EmailDomains         []string `envconfig:"EMAIL_DOMAIN"`
+	DefaultAllowedGroups []string `envconfig:"DEFAULT_ALLOWED_GROUPS"`
+
+	ClientID     string `envconfig:"CLIENT_ID"`
+	ClientSecret string `envconfig:"CLIENT_SECRET"`
 
 	DefaultUpstreamTimeout time.Duration `envconfig:"DEFAULT_UPSTREAM_TIMEOUT" default:"10s"`
 
@@ -112,6 +115,7 @@ func NewOptions() *Options {
 		SkipAuthPreflight:      false,
 		RequestLogging:         true,
 		DefaultUpstreamTimeout: time.Duration(1) * time.Second,
+		DefaultAllowedGroups:   []string{},
 		PassAccessToken:        false,
 	}
 }
@@ -176,7 +180,12 @@ func (o *Options) Validate() error {
 			templateVars = o.testTemplateVars
 		}
 
-		o.upstreamConfigs, err = loadServiceConfigs(rawBytes, o.Cluster, o.Scheme, templateVars)
+		defaultUpstreamOptionsConfig := &OptionsConfig{
+			AllowedGroups: o.DefaultAllowedGroups,
+			Timeout:       o.DefaultUpstreamTimeout,
+		}
+
+		o.upstreamConfigs, err = loadServiceConfigs(rawBytes, o.Cluster, o.Scheme, templateVars, defaultUpstreamOptionsConfig)
 		if err != nil {
 			msgs = append(msgs, fmt.Sprintf("error parsing upstream configs file %s", err))
 		}
