@@ -93,9 +93,72 @@ func TestNewSession(t *testing.T) {
 	}
 }
 
+func TestCookieCount(t *testing.T) {
+	testCases := []struct {
+		name          string
+		size          int
+		expectedCount int
+	}{
+		{"zero bytes", 0, 1},
+		{"one byte", 1, 1},
+		{"max single cookie bytes", CookieMaxLength, 1},
+		{"one byte overflow", CookieMaxLength + 1, 2},
+		{"max two cookie bytes", CookieMaxLength * 2, 2},
+		{"max two cookie bytes with overflow", CookieMaxLength*2 + 1, 3},
+		{"a lot of bytes", CookieMaxLength * 600, 600},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			testutil.Equal(t, tc.expectedCount, cookieCount(tc.size))
+		})
+	}
+}
+
+func TestCookiePrefix(t *testing.T) {
+	testCases := []struct {
+		name           string
+		size           int
+		expectedPrefix string
+	}{
+		{"zero bytes", 0, "AA==~"},
+		{"one byte", 1, "AQ==~"},
+		{"max single cookie bytes", CookieMaxLength, "_R8=~"},
+		{"one byte overflow", CookieMaxLength + 1, "_h8=~"},
+		{"max two cookie bytes", CookieMaxLength * 2, "-j8=~"},
+		{"max two cookie bytes with overflow", CookieMaxLength*2 + 1, "-z8=~"},
+		{"a lot of bytes", CookieMaxLength * 600, "-PGVAQ==~"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			testutil.Equal(t, tc.expectedPrefix, generatePrefix(tc.size))
+			testutil.Equal(t, tc.size, parsePrefix(generatePrefix(tc.size)))
+		})
+	}
+
+	errorCases := []struct {
+		name  string
+		input string
+	}{
+		{"empty string", ""},
+		{"no delimeter", "bogus"},
+		{"empty prefix", PrefixDelimiter + "bogus"},
+		{"invalid base64", "!@#$%^" + PrefixDelimiter},
+		{"unconsumed bytes", "AAA=" + PrefixDelimiter},
+	}
+
+	for _, tc := range errorCases {
+		t.Run(tc.name, func(t *testing.T) {
+			testutil.Equal(t, -1, parsePrefix(tc.input))
+		})
+	}
+}
+
 func TestMakeSessionCookie(t *testing.T) {
 	now := time.Now()
 	cookieValue := "cookieValue"
+	spannedValue := fmt.Sprintf("Cw==~%s", cookieValue)
 	expiration := time.Hour
 	cookieName := "cookieName"
 	testCases := []struct {
@@ -106,8 +169,8 @@ func TestMakeSessionCookie(t *testing.T) {
 		{
 			name: "default cookie domain",
 			expectedCookie: &http.Cookie{
-				Name:     cookieName,
-				Value:    cookieValue,
+				Name:     cookieName + "_0",
+				Value:    spannedValue,
 				Path:     "/",
 				Domain:   "www.example.com",
 				HttpOnly: true,
@@ -124,8 +187,8 @@ func TestMakeSessionCookie(t *testing.T) {
 				},
 			},
 			expectedCookie: &http.Cookie{
-				Name:     cookieName,
-				Value:    cookieValue,
+				Name:     cookieName + "_0",
+				Value:    spannedValue,
 				Path:     "/",
 				Domain:   "buzzfeed.com",
 				HttpOnly: true,
@@ -140,8 +203,8 @@ func TestMakeSessionCookie(t *testing.T) {
 			session, err := NewCookieStore(cookieName, tc.optFuncs...)
 			testutil.Ok(t, err)
 			req := httptest.NewRequest("GET", "http://www.example.com", nil)
-			cookie := session.makeSessionCookie(req, cookieValue, expiration, now)
-			testutil.Equal(t, cookie, tc.expectedCookie)
+			cookies := session.makeSessionCookies(req, cookieValue, expiration, now)
+			testutil.Equal(t, tc.expectedCookie, cookies[0])
 		})
 	}
 }
@@ -149,6 +212,7 @@ func TestMakeSessionCookie(t *testing.T) {
 func TestMakeSessionCSRFCookie(t *testing.T) {
 	now := time.Now()
 	cookieValue := "cookieValue"
+	spannedValue := fmt.Sprintf("Cw==~%s", cookieValue)
 	expiration := time.Hour
 	cookieName := "cookieName"
 	csrfName := "cookieName_csrf"
@@ -161,8 +225,8 @@ func TestMakeSessionCSRFCookie(t *testing.T) {
 		{
 			name: "default cookie domain",
 			expectedCookie: &http.Cookie{
-				Name:     csrfName,
-				Value:    cookieValue,
+				Name:     csrfName + "_0",
+				Value:    spannedValue,
 				Path:     "/",
 				Domain:   "www.example.com",
 				HttpOnly: true,
@@ -179,8 +243,8 @@ func TestMakeSessionCSRFCookie(t *testing.T) {
 				},
 			},
 			expectedCookie: &http.Cookie{
-				Name:     csrfName,
-				Value:    cookieValue,
+				Name:     csrfName + "_0",
+				Value:    spannedValue,
 				Path:     "/",
 				Domain:   "buzzfeed.com",
 				HttpOnly: true,
@@ -195,14 +259,15 @@ func TestMakeSessionCSRFCookie(t *testing.T) {
 			session, err := NewCookieStore(cookieName, tc.optFuncs...)
 			testutil.Ok(t, err)
 			req := httptest.NewRequest("GET", "http://www.example.com", nil)
-			cookie := session.makeCSRFCookie(req, cookieValue, expiration, now)
-			testutil.Equal(t, tc.expectedCookie, cookie)
+			cookies := session.makeCSRFCookies(req, cookieValue, expiration, now)
+			testutil.Equal(t, tc.expectedCookie, cookies[0])
 		})
 	}
 }
 
 func TestSetSessionCookie(t *testing.T) {
 	cookieValue := "cookieValue"
+	spannedValue := fmt.Sprintf("Cw==~%s", cookieValue)
 	cookieName := "cookieName"
 
 	t.Run("set session cookie test", func(t *testing.T) {
@@ -210,12 +275,12 @@ func TestSetSessionCookie(t *testing.T) {
 		testutil.Ok(t, err)
 		req := httptest.NewRequest("GET", "http://www.example.com", nil)
 		rw := httptest.NewRecorder()
-		session.setSessionCookie(rw, req, cookieValue)
+		session.setSessionCookies(rw, req, cookieValue)
 		var found bool
 		for _, cookie := range rw.Result().Cookies() {
-			if cookie.Name == cookieName {
+			if cookie.Name == fmt.Sprintf("%s_0", cookieName) {
 				found = true
-				testutil.Equal(t, cookieValue, cookie.Value)
+				testutil.Equal(t, spannedValue, cookie.Value)
 				testutil.Assert(t, cookie.Expires.After(time.Now()), "cookie expires after now")
 			}
 		}
@@ -224,6 +289,7 @@ func TestSetSessionCookie(t *testing.T) {
 }
 func TestSetCSRFSessionCookie(t *testing.T) {
 	cookieValue := "cookieValue"
+	spannedValue := fmt.Sprintf("Cw==~%s", cookieValue)
 	cookieName := "cookieName"
 
 	t.Run("set csrf cookie test", func(t *testing.T) {
@@ -234,9 +300,9 @@ func TestSetCSRFSessionCookie(t *testing.T) {
 		session.SetCSRF(rw, req, cookieValue)
 		var found bool
 		for _, cookie := range rw.Result().Cookies() {
-			if cookie.Name == fmt.Sprintf("%s_csrf", cookieName) {
+			if cookie.Name == fmt.Sprintf("%s_csrf_0", cookieName) {
 				found = true
-				testutil.Equal(t, cookieValue, cookie.Value)
+				testutil.Equal(t, spannedValue, cookie.Value)
 				testutil.Assert(t, cookie.Expires.After(time.Now()), "cookie expires after now")
 			}
 		}
@@ -248,23 +314,32 @@ func TestClearSessionCookie(t *testing.T) {
 	cookieValue := "cookieValue"
 	cookieName := "cookieName"
 
-	t.Run("set session cookie test", func(t *testing.T) {
+	t.Run("clear session cookie test", func(t *testing.T) {
 		session, err := NewCookieStore(cookieName)
 		testutil.Ok(t, err)
 		req := httptest.NewRequest("GET", "http://www.example.com", nil)
-		req.AddCookie(session.makeSessionCookie(req, cookieValue, time.Hour, time.Now()))
+		cookies := session.makeSessionCookies(req, cookieValue, time.Hour, time.Now())
+		for _, cookie := range cookies {
+			req.AddCookie(cookie)
+		}
 
 		rw := httptest.NewRecorder()
 		session.ClearSession(rw, req)
-		var found bool
+		var foundPrimary bool
+		var foundOverflow bool
 		for _, cookie := range rw.Result().Cookies() {
-			if cookie.Name == cookieName {
-				found = true
+			if cookie.Name == fmt.Sprintf("%s_0", cookieName) {
+				foundPrimary = true
+				testutil.Equal(t, "AA==~", cookie.Value) // zero byte prefix followed by zero bytes
+				testutil.Assert(t, cookie.Expires.Before(time.Now()), "cookie expires before now")
+			} else if cookie.Name == fmt.Sprintf("%s_1", cookieName) {
+				foundOverflow = true
 				testutil.Equal(t, "", cookie.Value)
 				testutil.Assert(t, cookie.Expires.Before(time.Now()), "cookie expires before now")
 			}
 		}
-		testutil.Assert(t, found, "cookie in header")
+		testutil.Assert(t, foundPrimary, "primary cookie present in header")
+		testutil.Assert(t, foundOverflow, "overflow cookie present in header")
 	})
 }
 
@@ -276,19 +351,28 @@ func TestClearCSRFSessionCookie(t *testing.T) {
 		session, err := NewCookieStore(cookieName)
 		testutil.Ok(t, err)
 		req := httptest.NewRequest("GET", "http://www.example.com", nil)
-		req.AddCookie(session.makeCSRFCookie(req, cookieValue, time.Hour, time.Now()))
+		cookies := session.makeCSRFCookies(req, cookieValue, time.Hour, time.Now())
+		for _, cookie := range cookies {
+			req.AddCookie(cookie)
+		}
 
 		rw := httptest.NewRecorder()
 		session.ClearCSRF(rw, req)
-		var found bool
+		var foundPrimary bool
+		var foundOverflow bool
 		for _, cookie := range rw.Result().Cookies() {
-			if cookie.Name == fmt.Sprintf("%s_csrf", cookieName) {
-				found = true
+			if cookie.Name == fmt.Sprintf("%s_csrf_0", cookieName) {
+				foundPrimary = true
+				testutil.Equal(t, "AA==~", cookie.Value) // zero byte prefix followed by zero bytes
+				testutil.Assert(t, cookie.Expires.Before(time.Now()), "cookie expires before now")
+			} else if cookie.Name == fmt.Sprintf("%s_csrf_1", cookieName) {
+				foundOverflow = true
 				testutil.Equal(t, "", cookie.Value)
 				testutil.Assert(t, cookie.Expires.Before(time.Now()), "cookie expires before now")
 			}
 		}
-		testutil.Assert(t, found, "cookie in header")
+		testutil.Assert(t, foundPrimary, "primary csrf cookie present in header")
+		testutil.Assert(t, foundOverflow, "overflow csrf cookie present in header")
 	})
 }
 
@@ -313,7 +397,10 @@ func TestLoadCookiedSession(t *testing.T) {
 			setupCookies: func(t *testing.T, req *http.Request, s *CookieStore, sessionState *SessionState) {
 				value, err := MarshalSession(sessionState, s.CookieCipher)
 				testutil.Ok(t, err)
-				req.AddCookie(s.makeSessionCookie(req, value, time.Hour, time.Now()))
+				cookies := s.makeSessionCookies(req, value, time.Hour, time.Now())
+				for _, cookie := range cookies {
+					req.AddCookie(cookie)
+				}
 			},
 			sessionState: &SessionState{
 				Email:        "example@email.com",
@@ -326,7 +413,10 @@ func TestLoadCookiedSession(t *testing.T) {
 			optFuncs: []func(*CookieStore) error{CreateMiscreantCookieCipher(testEncodedCookieSecret)},
 			setupCookies: func(t *testing.T, req *http.Request, s *CookieStore, sessionState *SessionState) {
 				value := "574b776a7c934d6b9fc42ec63a389f79"
-				req.AddCookie(s.makeSessionCookie(req, value, time.Hour, time.Now()))
+				cookies := s.makeSessionCookies(req, value, time.Hour, time.Now())
+				for _, cookie := range cookies {
+					req.AddCookie(cookie)
+				}
 			},
 			expectedError: ErrInvalidSession,
 		},
