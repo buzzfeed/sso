@@ -16,8 +16,10 @@ import (
 
 const (
 	// CookieMaxLength controls the byte length where cookie spanning occurs
-	// See http://browsercookielimits.squawky.net/
-	CookieMaxLength = 4093
+	// See http://browsercookielimits.squawky.net/ for guidance, however in
+	// practice this needs to be set smaller than the limit due to the entire
+	// header string counting against the limit.
+	CookieMaxLength = 3840
 	// PrefixDelimiter should be unreserved and not used by any base64 encoding
 	PrefixDelimiter = "~"
 )
