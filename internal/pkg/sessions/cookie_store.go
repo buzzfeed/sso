@@ -204,24 +204,48 @@ func setCookies(rw http.ResponseWriter, cookies []*http.Cookie) {
 	}
 }
 
+func (s *CookieStore) makeCookie(req *http.Request, name string, value string, expiration time.Duration, now time.Time) *http.Cookie {
+	logger := log.NewLogEntry()
+	domain := req.Host
+	if h, _, err := net.SplitHostPort(domain); err == nil {
+		domain = h
+	}
+	if s.CookieDomain != "" {
+		if !strings.HasSuffix(domain, s.CookieDomain) {
+			logger.WithRequestHost(domain).WithCookieDomain(s.CookieDomain).Warn("Warning: Using configured cookie domain.")
+		}
+		domain = s.CookieDomain
+	}
+
+	return &http.Cookie{
+		Name:     name,
+		Value:    value,
+		Path:     "/",
+		Domain:   domain,
+		HttpOnly: s.CookieHTTPOnly,
+		Secure:   s.CookieSecure,
+		Expires:  now.Add(expiration),
+	}
+}
+
 // makeSessionCookie constructs a session cookie given the request, an expiration time and the current time.
 func (s *CookieStore) makeSessionCookies(req *http.Request, value string, expiration time.Duration, now time.Time) []*http.Cookie {
 	return s.makeCookies(req, s.Name, value, expiration, now)
 }
 
 // makeCSRFCookie creates a CSRF cookie given the request, an expiration time, and the current time.
-func (s *CookieStore) makeCSRFCookies(req *http.Request, value string, expiration time.Duration, now time.Time) []*http.Cookie {
-	return s.makeCookies(req, s.CSRFCookieName, value, expiration, now)
+func (s *CookieStore) makeCSRFCookie(req *http.Request, value string, expiration time.Duration, now time.Time) *http.Cookie {
+	return s.makeCookie(req, s.CSRFCookieName, value, expiration, now)
 }
 
 // ClearCSRF clears the CSRF cookie from the request
 func (s *CookieStore) ClearCSRF(rw http.ResponseWriter, req *http.Request) {
-	setCookies(rw, s.makeCSRFCookies(req, "", time.Hour*-1, time.Now()))
+	http.SetCookie(rw, s.makeCSRFCookie(req, "", time.Hour*-1, time.Now()))
 }
 
 // SetCSRF sets the CSRFCookie creates a CSRF cookie in a given request
 func (s *CookieStore) SetCSRF(rw http.ResponseWriter, req *http.Request, val string) {
-	setCookies(rw, s.makeCSRFCookies(req, val, s.CookieExpire, time.Now()))
+	http.SetCookie(rw, s.makeCSRFCookie(req, val, s.CookieExpire, time.Now()))
 }
 
 // GetCSRF gets the CSRFCookie creates a CSRF cookie in a given request

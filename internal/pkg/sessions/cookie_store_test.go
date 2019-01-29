@@ -212,7 +212,6 @@ func TestMakeSessionCookie(t *testing.T) {
 func TestMakeSessionCSRFCookie(t *testing.T) {
 	now := time.Now()
 	cookieValue := "cookieValue"
-	spannedValue := fmt.Sprintf("Cw==~%s", cookieValue)
 	expiration := time.Hour
 	cookieName := "cookieName"
 	csrfName := "cookieName_csrf"
@@ -225,8 +224,8 @@ func TestMakeSessionCSRFCookie(t *testing.T) {
 		{
 			name: "default cookie domain",
 			expectedCookie: &http.Cookie{
-				Name:     csrfName + "_0",
-				Value:    spannedValue,
+				Name:     csrfName,
+				Value:    cookieValue,
 				Path:     "/",
 				Domain:   "www.example.com",
 				HttpOnly: true,
@@ -243,8 +242,8 @@ func TestMakeSessionCSRFCookie(t *testing.T) {
 				},
 			},
 			expectedCookie: &http.Cookie{
-				Name:     csrfName + "_0",
-				Value:    spannedValue,
+				Name:     csrfName,
+				Value:    cookieValue,
 				Path:     "/",
 				Domain:   "buzzfeed.com",
 				HttpOnly: true,
@@ -259,8 +258,8 @@ func TestMakeSessionCSRFCookie(t *testing.T) {
 			session, err := NewCookieStore(cookieName, tc.optFuncs...)
 			testutil.Ok(t, err)
 			req := httptest.NewRequest("GET", "http://www.example.com", nil)
-			cookies := session.makeCSRFCookies(req, cookieValue, expiration, now)
-			testutil.Equal(t, tc.expectedCookie, cookies[0])
+			cookie := session.makeCSRFCookie(req, cookieValue, expiration, now)
+			testutil.Equal(t, tc.expectedCookie, cookie)
 		})
 	}
 }
@@ -287,9 +286,9 @@ func TestSetSessionCookie(t *testing.T) {
 		testutil.Assert(t, found, "cookie in header")
 	})
 }
+
 func TestSetCSRFSessionCookie(t *testing.T) {
 	cookieValue := "cookieValue"
-	spannedValue := fmt.Sprintf("Cw==~%s", cookieValue)
 	cookieName := "cookieName"
 
 	t.Run("set csrf cookie test", func(t *testing.T) {
@@ -300,9 +299,9 @@ func TestSetCSRFSessionCookie(t *testing.T) {
 		session.SetCSRF(rw, req, cookieValue)
 		var found bool
 		for _, cookie := range rw.Result().Cookies() {
-			if cookie.Name == fmt.Sprintf("%s_csrf_0", cookieName) {
+			if cookie.Name == fmt.Sprintf("%s_csrf", cookieName) {
 				found = true
-				testutil.Equal(t, spannedValue, cookie.Value)
+				testutil.Equal(t, cookieValue, cookie.Value)
 				testutil.Assert(t, cookie.Expires.After(time.Now()), "cookie expires after now")
 			}
 		}
@@ -351,28 +350,19 @@ func TestClearCSRFSessionCookie(t *testing.T) {
 		session, err := NewCookieStore(cookieName)
 		testutil.Ok(t, err)
 		req := httptest.NewRequest("GET", "http://www.example.com", nil)
-		cookies := session.makeCSRFCookies(req, cookieValue, time.Hour, time.Now())
-		for _, cookie := range cookies {
-			req.AddCookie(cookie)
-		}
+		req.AddCookie(session.makeCSRFCookie(req, cookieValue, time.Hour, time.Now()))
 
 		rw := httptest.NewRecorder()
 		session.ClearCSRF(rw, req)
-		var foundPrimary bool
-		var foundOverflow bool
+		var found bool
 		for _, cookie := range rw.Result().Cookies() {
-			if cookie.Name == fmt.Sprintf("%s_csrf_0", cookieName) {
-				foundPrimary = true
-				testutil.Equal(t, "AA==~", cookie.Value) // zero byte prefix followed by zero bytes
-				testutil.Assert(t, cookie.Expires.Before(time.Now()), "cookie expires before now")
-			} else if cookie.Name == fmt.Sprintf("%s_csrf_1", cookieName) {
-				foundOverflow = true
+			if cookie.Name == fmt.Sprintf("%s_csrf", cookieName) {
+				found = true
 				testutil.Equal(t, "", cookie.Value)
 				testutil.Assert(t, cookie.Expires.Before(time.Now()), "cookie expires before now")
 			}
 		}
-		testutil.Assert(t, foundPrimary, "primary csrf cookie present in header")
-		testutil.Assert(t, foundOverflow, "overflow csrf cookie present in header")
+		testutil.Assert(t, found, "cookie in header")
 	})
 }
 
