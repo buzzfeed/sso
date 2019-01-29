@@ -19,8 +19,8 @@ import (
 
 // AdminService wraps calls to provider admin APIs
 type AdminService interface {
-	ListMemberships(string, int) ([]string, error)
-	CheckMemberships([]string, string) ([]string, error)
+	ListMemberships(group string, depth int) (members []string, err error)
+	CheckMemberships(groups []string, user string) (inGroups []string, errr error)
 }
 
 // GoogleAdminService is an AdminService for the google provider
