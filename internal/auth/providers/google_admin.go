@@ -92,6 +92,9 @@ func (gs *GoogleAdminService) listMemberships(groupName string, maxDepth, curren
 						err = ErrTokenRevoked
 					}
 					err = ErrBadRequest
+				case 404:
+					logger.WithUserGroup(groupName).Warn("could not list memberships, user group not found")
+					err = ErrGroupNotFound
 				case 429:
 					err = ErrRateLimitExceeded
 				case 503:
@@ -144,6 +147,8 @@ func (gs *GoogleAdminService) listMemberships(groupName string, maxDepth, curren
 // CheckMemberships given a list of groups and a user email, returns a string slice of the groups the user is a member of.
 // This func leverages the google HasMember endpoint to verify if a user has membership of the given groups.
 func (gs *GoogleAdminService) CheckMemberships(groups []string, email string) ([]string, error) {
+	logger := log.NewLogEntry()
+
 	tags := []string{
 		"provider:google",
 		"action:check_memberships_resource",
@@ -172,6 +177,9 @@ func (gs *GoogleAdminService) CheckMemberships(groups []string, email string) ([
 						err = ErrTokenRevoked
 					}
 					err = ErrBadRequest
+				case 404:
+					logger.WithUserGroup(group).Warn("could not check memberships, user group not found")
+					continue
 				case 429:
 					err = ErrRateLimitExceeded
 				case 503:
