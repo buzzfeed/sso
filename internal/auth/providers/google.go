@@ -319,7 +319,7 @@ func (p *GoogleProvider) Redeem(redirectURL, code string) (*sessions.SessionStat
 
 // PopulateMembers is the fill function for the groups cache
 func (p *GoogleProvider) PopulateMembers(group string) (groups.MemberSet, error) {
-	members, err := p.AdminService.GetMembers(group)
+	members, err := p.AdminService.ListMemberships(group, 4)
 	if err != nil {
 		return nil, err
 	}
@@ -331,16 +331,16 @@ func (p *GoogleProvider) PopulateMembers(group string) (groups.MemberSet, error)
 }
 
 // ValidateGroupMembership takes in an email and the allowed groups and returns the groups that the email is part of in that list.
-// If `allGroups` is an empty list it returns all the groups that the user belongs to.
+// If `allGroups` is an empty list, returns an empty list.
 func (p *GoogleProvider) ValidateGroupMembership(email string, allGroups []string) ([]string, error) {
 	logger := log.NewLogEntry()
 
 	groups := []string{}
 	var useGroupsResource bool
 
-	// if `allGroups` is empty use the groups resource
+	// if `allGroups` is empty, we return an empty list
 	if len(allGroups) == 0 {
-		return p.AdminService.GetGroups(email)
+		return []string{}, nil
 	}
 
 	// iterate over the groups, if a set isn't populated only call the GroupsResource once and check all groups
@@ -359,21 +359,9 @@ func (p *GoogleProvider) ValidateGroupMembership(email string, allGroups []strin
 		}
 	}
 
-	// if a member set was not populated, use the groups resource to get all the groups and filter out the ones that are in `allGroups`
+	// if a cached member set was not populated, use the groups resource to get all the groups and filter out the ones that are in `allGroups`
 	if useGroupsResource {
-		filtered := []string{}
-		userGroups, err := p.AdminService.GetGroups(email)
-		if err != nil {
-			return nil, err
-		}
-		for _, userGroup := range userGroups {
-			for _, allowedGroup := range allGroups {
-				if userGroup == allowedGroup {
-					filtered = append(filtered, userGroup)
-				}
-			}
-		}
-		return filtered, nil
+		return p.AdminService.CheckMemberships(allGroups, email)
 	}
 
 	return groups, nil

@@ -8,12 +8,12 @@ type MockAdminService struct {
 	GroupsError  error
 }
 
-// GetMembers mocks the GetMembers function
-func (ms *MockAdminService) GetMembers(string) ([]string, error) {
+// ListMemberships mocks the ListMemebership function
+func (ms *MockAdminService) ListMemberships(string, int) ([]string, error) {
 	return ms.Members, ms.MembersError
 }
 
-// GetGroups mocks the GetGroups function
-func (ms *MockAdminService) GetGroups(string) ([]string, error) {
+// CheckMemberships mocks the CheckMemberships function
+func (ms *MockAdminService) CheckMemberships([]string, string) ([]string, error) {
 	return ms.Groups, ms.GroupsError
 }

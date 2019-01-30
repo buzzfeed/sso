@@ -14,6 +14,9 @@ var (
 	// ErrTokenRevoked represents 400 Token Revoked errors
 	ErrTokenRevoked = errors.New("TOKEN_REVOKED")
 
+	// ErrGroupNotFound respesnts a 404 Not Found errors for groups
+	ErrGroupNotFound = errors.New("GROUP_NOT_FOUND")
+
 	// ErrRateLimitExceeded represents 429 Rate Limit Exceeded errors
 	ErrRateLimitExceeded = errors.New("RATE_LIMIT_EXCEEDED")
 
