@@ -218,6 +218,12 @@ func (p *AzureV2Provider) RefreshAccessToken(refreshToken string) (string, time.
 	return newToken.AccessToken, newToken.Expiry.Sub(time.Now()), nil
 }
 
+// Revoke does nothing for Azure AD, but needs to be declared to avoid a
+// not implemented error which would prevent clearing sessions on sign out.
+func (p *AzureV2Provider) Revoke(s *sessions.SessionState) error {
+	return nil
+}
+
 // ValidateSessionState attempts to validate the session state's access token.
 func (p *AzureV2Provider) ValidateSessionState(s *sessions.SessionState) bool {
 	// return validateToken(p, s.AccessToken, nil)
