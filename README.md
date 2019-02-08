@@ -25,6 +25,8 @@ Group membership can be required on a per-upstream basis.
 The main idea behind **sso** is a "double OAuth2" flow, where `sso-auth` is the
 OAuth2 provider for `sso-proxy` and Google is the OAuth2 provider for `sso-auth`.
 
+[sso](https://github.com/buzzfeed/sso) is built on top of Bitly’s open source [oauth2_proxy](https://github.com/bitly/oauth2_proxy)
+
 In a nutshell:
 
 - If a user visits an `sso-proxy`-protected service (`foo.sso.example.com`) and does not have a session cookie, they are redirected to `sso-auth` (`sso-auth.example.com`).
@@ -68,6 +70,10 @@ If you come across any security vulnerabilities with the **sso** repo or softwar
 ## Maintainers
 
 **sso** is actively maintained by the BuzzFeed Infrastructure teams.
+
+## Notable forks
+
+ - [pomerium](https://github.com/pomerium/pomerium) an identity-access proxy, inspired by BeyondCorp.
 
 [docker_hub]: https://hub.docker.com/r/buzzfeed/sso/
 [sso_survey]: https://docs.google.com/forms/d/e/1FAIpQLSeRjf66ZSpMkSASMbYebx6QvECYRj9nUevOhUF2huw53sE6_g/viewform
