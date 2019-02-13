@@ -118,6 +118,7 @@ func (p *OIDCProvider) Redeem(redirectURL, code string) (*sessions.SessionState,
 		AccessToken:     token.AccessToken,
 		RefreshToken:    token.RefreshToken,
 		RefreshDeadline: token.Expiry,
+		LifetimeDeadline: sessions.ExtendDeadline(p.SessionLifetimeTTL),
 		Email:           claims.Email,
 	}
 
