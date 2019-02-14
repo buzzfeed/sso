@@ -269,6 +269,12 @@ func newProvider(o *Options) (providers.Provider, error) {
 		}
 		azureProvider.Configure(o.AzureTenant)
 		singleFlightProvider = providers.NewSingleFlightProvider(azureProvider)
+	case providers.OIDCProviderName:
+		oidcProvider, err := providers.NewOIDCProvider(p, o.OIDCDiscoveryURL)
+		if err != nil {
+			return nil, err
+		}
+		singleFlightProvider = providers.NewSingleFlightProvider(oidcProvider)
 	case providers.GoogleProviderName:
 		if o.GoogleServiceAccountJSON != "" {
 			_, err := os.Open(o.GoogleServiceAccountJSON)
