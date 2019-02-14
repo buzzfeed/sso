@@ -171,3 +171,10 @@ func (p *OIDCProvider) RefreshAccessToken(refreshToken string) (string, time.Dur
 
 	return newToken.AccessToken, newToken.Expiry.Sub(time.Now()), nil
 }
+
+// ValidateSessionState attempts to validate the session state's access token.
+func (p *OIDCProvider) ValidateSessionState(s *sessions.SessionState) bool {
+	// return validateToken(p, s.AccessToken, nil)
+	// TODO Validate ID token
+	return true
+}
