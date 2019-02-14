@@ -66,6 +66,7 @@ type Options struct {
 	AzureTenant              string `envconfig:"AZURE_TENANT"`
 	GoogleAdminEmail         string `envconfig:"GOOGLE_ADMIN_EMAIL"`
 	GoogleServiceAccountJSON string `envconfig:"GOOGLE_SERVICE_ACCOUNT_JSON"`
+	OIDCDiscoveryURL         string `envconfig:"OIDC_DISCOVERY_URL"`
 
 	Footer string `envconfig:"FOOTER"`
 
