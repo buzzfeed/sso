@@ -57,7 +57,7 @@ type Options struct {
 	SkipAuthPreflight bool `envconfig:"SKIP_AUTH_PREFLIGHT"`
 
 	EmailDomains   []string `envconfig:"EMAIL_DOMAIN"`
-	EmailAddresses []string `envconfig:"EMAIL_ADDRESS"`
+	EmailAddresses []string `envconfig:"EMAIL_ADDRESSES"`
 	ClientID       string   `envconfig:"CLIENT_ID"`
 	ClientSecret   string   `envconfig:"CLIENT_SECRET"`
 

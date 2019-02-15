@@ -62,7 +62,7 @@ type Options struct {
 	Port int    `envconfig:"PORT" default:"4180"`
 
 	EmailDomains     []string `envconfig:"SSO_EMAIL_DOMAIN"`
-	EmailAddresses   []string `envconfig:"SSO_EMAIL_ADDRESS"`
+	EmailAddresses   []string `envconfig:"SSO_EMAIL_ADDRESSES"`
 	ProxyRootDomains []string `envconfig:"PROXY_ROOT_DOMAIN"`
 
 	GoogleAdminEmail         string `envconfig:"GOOGLE_ADMIN_EMAIL"`
