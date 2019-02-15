@@ -17,6 +17,7 @@ import (
 	"time"
 
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
+	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	"github.com/datadog/datadog-go/statsd"
 )
 
@@ -57,26 +58,34 @@ func init() {
 func NewSSOProvider(p *ProviderData, sc *statsd.Client) *SSOProvider {
 	p.ProviderName = "SSO"
 	base := p.ProviderURL
+	internalBase := base
+
+	if p.ProviderURLInternal != nil {
+		internalBase = p.ProviderURLInternal
+	}
+
 	p.SignInURL = base.ResolveReference(&url.URL{Path: "/sign_in"})
 	p.SignOutURL = base.ResolveReference(&url.URL{Path: "/sign_out"})
-	p.RedeemURL = base.ResolveReference(&url.URL{Path: "/redeem"})
-	p.RefreshURL = base.ResolveReference(&url.URL{Path: "/refresh"})
-	p.ValidateURL = base.ResolveReference(&url.URL{Path: "/validate"})
-	p.ProfileURL = base.ResolveReference(&url.URL{Path: "/profile"})
-	p.ProxyRedeemURL = p.ProxyProviderURL.ResolveReference(&url.URL{Path: "/redeem"})
+
+	p.RedeemURL = internalBase.ResolveReference(&url.URL{Path: "/redeem"})
+	p.RefreshURL = internalBase.ResolveReference(&url.URL{Path: "/refresh"})
+	p.ValidateURL = internalBase.ResolveReference(&url.URL{Path: "/validate"})
+	p.ProfileURL = internalBase.ResolveReference(&url.URL{Path: "/profile"})
+
 	return &SSOProvider{
 		ProviderData: p,
 		StatsdClient: sc,
 	}
 }
 
-func newRequest(method, url string, body io.Reader) (*http.Request, error) {
+func (p *SSOProvider) newRequest(method, url string, body io.Reader) (*http.Request, error) {
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", userAgentString)
 	req.Header.Set("Accept", "application/json")
+	req.Host = p.ProviderData.ProviderURL.Host
 	return req, nil
 }
 
@@ -88,7 +97,7 @@ func extendDeadline(ttl time.Duration) time.Time {
 	return time.Now().Add(ttl).Truncate(time.Second)
 }
 
-func (p *SSOProvider) withinGracePeriod(s *SessionState) bool {
+func (p *SSOProvider) withinGracePeriod(s *sessions.SessionState) bool {
 	if s.GracePeriodStart.IsZero() {
 		s.GracePeriodStart = time.Now()
 	}
@@ -96,7 +105,7 @@ func (p *SSOProvider) withinGracePeriod(s *SessionState) bool {
 }
 
 // Redeem takes a redirectURL and code and redeems the SessionState
-func (p *SSOProvider) Redeem(redirectURL, code string) (*SessionState, error) {
+func (p *SSOProvider) Redeem(redirectURL, code string) (*sessions.SessionState, error) {
 	if code == "" {
 		return nil, errors.New("missing code")
 	}
@@ -109,11 +118,10 @@ func (p *SSOProvider) Redeem(redirectURL, code string) (*SessionState, error) {
 	params.Add("code", code)
 	params.Add("grant_type", "authorization_code")
 
-	req, err := newRequest("POST", p.ProxyRedeemURL.String(), bytes.NewBufferString(params.Encode()))
+	req, err := p.newRequest("POST", p.RedeemURL.String(), bytes.NewBufferString(params.Encode()))
 	if err != nil {
 		return nil, err
 	}
-	req.Host = p.RedeemURL.Host
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -145,7 +153,7 @@ func (p *SSOProvider) Redeem(redirectURL, code string) (*SessionState, error) {
 	}
 
 	user := strings.Split(jsonResponse.Email, "@")[0]
-	return &SessionState{
+	return &sessions.SessionState{
 		AccessToken:  jsonResponse.AccessToken,
 		RefreshToken: jsonResponse.RefreshToken,
 
@@ -194,7 +202,7 @@ func (p *SSOProvider) UserGroups(email string, groups []string) ([]string, error
 	params.Add("client_id", p.ClientID)
 	params.Add("groups", strings.Join(groups, ","))
 
-	req, err := newRequest("GET", fmt.Sprintf("%s?%s", p.ProfileURL.String(), params.Encode()), nil)
+	req, err := p.newRequest("GET", fmt.Sprintf("%s?%s", p.ProfileURL.String(), params.Encode()), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +239,7 @@ func (p *SSOProvider) UserGroups(email string, groups []string) ([]string, error
 
 // RefreshSession takes a SessionState and allowedGroups and refreshes the session access token,
 // returns `true` on success, and `false` on error
-func (p *SSOProvider) RefreshSession(s *SessionState, allowedGroups []string) (bool, error) {
+func (p *SSOProvider) RefreshSession(s *sessions.SessionState, allowedGroups []string) (bool, error) {
 	logger := log.NewLogEntry()
 
 	if s.RefreshToken == "" {
@@ -284,7 +292,7 @@ func (p *SSOProvider) redeemRefreshToken(refreshToken string) (token string, exp
 	params.Add("client_secret", p.ClientSecret)
 	params.Add("refresh_token", refreshToken)
 	var req *http.Request
-	req, err = newRequest("POST", p.RefreshURL.String(), bytes.NewBufferString(params.Encode()))
+	req, err = p.newRequest("POST", p.RefreshURL.String(), bytes.NewBufferString(params.Encode()))
 	if err != nil {
 		return
 	}
@@ -323,13 +331,13 @@ func (p *SSOProvider) redeemRefreshToken(refreshToken string) (token string, exp
 }
 
 // ValidateSessionState takes a sessionState and allowedGroups and validates the session state
-func (p *SSOProvider) ValidateSessionState(s *SessionState, allowedGroups []string) bool {
+func (p *SSOProvider) ValidateSessionState(s *sessions.SessionState, allowedGroups []string) bool {
 	logger := log.NewLogEntry()
 
 	// we validate the user's access token is valid
 	params := url.Values{}
 	params.Add("client_id", p.ClientID)
-	req, err := newRequest("GET", fmt.Sprintf("%s?%s", p.ValidateURL.String(), params.Encode()), nil)
+	req, err := p.newRequest("GET", fmt.Sprintf("%s?%s", p.ValidateURL.String(), params.Encode()), nil)
 	if err != nil {
 		logger.WithUser(s.Email).Error(err, "error validating session state")
 		return false
@@ -389,14 +397,6 @@ func (p *SSOProvider) ValidateSessionState(s *SessionState, allowedGroups []stri
 	return true
 }
 
-// signRedirectURL signs the redirect url string, given a timestamp, and returns it
-func (p *SSOProvider) signRedirectURL(rawRedirect string, timestamp time.Time) string {
-	h := hmac.New(sha256.New, []byte(p.Data().ClientSecret))
-	h.Write([]byte(rawRedirect))
-	h.Write([]byte(fmt.Sprint(timestamp.Unix())))
-	return base64.URLEncoding.EncodeToString(h.Sum(nil))
-}
-
 // GetSignInURL with typical oauth parameters
 func (p *SSOProvider) GetSignInURL(redirectURL *url.URL, state string) *url.URL {
 	a := *p.Data().SignInURL
@@ -404,8 +404,8 @@ func (p *SSOProvider) GetSignInURL(redirectURL *url.URL, state string) *url.URL 
 	rawRedirect := redirectURL.String()
 	params, _ := url.ParseQuery(a.RawQuery)
 	params.Set("redirect_uri", rawRedirect)
-	params.Add("scope", p.Data().Scope)
-	params.Set("client_id", p.Data().ClientID)
+	params.Add("scope", p.Scope)
+	params.Set("client_id", p.ClientID)
 	params.Set("response_type", "code")
 	params.Add("state", state)
 	params.Set("ts", fmt.Sprint(now.Unix()))
@@ -417,6 +417,7 @@ func (p *SSOProvider) GetSignInURL(redirectURL *url.URL, state string) *url.URL 
 // GetSignOutURL creates and returns the sign out URL, given a redirectURL
 func (p *SSOProvider) GetSignOutURL(redirectURL *url.URL) *url.URL {
 	a := *p.Data().SignOutURL
+
 	now := time.Now()
 	rawRedirect := redirectURL.String()
 	params, _ := url.ParseQuery(a.RawQuery)
@@ -425,4 +426,12 @@ func (p *SSOProvider) GetSignOutURL(redirectURL *url.URL) *url.URL {
 	params.Set("sig", p.signRedirectURL(rawRedirect, now))
 	a.RawQuery = params.Encode()
 	return &a
+}
+
+// signRedirectURL signs the redirect url string, given a timestamp, and returns it
+func (p *SSOProvider) signRedirectURL(rawRedirect string, timestamp time.Time) string {
+	h := hmac.New(sha256.New, []byte(p.ClientSecret))
+	h.Write([]byte(rawRedirect))
+	h.Write([]byte(fmt.Sprint(timestamp.Unix())))
+	return base64.URLEncoding.EncodeToString(h.Sum(nil))
 }

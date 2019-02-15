@@ -1,6 +1,7 @@
 package sessions
 
 import (
+	"encoding/json"
 	"net/http"
 )
 
@@ -41,10 +42,15 @@ func (ms *MockSessionStore) ClearSession(http.ResponseWriter, *http.Request) {
 
 // LoadSession returns the session and a error
 func (ms *MockSessionStore) LoadSession(*http.Request) (*SessionState, error) {
+	if ms.Session == nil {
+		ms.LoadError = http.ErrNoCookie
+	}
 	return ms.Session, ms.LoadError
 }
 
 // SaveSession returns a save error.
-func (ms *MockSessionStore) SaveSession(http.ResponseWriter, *http.Request, *SessionState) error {
+func (ms *MockSessionStore) SaveSession(rw http.ResponseWriter, req *http.Request, s *SessionState) error {
+	marshaled, _ := json.Marshal(s)
+	ms.ResponseSession = string(marshaled)
 	return ms.SaveError
 }

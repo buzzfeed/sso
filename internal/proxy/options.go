@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	"github.com/buzzfeed/sso/internal/proxy/providers"
 
 	"github.com/datadog/datadog-go/statsd"
@@ -26,6 +27,7 @@ import (
 // SkipAuthPreflight - will skip authentication for OPTIONS requests, default false
 // EmailDomains - csv list of emails with the specified domain to authenticate. Use * to authenticate any email
 // EmailAddresses - []string - authenticate emails with the specified email address (may be given multiple times). Use * to authenticate any email
+// DefaultAllowedGroups - csv list of default allowed groups that are applied to authorize access to upstreams. Will be overriden by groups specified in upstream configs.
 // ClientID - the OAuth Client ID: ie: "123456.apps.googleusercontent.com"
 // ClientSecret - The OAuth Client Secret
 // DefaultUpstreamTimeout - the default time period to wait for a response from an upstream
@@ -37,6 +39,7 @@ import (
 // CookieExpire - expire timeframe for cookie
 // CookieSecure - set secure (HTTPS) cookie flag
 // CookieHTTPOnly - set HttpOnly cookie flag
+// PassAccessToken - send access token in the http headers
 // Provider - OAuth provider
 // Scope - OAuth scope specification
 // SessionLifetimeTTL - time to live for a session lifetime
@@ -48,18 +51,20 @@ import (
 type Options struct {
 	Port int `envconfig:"PORT" default:"4180"`
 
-	ProviderURLString      string `envconfig:"PROVIDER_URL"`
-	ProxyProviderURLString string `envconfig:"PROXY_PROVIDER_URL"`
-	UpstreamConfigsFile    string `envconfig:"UPSTREAM_CONFIGS"`
-	Cluster                string `envconfig:"CLUSTER"`
-	Scheme                 string `envconfig:"SCHEME" default:"https"`
+	ProviderURLString         string `envconfig:"PROVIDER_URL"`
+	ProviderURLInternalString string `envconfig:"PROVIDER_URL_INTERNAL"`
+	UpstreamConfigsFile       string `envconfig:"UPSTREAM_CONFIGS"`
+	Cluster                   string `envconfig:"CLUSTER"`
+	Scheme                    string `envconfig:"SCHEME" default:"https"`
 
 	SkipAuthPreflight bool `envconfig:"SKIP_AUTH_PREFLIGHT"`
 
-	EmailDomains   []string `envconfig:"EMAIL_DOMAIN"`
-	EmailAddresses []string `envconfig:"EMAIL_ADDRESSES"`
-	ClientID       string   `envconfig:"CLIENT_ID"`
-	ClientSecret   string   `envconfig:"CLIENT_SECRET"`
+	EmailDomains         []string `envconfig:"EMAIL_DOMAIN"`
+  EmailAddresses       []string `envconfig:"EMAIL_ADDRESSES"`
+	DefaultAllowedGroups []string `envconfig:"DEFAULT_ALLOWED_GROUPS"`
+
+	ClientID     string `envconfig:"CLIENT_ID"`
+	ClientSecret string `envconfig:"CLIENT_SECRET"`
 
 	DefaultUpstreamTimeout time.Duration `envconfig:"DEFAULT_UPSTREAM_TIMEOUT" default:"10s"`
 
@@ -73,6 +78,8 @@ type Options struct {
 	CookieSecure   bool          `envconfig:"COOKIE_SECURE" default:"true"`
 	CookieHTTPOnly bool          `envconfig:"COOKIE_HTTP_ONLY"`
 
+	PassAccessToken bool `envconfig:"PASS_ACCESS_TOKEN" default:"false"`
+
 	// These options allow for other providers besides Google, with potential overrides.
 	Provider string `envconfig:"PROVIDER" default:"google"`
 	Scope    string `envconfig:"SCOPE"`
@@ -85,6 +92,8 @@ type Options struct {
 
 	StatsdHost string `envconfig:"STATSD_HOST"`
 	StatsdPort int    `envconfig:"STATSD_PORT"`
+
+	RequestSigningKey string `envconfig:"REQUEST_SIGNATURE_KEY"`
 
 	StatsdClient *statsd.Client
 
@@ -108,6 +117,8 @@ func NewOptions() *Options {
 		SkipAuthPreflight:      false,
 		RequestLogging:         true,
 		DefaultUpstreamTimeout: time.Duration(1) * time.Second,
+		DefaultAllowedGroups:   []string{},
+		PassAccessToken:        false,
 	}
 }
 
@@ -128,9 +139,6 @@ func (o *Options) Validate() error {
 	}
 	if o.ProviderURLString == "" {
 		msgs = append(msgs, "missing setting: provider-url")
-	}
-	if o.ProxyProviderURLString == "" {
-		o.ProxyProviderURLString = o.ProviderURLString
 	}
 	if o.UpstreamConfigsFile == "" {
 		msgs = append(msgs, "missing setting: upstream-configs")
@@ -174,7 +182,12 @@ func (o *Options) Validate() error {
 			templateVars = o.testTemplateVars
 		}
 
-		o.upstreamConfigs, err = loadServiceConfigs(rawBytes, o.Cluster, o.Scheme, templateVars)
+		defaultUpstreamOptionsConfig := &OptionsConfig{
+			AllowedGroups: o.DefaultAllowedGroups,
+			Timeout:       o.DefaultUpstreamTimeout,
+		}
+
+		o.upstreamConfigs, err = loadServiceConfigs(rawBytes, o.Cluster, o.Scheme, templateVars, defaultUpstreamOptionsConfig)
 		if err != nil {
 			msgs = append(msgs, fmt.Sprintf("error parsing upstream configs file %s", err))
 		}
@@ -222,23 +235,27 @@ func parseProviderInfo(o *Options) error {
 		return errors.New("provider-url must include scheme and host")
 	}
 
-	proxyProviderURL, err := url.Parse(o.ProxyProviderURLString)
-	if err != nil {
-		return err
-	}
-	if proxyProviderURL.Scheme == "" || proxyProviderURL.Host == "" {
-		return errors.New("proxy provider url must include scheme and host")
+	var providerURLInternal *url.URL
+
+	if o.ProviderURLInternalString != "" {
+		providerURLInternal, err = url.Parse(o.ProviderURLInternalString)
+		if err != nil {
+			return err
+		}
+		if providerURLInternal.Scheme == "" || providerURLInternal.Host == "" {
+			return errors.New("proxy provider url must include scheme and host")
+		}
 	}
 
 	providerData := &providers.ProviderData{
-		ClientID:           o.ClientID,
-		ClientSecret:       o.ClientSecret,
-		ProviderURL:        providerURL,
-		ProxyProviderURL:   proxyProviderURL,
-		Scope:              o.Scope,
-		SessionLifetimeTTL: o.SessionLifetimeTTL,
-		SessionValidTTL:    o.SessionValidTTL,
-		GracePeriodTTL:     o.GracePeriodTTL,
+		ClientID:            o.ClientID,
+		ClientSecret:        o.ClientSecret,
+		ProviderURL:         providerURL,
+		ProviderURLInternal: providerURLInternal,
+		Scope:               o.Scope,
+		SessionLifetimeTTL:  o.SessionLifetimeTTL,
+		SessionValidTTL:     o.SessionValidTTL,
+		GracePeriodTTL:      o.GracePeriodTTL,
 	}
 
 	p := providers.New(o.Provider, providerData, o.StatsdClient)
@@ -286,4 +303,28 @@ func parseEnvironment(environ []string) map[string]string {
 		env[key] = split[1]
 	}
 	return env
+}
+
+// SetCookieStore sets the session and csrf stores as a functional option
+func SetCookieStore(opts *Options) func(*OAuthProxy) error {
+	return func(a *OAuthProxy) error {
+		cookieStore, err := sessions.NewCookieStore(opts.CookieName,
+			sessions.CreateMiscreantCookieCipher(opts.decodedCookieSecret),
+			func(c *sessions.CookieStore) error {
+				c.CookieDomain = opts.CookieDomain
+				c.CookieHTTPOnly = opts.CookieHTTPOnly
+				c.CookieExpire = opts.CookieExpire
+				c.CookieSecure = opts.CookieSecure
+				return nil
+			})
+
+		if err != nil {
+			return err
+		}
+
+		a.csrfStore = cookieStore
+		a.sessionStore = cookieStore
+		a.CookieCipher = cookieStore.CookieCipher
+		return nil
+	}
 }

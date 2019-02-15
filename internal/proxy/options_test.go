@@ -71,8 +71,6 @@ func TestDefaultProviderApiSettings(t *testing.T) {
 		p.SignOutURL.String())
 	testutil.Equal(t, "https://www.example.com/redeem",
 		p.RedeemURL.String())
-	testutil.Equal(t, "https://www.example.com/redeem",
-		p.ProxyRedeemURL.String())
 	testutil.Equal(t, "https://www.example.com/validate",
 		p.ValidateURL.String())
 	testutil.Equal(t, "https://www.example.com/profile",
@@ -82,12 +80,12 @@ func TestDefaultProviderApiSettings(t *testing.T) {
 
 func TestProviderURLValidation(t *testing.T) {
 	testCases := []struct {
-		name                           string
-		providerURLString              string
-		proxyProviderURLString         string
-		expectedError                  string
-		expectedProxyProviderURLString string
-		expectedSignInURL              string
+		name                              string
+		providerURLString                 string
+		providerURLInternalString         string
+		expectedError                     string
+		expectedProviderURLInternalString string
+		expectedSignInURL                 string
 	}{
 		{
 			name:              "http scheme preserved",
@@ -100,15 +98,15 @@ func TestProviderURLValidation(t *testing.T) {
 			expectedSignInURL: "https://provider.example.com/sign_in",
 		},
 		{
-			name:                           "proxy provider url string based on providerURL",
-			providerURLString:              "https://provider.example.com",
-			expectedProxyProviderURLString: "https://provider.example.com",
+			name:                              "proxy provider url string based on providerURL",
+			providerURLString:                 "https://provider.example.com",
+			expectedProviderURLInternalString: "",
 		},
 		{
-			name:                           "proxy provider url string based on proxyProviderURL",
-			providerURLString:              "https://provider.example.com",
-			proxyProviderURLString:         "https://provider-internal.example.com",
-			expectedProxyProviderURLString: "https://provider-internal.example.com",
+			name:                              "proxy provider url string based on proxyProviderURL",
+			providerURLString:                 "https://provider.example.com",
+			providerURLInternalString:         "https://provider-internal.example.com",
+			expectedProviderURLInternalString: "https://provider-internal.example.com",
 		},
 		{
 			name:              "scheme required",
@@ -136,7 +134,7 @@ func TestProviderURLValidation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			o := testOptions()
 			o.ProviderURLString = tc.providerURLString
-			o.ProxyProviderURLString = tc.proxyProviderURLString
+			o.ProviderURLInternalString = tc.providerURLInternalString
 			err := o.Validate()
 			if tc.expectedError != "" {
 				if err == nil {
@@ -148,8 +146,8 @@ func TestProviderURLValidation(t *testing.T) {
 			if tc.expectedSignInURL != "" {
 				testutil.Equal(t, o.provider.Data().SignInURL.String(), tc.expectedSignInURL)
 			}
-			if tc.expectedProxyProviderURLString != "" {
-				testutil.Equal(t, o.provider.Data().ProxyProviderURL.String(), tc.expectedProxyProviderURLString)
+			if tc.expectedProviderURLInternalString != "" {
+				testutil.Equal(t, o.provider.Data().ProviderURLInternal.String(), tc.expectedProviderURLInternalString)
 			}
 		})
 	}
@@ -182,4 +180,12 @@ func TestValidateCookieBadName(t *testing.T) {
 	err := o.Validate()
 	testutil.Equal(t, err.Error(), "Invalid configuration:\n"+
 		fmt.Sprintf("  invalid cookie name: %q", o.CookieName))
+}
+
+func TestPassAccessToken(t *testing.T) {
+	o := testOptions()
+	testutil.Equal(t, false, o.PassAccessToken)
+	o.PassAccessToken = true
+	testutil.Equal(t, nil, o.Validate())
+	testutil.Equal(t, true, o.PassAccessToken)
 }
