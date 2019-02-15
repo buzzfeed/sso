@@ -60,7 +60,7 @@ type Options struct {
 	SkipAuthPreflight bool `envconfig:"SKIP_AUTH_PREFLIGHT"`
 
 	EmailDomains         []string `envconfig:"EMAIL_DOMAIN"`
-  EmailAddresses       []string `envconfig:"EMAIL_ADDRESSES"`
+	EmailAddresses       []string `envconfig:"EMAIL_ADDRESSES"`
 	DefaultAllowedGroups []string `envconfig:"DEFAULT_ALLOWED_GROUPS"`
 
 	ClientID     string `envconfig:"CLIENT_ID"`
