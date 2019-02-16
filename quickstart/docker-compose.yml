@@ -27,6 +27,10 @@ services:
       # Allow any google account to log in for demo purposes
       - EMAIL_DOMAIN=*
 
+      # (Optional) Allow specific google email address to log in for demo purposes
+      # This overrides EMAIL_DOMAIN
+      # - EMAIL_ADDRESSES=*
+
       - UPSTREAM_CONFIGS=/sso/upstream_configs.yml
       - PROVIDER_URL=http://sso-auth.localtest.me
       - PROVIDER_URL_INTERNAL=http://host.docker.internal
@@ -67,6 +71,10 @@ services:
     environment:
       # Allow any google account to log in for demo purposes
       - SSO_EMAIL_DOMAIN=*
+
+      # (Optional) Allow specific google email address to log in for demo purposes
+      # This overrides SSO_EMAIL_DOMAIN
+      # - SSO_EMAIL_ADDRESSES=*
 
       - HOST=sso-auth.localtest.me
       - REDIRECT_URL=http://sso-auth.localtest.me
