@@ -2,20 +2,18 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/golang:1.10
+      - image: circleci/golang:1.11
     working_directory: /go/src/github.com/buzzfeed/sso
     steps:
+      - run:
+          name: Enable go modules
+          command: |
+            echo 'export GO111MODULE=on' >> $BASH_ENV
       - checkout
       - setup_remote_docker
       - run:
-          name: get lint
-          command: go get golang.org/x/lint/golint
-      - run:
-          name: install dependencies
-          command: |
-            cp Godeps /tmp/Godeps
-            cp gpm /tmp/gpm
-            cd /tmp && ./gpm install
+          name: get tools
+          command: make tools
       - run:
           name: copy source
           command: |
