@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/buzzfeed/sso/internal/pkg/aead"
@@ -145,14 +146,23 @@ func (u *UpstreamProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // upstreamTransport is used to ensure that upstreams cannot override the
-// security headers applied by sso_proxy
+// security headers applied by sso_proxy. Also includes functionality to rotate
+// http.Transport objects to ensure tcp connection reset deadlines are not exceeded
 type upstreamTransport struct {
-	transport *http.Transport
+	mux sync.Mutex
+
+	deadAfter     time.Time
+	resetDeadline time.Duration
+
+	transport          *http.Transport
+	insecureSkipVerify bool
 }
 
 // RoundTrip round trips the request and deletes security headers before returning the response.
 func (t *upstreamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	resp, err := t.transport.RoundTrip(req)
+	transport := t.getTransport()
+
+	resp, err := transport.RoundTrip(req)
 	if err != nil {
 		logger := log.NewLogEntry()
 		logger.Error(err, "error in upstreamTransport RoundTrip")
@@ -164,9 +174,14 @@ func (t *upstreamTransport) RoundTrip(req *http.Request) (*http.Response, error)
 	return resp, err
 }
 
-func newUpstreamTransport(insecureSkipVerify bool) *upstreamTransport {
-	return &upstreamTransport{
-		transport: &http.Transport{
+// getTransport gets either a cached http transport or allocates a new one
+func (t *upstreamTransport) getTransport() *http.Transport {
+	t.mux.Lock()
+	defer t.mux.Unlock()
+
+	if t.transport == nil || time.Now().After(t.deadAfter) {
+		t.deadAfter = time.Now().Add(t.resetDeadline)
+		t.transport = &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
 			DialContext: (&net.Dialer{
 				Timeout:   30 * time.Second,
@@ -176,17 +191,22 @@ func newUpstreamTransport(insecureSkipVerify bool) *upstreamTransport {
 			MaxIdleConns:          100,
 			IdleConnTimeout:       90 * time.Second,
 			TLSHandshakeTimeout:   10 * time.Second,
-			TLSClientConfig:       &tls.Config{InsecureSkipVerify: insecureSkipVerify},
+			TLSClientConfig:       &tls.Config{InsecureSkipVerify: t.insecureSkipVerify},
 			ExpectContinueTimeout: 1 * time.Second,
-		},
+		}
 	}
+
+	return t.transport
 }
 
 // NewReverseProxy creates a reverse proxy to a specified url.
 // It adds an X-Forwarded-Host header that is the request's host.
 func NewReverseProxy(to *url.URL, config *UpstreamConfig) *httputil.ReverseProxy {
 	proxy := httputil.NewSingleHostReverseProxy(to)
-	proxy.Transport = newUpstreamTransport(config.TLSSkipVerify)
+	proxy.Transport = &upstreamTransport{
+		resetDeadline:      config.ResetDeadline,
+		insecureSkipVerify: config.TLSSkipVerify,
+	}
 	director := proxy.Director
 	proxy.Director = func(req *http.Request) {
 		req.Header.Add("X-Forwarded-Host", req.Host)
@@ -203,7 +223,10 @@ func NewReverseProxy(to *url.URL, config *UpstreamConfig) *httputil.ReverseProxy
 // It adds an X-Forwarded-Host header to the the upstream's request.
 func NewRewriteReverseProxy(route *RewriteRoute, config *UpstreamConfig) *httputil.ReverseProxy {
 	proxy := &httputil.ReverseProxy{}
-	proxy.Transport = newUpstreamTransport(config.TLSSkipVerify)
+	proxy.Transport = &upstreamTransport{
+		resetDeadline:      config.ResetDeadline,
+		insecureSkipVerify: config.TLSSkipVerify,
+	}
 	proxy.Director = func(req *http.Request) {
 		// we do this to rewrite requests
 		rewritten := route.FromRegex.ReplaceAllString(req.Host, route.ToTemplate.Opaque)

@@ -56,6 +56,7 @@ type UpstreamConfig struct {
 	PreserveHost          bool
 	HMACAuth              hmacauth.HmacAuth
 	Timeout               time.Duration
+	ResetDeadline         time.Duration
 	FlushInterval         time.Duration
 	HeaderOverrides       map[string]string
 	SkipRequestSigning    bool
@@ -85,6 +86,7 @@ type OptionsConfig struct {
 	TLSSkipVerify      bool              `yaml:"tls_skip_verify"`
 	PreserveHost       bool              `yaml:"preserve_host"`
 	Timeout            time.Duration     `yaml:"timeout"`
+	ResetDeadline      time.Duration     `yaml:"reset_deadline"`
 	FlushInterval      time.Duration     `yaml:"flush_interval"`
 	SkipRequestSigning bool              `yaml:"skip_request_signing"`
 }
@@ -382,6 +384,7 @@ func parseOptionsConfig(proxy *UpstreamConfig, defaultOpts *OptionsConfig) error
 
 	proxy.AllowedGroups = dst.AllowedGroups
 	proxy.Timeout = dst.Timeout
+	proxy.ResetDeadline = dst.ResetDeadline
 	proxy.FlushInterval = dst.FlushInterval
 	proxy.HeaderOverrides = dst.HeaderOverrides
 	proxy.TLSSkipVerify = dst.TLSSkipVerify
