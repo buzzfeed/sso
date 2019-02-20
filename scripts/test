@@ -3,16 +3,28 @@ set -e
 
 cd $(dirname "$BASH_SOURCE[0]")/..
 
-echo "running gofmt ..."
-res=$(gofmt -d -s -e .)
+echo "running go fmt ..."
+res=$(go fmt ./...)
 if [ -n "$res" ]; then
   echo "$res"
   echo "gofmt failed..."
   exit 1
 fi
 
+git diff --exit-code 
+if [ "$?" -gt "0" ]; then
+  exit 1
+fi
+
+echo "running go mod vendor ..."
+go mod vendor
+git diff --exit-code
+if [ "$?" -gt "0" ]; then
+  exit 1
+fi
+
 echo "running golint ..."
-golint -set_exit_status ./...
+golint -set_exit_status cmd internal
 
 echo "running go vet ..."
 go vet ./...
