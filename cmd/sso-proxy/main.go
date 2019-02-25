@@ -32,7 +32,11 @@ func main() {
 	}
 
 	validator := func(p *proxy.OAuthProxy) error {
-		p.EmailValidator = options.NewEmailValidator(opts.EmailDomains)
+		if len(opts.EmailAddresses) != 0 {
+			p.EmailValidator = options.NewEmailAddressValidator(opts.EmailAddresses)
+		} else {
+			p.EmailValidator = options.NewEmailDomainValidator(opts.EmailDomains)
+		}
 		return nil
 	}
 
