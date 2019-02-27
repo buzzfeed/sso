@@ -454,7 +454,10 @@ func TestRoundTrip(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest("GET", tc.url, nil)
-			ut := newUpstreamTransport(false)
+			ut := &upstreamTransport{
+				insecureSkipVerify: false,
+				resetDeadline:      time.Duration(1) * time.Minute,
+			}
 			resp, err := ut.RoundTrip(req)
 			if err == nil && tc.expectedError {
 				t.Errorf("expected error but error was nil")

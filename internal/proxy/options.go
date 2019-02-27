@@ -31,6 +31,7 @@ import (
 // ClientID - the OAuth Client ID: ie: "123456.apps.googleusercontent.com"
 // ClientSecret - The OAuth Client Secret
 // DefaultUpstreamTimeout - the default time period to wait for a response from an upstream
+// DefaultUpstreamTCPResetDeadline - the default time period to wait for a response from an upstream
 // TCPWriteTimeout - http server tcp write timeout
 // TCPReadTimeout - http server tcp read timeout
 // CookieName - name of the cookie
@@ -66,7 +67,8 @@ type Options struct {
 	ClientID     string `envconfig:"CLIENT_ID"`
 	ClientSecret string `envconfig:"CLIENT_SECRET"`
 
-	DefaultUpstreamTimeout time.Duration `envconfig:"DEFAULT_UPSTREAM_TIMEOUT" default:"10s"`
+	DefaultUpstreamTimeout          time.Duration `envconfig:"DEFAULT_UPSTREAM_TIMEOUT" default:"10s"`
+	DefaultUpstreamTCPResetDeadline time.Duration `envconfig:"DEFAULT_UPSTREAM_TCP_RESET_DEADLINE" default:"60s"`
 
 	TCPWriteTimeout time.Duration `envconfig:"TCP_WRITE_TIMEOUT" default:"30s"`
 	TCPReadTimeout  time.Duration `envconfig:"TCP_READ_TIMEOUT" default:"30s"`
@@ -110,15 +112,19 @@ type Options struct {
 // NewOptions returns a new options struct
 func NewOptions() *Options {
 	return &Options{
-		CookieName:             "_sso_proxy",
-		CookieSecure:           true,
-		CookieHTTPOnly:         true,
-		CookieExpire:           time.Duration(168) * time.Hour,
-		SkipAuthPreflight:      false,
-		RequestLogging:         true,
-		DefaultUpstreamTimeout: time.Duration(1) * time.Second,
-		DefaultAllowedGroups:   []string{},
-		PassAccessToken:        false,
+		CookieName:     "_sso_proxy",
+		CookieSecure:   true,
+		CookieHTTPOnly: true,
+		CookieExpire:   time.Duration(168) * time.Hour,
+
+		SkipAuthPreflight: false,
+		RequestLogging:    true,
+
+		DefaultUpstreamTimeout:          time.Duration(1) * time.Second,
+		DefaultUpstreamTCPResetDeadline: time.Duration(1) * time.Minute,
+
+		DefaultAllowedGroups: []string{},
+		PassAccessToken:      false,
 	}
 }
 
@@ -185,6 +191,7 @@ func (o *Options) Validate() error {
 		defaultUpstreamOptionsConfig := &OptionsConfig{
 			AllowedGroups: o.DefaultAllowedGroups,
 			Timeout:       o.DefaultUpstreamTimeout,
+			ResetDeadline: o.DefaultUpstreamTCPResetDeadline,
 		}
 
 		o.upstreamConfigs, err = loadServiceConfigs(rawBytes, o.Cluster, o.Scheme, templateVars, defaultUpstreamOptionsConfig)
