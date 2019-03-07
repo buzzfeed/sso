@@ -2,16 +2,16 @@ package groups
 
 // MockCache is a mock of MemberSetCache that can be used for testing purposes
 type MockCache struct {
-	GetMembersFunc func(string) (MemberSet, bool)
-	Exists         bool
-	Updated        bool
-	UpdateError    error
-	Refreshed      bool
+	ListMembershipsFunc func(string) (MemberSet, bool)
+	Exists              bool
+	Updated             bool
+	UpdateError         error
+	Refreshed           bool
 }
 
 // Get returns the members and if the set exists
 func (mc *MockCache) Get(group string) (MemberSet, bool) {
-	return mc.GetMembersFunc(group)
+	return mc.ListMembershipsFunc(group)
 }
 
 // Update updates the cache

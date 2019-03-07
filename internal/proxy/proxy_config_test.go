@@ -79,7 +79,7 @@ func TestUpstreamConfigParsing(t *testing.T) {
 				"root_domain": "dev",
 				"cluster":     "sso",
 			}
-			gotConfigs, err := loadServiceConfigs(tc.rawConfig, "sso", "http", templateVars)
+			gotConfigs, err := loadServiceConfigs(tc.rawConfig, "sso", "http", templateVars, nil)
 			if tc.wantErr != nil {
 				if err != tc.wantErr {
 					t.Logf("got err %v", err)
@@ -121,7 +121,7 @@ func TestUpstreamConfigLoading(t *testing.T) {
   default:
     from: foo.{{cluster}}.{{root_domain}}
     to: foo-internal.{{cluster}}.{{root_domain}}
-`), "sso", "http", templateVars)
+`), "sso", "http", templateVars, nil)
 	if err != nil {
 		t.Fatalf("expected to parse upstream configs: %s", err)
 	}
@@ -166,7 +166,7 @@ func TestUpstreamConfigOverrides(t *testing.T) {
   sso:
     from: foo.{{cluster}}.{{root_domain}}
     to: foo-special.{{cluster}}.{{root_domain}}
-`), "sso", "http", templateVars)
+`), "sso", "http", templateVars, nil)
 	if err != nil {
 		t.Fatalf("expected to parse upstream configs: %s", err)
 	}
@@ -209,7 +209,7 @@ func TestUpstreamConfigSkipAuthRegex(t *testing.T) {
     options:
       skip_auth_regex:
         - ^\/github-webhook\/$
-`), "sso", "http", templateVars)
+`), "sso", "http", templateVars, nil)
 	if err != nil {
 		t.Fatalf("expected to parse upstream configs: %s", err)
 	}
@@ -245,7 +245,7 @@ func TestUpstreamConfigTimeout(t *testing.T) {
     to: foo-internal.{{cluster}}.{{root_domain}}
     options:
       timeout: 10s
-`), "sso", "http", templateVars)
+`), "sso", "http", templateVars, nil)
 	if err != nil {
 		t.Fatalf("expected to parse upstream configs: %s", err)
 	}
@@ -275,7 +275,7 @@ func TestUpstreamConfigFlushInterval(t *testing.T) {
     to: foo-internal.{{cluster}}.{{root_domain}}
     options:
       flush_interval: 100ms
-`), "sso", "http", templateVars)
+`), "sso", "http", templateVars, nil)
 	if err != nil {
 		t.Fatalf("expected to parse upstream configs: %s", err)
 	}
@@ -305,7 +305,7 @@ func TestUpstreamConfigPreserveHost(t *testing.T) {
     to: foo-internal.{{cluster}}.{{root_domain}}
     options:
       preserve_host: true
-`), "sso", "http", templateVars)
+`), "sso", "http", templateVars, nil)
 	if err != nil {
 		t.Fatalf("expected to parse upstream configs: %s", err)
 	}
@@ -338,7 +338,7 @@ func TestUpstreamConfigHeaderOverrides(t *testing.T) {
     options:
       header_overrides:
         X-Frame-Options: DENY
-`), "sso", "http", templateVars)
+`), "sso", "http", templateVars, nil)
 	if err != nil {
 		t.Fatalf("expected to parse upstream configs: %s", err)
 	}
@@ -447,7 +447,7 @@ func TestUpstreamConfigErrorParsing(t *testing.T) {
 				"root_domain": "dev",
 				"cluster":     "sso",
 			}
-			_, err := loadServiceConfigs(tc.Config, "sso", "http", templateVars)
+			_, err := loadServiceConfigs(tc.Config, "sso", "http", templateVars, nil)
 			if err == nil {
 				t.Fatalf("wanted error %v, got nil", tc.WantErr)
 			}
@@ -663,7 +663,7 @@ func TestUpstreamConfigRoutes(t *testing.T) {
 				"root_domain": "dev",
 				"cluster":     "sso",
 			}
-			gotConfigs, err := loadServiceConfigs(tc.rawConfig, "sso", "http", templateVars)
+			gotConfigs, err := loadServiceConfigs(tc.rawConfig, "sso", "http", templateVars, nil)
 			if tc.wantErr != nil {
 				if err != tc.wantErr {
 					t.Logf("got err %v", err)
@@ -947,7 +947,7 @@ func TestUpstreamConfigExtraRoutes(t *testing.T) {
 				"root_domain": "dev",
 				"cluster":     "sso",
 			}
-			gotConfigs, err := loadServiceConfigs(tc.rawConfig, "sso", "http", templateVars)
+			gotConfigs, err := loadServiceConfigs(tc.rawConfig, "sso", "http", templateVars, nil)
 			if tc.wantErr != nil {
 				if err != tc.wantErr {
 					t.Logf("got err %v", err)

@@ -24,6 +24,7 @@ import (
 // Host - string - The host that is in the header that is required on incoming requests
 // Port - string - Port to listen on
 // EmailDomains - []string - authenticate emails with the specified domain (may be given multiple times). Use * to authenticate any email
+// EmailAddresses - []string - authenticate emails with the specified email address (may be given multiple times). Use * to authenticate any email
 // ProxyRootDomains - []string - only redirect to specified proxy domains (may be given multiple times)
 // GoogleAdminEmail - string - the google admin to impersonate for api calls
 // GoogleServiceAccountJSON - string - the path to the service account json credentials
@@ -61,6 +62,7 @@ type Options struct {
 	Port int    `envconfig:"PORT" default:"4180"`
 
 	EmailDomains     []string `envconfig:"SSO_EMAIL_DOMAIN"`
+	EmailAddresses   []string `envconfig:"SSO_EMAIL_ADDRESSES"`
 	ProxyRootDomains []string `envconfig:"PROXY_ROOT_DOMAIN"`
 
 	GoogleAdminEmail         string `envconfig:"GOOGLE_ADMIN_EMAIL"`
@@ -154,8 +156,8 @@ func (o *Options) Validate() error {
 	if o.ClientSecret == "" {
 		msgs = append(msgs, "missing setting: client-secret")
 	}
-	if len(o.EmailDomains) == 0 {
-		msgs = append(msgs, "missing setting for email validation: email-domain required.\n      use email-domain=* to authorize all email addresses")
+	if len(o.EmailDomains) == 0 && len(o.EmailAddresses) == 0 {
+		msgs = append(msgs, "missing setting for email validation: email-domain or email-address required.\n      use email-domain=* to authorize all email addresses")
 	}
 	if len(o.ProxyRootDomains) == 0 {
 		msgs = append(msgs, "missing setting: proxy-root-domain")

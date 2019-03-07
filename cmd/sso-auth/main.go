@@ -33,7 +33,11 @@ func main() {
 	}
 
 	emailValidator := func(p *auth.Authenticator) error {
-		p.Validator = options.NewEmailValidator(opts.EmailDomains)
+		if len(opts.EmailAddresses) != 0 {
+			p.Validator = options.NewEmailAddressValidator(opts.EmailAddresses)
+		} else {
+			p.Validator = options.NewEmailDomainValidator(opts.EmailDomains)
+		}
 		return nil
 	}
 

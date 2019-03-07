@@ -56,6 +56,7 @@ type UpstreamConfig struct {
 	PreserveHost          bool
 	HMACAuth              hmacauth.HmacAuth
 	Timeout               time.Duration
+	ResetDeadline         time.Duration
 	FlushInterval         time.Duration
 	HeaderOverrides       map[string]string
 	SkipRequestSigning    bool
@@ -85,6 +86,7 @@ type OptionsConfig struct {
 	TLSSkipVerify      bool              `yaml:"tls_skip_verify"`
 	PreserveHost       bool              `yaml:"preserve_host"`
 	Timeout            time.Duration     `yaml:"timeout"`
+	ResetDeadline      time.Duration     `yaml:"reset_deadline"`
 	FlushInterval      time.Duration     `yaml:"flush_interval"`
 	SkipRequestSigning bool              `yaml:"skip_request_signing"`
 }
@@ -103,7 +105,7 @@ func (e *ErrParsingConfig) Error() string {
 	return e.Message
 }
 
-func loadServiceConfigs(raw []byte, cluster, scheme string, configVars map[string]string) ([]*UpstreamConfig, error) {
+func loadServiceConfigs(raw []byte, cluster, scheme string, configVars map[string]string, defaultOpts *OptionsConfig) ([]*UpstreamConfig, error) {
 	// We fill in all templated values and resolve overrides
 	rawTemplated := resolveTemplates(raw, configVars)
 
@@ -181,7 +183,7 @@ func loadServiceConfigs(raw []byte, cluster, scheme string, configVars map[strin
 
 	// We validate OptionsConfig
 	for _, proxy := range configs {
-		err := parseOptionsConfig(proxy)
+		err := parseOptionsConfig(proxy, defaultOpts)
 		if err != nil {
 			return nil, err
 		}
@@ -347,13 +349,29 @@ func resolveTemplates(raw []byte, templateVars map[string]string) []byte {
 	return []byte(rawString)
 }
 
-func parseOptionsConfig(proxy *UpstreamConfig) error {
-	if proxy.RouteConfig.Options == nil {
-		return nil
+func parseOptionsConfig(proxy *UpstreamConfig, defaultOpts *OptionsConfig) error {
+	dst := &OptionsConfig{}
+
+	if defaultOpts == nil {
+		defaultOpts = &OptionsConfig{}
+	}
+
+	// Override empty with defaults
+	err := mergo.Merge(dst, *defaultOpts, mergo.WithOverride)
+	if err != nil {
+		return err
+	}
+
+	// Override defaults with specified
+	if proxy.RouteConfig.Options != nil {
+		err := mergo.Merge(dst, proxy.RouteConfig.Options, mergo.WithOverride)
+		if err != nil {
+			return err
+		}
 	}
 
 	// We compile all the regexes in SkipAuth Regex
-	for _, uncompiled := range proxy.RouteConfig.Options.SkipAuthRegex {
+	for _, uncompiled := range dst.SkipAuthRegex {
 		compiled, err := regexp.Compile(uncompiled)
 		if err != nil {
 			return &ErrParsingConfig{
@@ -364,13 +382,14 @@ func parseOptionsConfig(proxy *UpstreamConfig) error {
 		proxy.SkipAuthCompiledRegex = append(proxy.SkipAuthCompiledRegex, compiled)
 	}
 
-	proxy.AllowedGroups = proxy.RouteConfig.Options.AllowedGroups
-	proxy.Timeout = proxy.RouteConfig.Options.Timeout
-	proxy.FlushInterval = proxy.RouteConfig.Options.FlushInterval
-	proxy.HeaderOverrides = proxy.RouteConfig.Options.HeaderOverrides
-	proxy.TLSSkipVerify = proxy.RouteConfig.Options.TLSSkipVerify
-	proxy.PreserveHost = proxy.RouteConfig.Options.PreserveHost
-	proxy.SkipRequestSigning = proxy.RouteConfig.Options.SkipRequestSigning
+	proxy.AllowedGroups = dst.AllowedGroups
+	proxy.Timeout = dst.Timeout
+	proxy.ResetDeadline = dst.ResetDeadline
+	proxy.FlushInterval = dst.FlushInterval
+	proxy.HeaderOverrides = dst.HeaderOverrides
+	proxy.TLSSkipVerify = dst.TLSSkipVerify
+	proxy.PreserveHost = dst.PreserveHost
+	proxy.SkipRequestSigning = dst.SkipRequestSigning
 
 	proxy.RouteConfig.Options = nil
 

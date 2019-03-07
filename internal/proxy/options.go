@@ -26,9 +26,12 @@ import (
 // Scheme - the default scheme, used for upstream configs
 // SkipAuthPreflight - will skip authentication for OPTIONS requests, default false
 // EmailDomains - csv list of emails with the specified domain to authenticate. Use * to authenticate any email
+// EmailAddresses - []string - authenticate emails with the specified email address (may be given multiple times). Use * to authenticate any email
+// DefaultAllowedGroups - csv list of default allowed groups that are applied to authorize access to upstreams. Will be overriden by groups specified in upstream configs.
 // ClientID - the OAuth Client ID: ie: "123456.apps.googleusercontent.com"
 // ClientSecret - The OAuth Client Secret
 // DefaultUpstreamTimeout - the default time period to wait for a response from an upstream
+// DefaultUpstreamTCPResetDeadline - the default time period to wait for a response from an upstream
 // TCPWriteTimeout - http server tcp write timeout
 // TCPReadTimeout - http server tcp read timeout
 // CookieName - name of the cookie
@@ -57,11 +60,15 @@ type Options struct {
 
 	SkipAuthPreflight bool `envconfig:"SKIP_AUTH_PREFLIGHT"`
 
-	EmailDomains []string `envconfig:"EMAIL_DOMAIN"`
-	ClientID     string   `envconfig:"CLIENT_ID"`
-	ClientSecret string   `envconfig:"CLIENT_SECRET"`
+	EmailDomains         []string `envconfig:"EMAIL_DOMAIN"`
+	EmailAddresses       []string `envconfig:"EMAIL_ADDRESSES"`
+	DefaultAllowedGroups []string `envconfig:"DEFAULT_ALLOWED_GROUPS"`
 
-	DefaultUpstreamTimeout time.Duration `envconfig:"DEFAULT_UPSTREAM_TIMEOUT" default:"10s"`
+	ClientID     string `envconfig:"CLIENT_ID"`
+	ClientSecret string `envconfig:"CLIENT_SECRET"`
+
+	DefaultUpstreamTimeout          time.Duration `envconfig:"DEFAULT_UPSTREAM_TIMEOUT" default:"10s"`
+	DefaultUpstreamTCPResetDeadline time.Duration `envconfig:"DEFAULT_UPSTREAM_TCP_RESET_DEADLINE" default:"60s"`
 
 	TCPWriteTimeout time.Duration `envconfig:"TCP_WRITE_TIMEOUT" default:"30s"`
 	TCPReadTimeout  time.Duration `envconfig:"TCP_READ_TIMEOUT" default:"30s"`
@@ -105,14 +112,19 @@ type Options struct {
 // NewOptions returns a new options struct
 func NewOptions() *Options {
 	return &Options{
-		CookieName:             "_sso_proxy",
-		CookieSecure:           true,
-		CookieHTTPOnly:         true,
-		CookieExpire:           time.Duration(168) * time.Hour,
-		SkipAuthPreflight:      false,
-		RequestLogging:         true,
-		DefaultUpstreamTimeout: time.Duration(1) * time.Second,
-		PassAccessToken:        false,
+		CookieName:     "_sso_proxy",
+		CookieSecure:   true,
+		CookieHTTPOnly: true,
+		CookieExpire:   time.Duration(168) * time.Hour,
+
+		SkipAuthPreflight: false,
+		RequestLogging:    true,
+
+		DefaultUpstreamTimeout:          time.Duration(1) * time.Second,
+		DefaultUpstreamTCPResetDeadline: time.Duration(1) * time.Minute,
+
+		DefaultAllowedGroups: []string{},
+		PassAccessToken:      false,
 	}
 }
 
@@ -146,8 +158,8 @@ func (o *Options) Validate() error {
 	if o.ClientSecret == "" {
 		msgs = append(msgs, "missing setting: client-secret")
 	}
-	if len(o.EmailDomains) == 0 {
-		msgs = append(msgs, "missing setting: email-domain")
+	if len(o.EmailDomains) == 0 && len(o.EmailAddresses) == 0 {
+		msgs = append(msgs, "missing setting: email-domain or email-address")
 	}
 
 	if o.StatsdHost == "" {
@@ -176,7 +188,13 @@ func (o *Options) Validate() error {
 			templateVars = o.testTemplateVars
 		}
 
-		o.upstreamConfigs, err = loadServiceConfigs(rawBytes, o.Cluster, o.Scheme, templateVars)
+		defaultUpstreamOptionsConfig := &OptionsConfig{
+			AllowedGroups: o.DefaultAllowedGroups,
+			Timeout:       o.DefaultUpstreamTimeout,
+			ResetDeadline: o.DefaultUpstreamTCPResetDeadline,
+		}
+
+		o.upstreamConfigs, err = loadServiceConfigs(rawBytes, o.Cluster, o.Scheme, templateVars, defaultUpstreamOptionsConfig)
 		if err != nil {
 			msgs = append(msgs, fmt.Sprintf("error parsing upstream configs file %s", err))
 		}
