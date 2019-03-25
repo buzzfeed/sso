@@ -7,9 +7,9 @@ require (
 	github.com/imdario/mergo v0.3.7
 	github.com/kelseyhightower/envconfig v1.3.0
 	github.com/miscreant/miscreant-go v0.0.0-20181010193435-325cbd69228b
-	github.com/rakyll/statik v0.1.5
+	github.com/rakyll/statik v0.1.6
 	github.com/sirupsen/logrus v1.3.0
-	golang.org/x/lint v0.0.0-20190227174305-5b3e6a55c961 // indirect
+	golang.org/x/lint v0.0.0-20190313153728-d0100b6bd8b3 // indirect
 	golang.org/x/oauth2 v0.0.0-20190130055435-99b60b757ec1
 	google.golang.org/api v0.1.0
 	gopkg.in/yaml.v2 v2.2.2
