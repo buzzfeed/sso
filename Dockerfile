@@ -7,6 +7,7 @@ FROM golang:1.11 AS build
 
 ENV GOFLAGS='-ldflags=-s -ldflags=-w'
 ENV CGO_ENABLED=0
+ENV GO111MODULE=on
 
 WORKDIR /go/src/github.com/buzzfeed/sso
 
