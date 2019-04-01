@@ -39,7 +39,7 @@ type Provider interface {
 	ValidateSessionState(*sessions.SessionState) bool
 	GetSignInURL(redirectURI, finalRedirect string) string
 	RefreshSessionIfNeeded(*sessions.SessionState) (bool, error)
-	ValidateGroupMembership(string, []string) ([]string, error)
+	ValidateGroupMembership(string, []string, string) ([]string, error)
 	Revoke(*sessions.SessionState) error
 	RefreshAccessToken(string) (string, time.Duration, error)
 	Stop()

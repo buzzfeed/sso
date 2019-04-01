@@ -168,7 +168,7 @@ func (p *SSOProvider) Redeem(redirectURL, code string) (*sessions.SessionState, 
 
 // ValidateGroup does a GET request to the profile url and returns true if the user belongs to
 // an authorized group.
-func (p *SSOProvider) ValidateGroup(email string, allowedGroups []string) ([]string, bool, error) {
+func (p *SSOProvider) ValidateGroup(email string, allowedGroups []string, accessToken string) ([]string, bool, error) {
 	logger := log.NewLogEntry()
 
 	logger.WithUser(email).WithAllowedGroups(allowedGroups).Info("validating groups")
@@ -177,7 +177,7 @@ func (p *SSOProvider) ValidateGroup(email string, allowedGroups []string) ([]str
 		return inGroups, true, nil
 	}
 
-	userGroups, err := p.UserGroups(email, allowedGroups)
+	userGroups, err := p.UserGroups(email, allowedGroups, accessToken)
 	if err != nil {
 		return nil, false, err
 	}
@@ -196,7 +196,7 @@ func (p *SSOProvider) ValidateGroup(email string, allowedGroups []string) ([]str
 }
 
 // UserGroups takes an email and returns the UserGroups for that email
-func (p *SSOProvider) UserGroups(email string, groups []string) ([]string, error) {
+func (p *SSOProvider) UserGroups(email string, groups []string, accessToken string) ([]string, error) {
 	params := url.Values{}
 	params.Add("email", email)
 	params.Add("client_id", p.ClientID)
@@ -206,7 +206,10 @@ func (p *SSOProvider) UserGroups(email string, groups []string) ([]string, error
 	if err != nil {
 		return nil, err
 	}
+
 	req.Header.Set("X-Client-Secret", p.ClientSecret)
+	req.Header.Set("X-Access-Token", accessToken)
+
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -260,7 +263,7 @@ func (p *SSOProvider) RefreshSession(s *sessions.SessionState, allowedGroups []s
 		return false, err
 	}
 
-	inGroups, validGroup, err := p.ValidateGroup(s.Email, allowedGroups)
+	inGroups, validGroup, err := p.ValidateGroup(s.Email, allowedGroups, newToken)
 	if err != nil {
 		// When we detect that the auth provider is not explicitly denying
 		// authentication, and is merely unavailable, we refresh and continue
@@ -342,6 +345,7 @@ func (p *SSOProvider) ValidateSessionState(s *sessions.SessionState, allowedGrou
 		logger.WithUser(s.Email).Error(err, "error validating session state")
 		return false
 	}
+
 	req.Header.Set("X-Client-Secret", p.ClientSecret)
 	req.Header.Set("X-Access-Token", s.AccessToken)
 
@@ -367,7 +371,7 @@ func (p *SSOProvider) ValidateSessionState(s *sessions.SessionState, allowedGrou
 	}
 
 	// check the user is in the proper group(s)
-	inGroups, validGroup, err := p.ValidateGroup(s.Email, allowedGroups)
+	inGroups, validGroup, err := p.ValidateGroup(s.Email, allowedGroups, s.AccessToken)
 	if err != nil {
 		// When we detect that the auth provider is not explicitly denying
 		// authentication, and is merely unavailable, we validate and continue

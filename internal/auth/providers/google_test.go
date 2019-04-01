@@ -392,7 +392,7 @@ func TestValidateGroupMembers(t *testing.T) {
 				GroupsCache:  &groups.MockCache{ListMembershipsFunc: tc.listMembershipsFunc, Refreshed: true},
 			}
 
-			groups, err := p.ValidateGroupMembership("email", tc.inputAllowedGroups)
+			groups, err := p.ValidateGroupMembership("email", tc.inputAllowedGroups, "accessToken")
 
 			if err != nil {
 				if tc.expectedErrorString != err.Error() {

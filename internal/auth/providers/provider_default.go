@@ -133,7 +133,7 @@ func (p *ProviderData) Revoke(s *sessions.SessionState) error {
 }
 
 // ValidateGroupMembership returns an ErrNotImplemented.
-func (p *ProviderData) ValidateGroupMembership(string, []string) ([]string, error) {
+func (p *ProviderData) ValidateGroupMembership(string, []string, string) ([]string, error) {
 	return nil, ErrNotImplemented
 }
 
