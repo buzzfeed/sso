@@ -199,7 +199,7 @@ func TestSSOProviderGroups(t *testing.T) {
 			}
 			p.ProfileURL, server = newTestServer(profileStatus, body)
 			defer server.Close()
-			inGroups, valid, err := p.ValidateGroup(tc.Email, tc.ProxyGroupIds)
+			inGroups, valid, err := p.ValidateGroup(tc.Email, tc.ProxyGroupIds, "accessToken")
 			testutil.Equal(t, tc.ExpectError, err)
 			if err == nil {
 				testutil.Equal(t, tc.ExpectedValid, valid)

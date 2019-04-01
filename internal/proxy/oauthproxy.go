@@ -810,7 +810,7 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 	}
 	allowedGroups := route.upstreamConfig.AllowedGroups
 
-	inGroups, validGroup, err := p.provider.ValidateGroup(session.Email, allowedGroups)
+	inGroups, validGroup, err := p.provider.ValidateGroup(session.Email, allowedGroups, session.AccessToken)
 	if err != nil {
 		tags = append(tags, "error:user_group_failed")
 		p.StatsdClient.Incr("provider_error", tags, 1.0)
