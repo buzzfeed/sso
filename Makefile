@@ -29,4 +29,8 @@ imagepush:
 	docker build -t buzzfeed/sso-dev:$(commit) .
 	docker push buzzfeed/sso-dev:$(commit)
 
+releasepush:
+	docker build -t buzzfeed/sso:$(version) .
+	docker push buzzfeed/sso:$(version)
+
 .PHONY: dist/sso-auth dist/sso-proxy tools
