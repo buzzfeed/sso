@@ -30,6 +30,8 @@ var (
 const (
 	// GoogleProviderName identifies the Google provider
 	GoogleProviderName = "google"
+	// OktaProviderName identities the Okta provider
+	OktaProviderName = "okta"
 )
 
 // Provider is an interface exposing functions necessary to authenticate with a given provider.

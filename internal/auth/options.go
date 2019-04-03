@@ -16,9 +16,10 @@ import (
 )
 
 // Options are config options that can be set by environment variables
-// RedirectURL 	string - the OAuth Redirect URL. ie: \"https://internalapp.yourcompany.com/oauth2/callback\
-// ClientID - 	string - the OAuth ClientID ie "123456.apps.googleusercontent.com"
+// RedirectURL - string - the OAuth Redirect URL. ie: \"https://internalapp.yourcompany.com/oauth2/callback\
+// ClientID - string - the OAuth ClientID ie "123456.apps.googleusercontent.com"
 // ClientSecret string - the OAuth Client Secret
+// OrgName - string - if using Okta as the provider, the Okta domain to use
 // ProxyClientID - string - the client id that matches the sso proxy client id
 // ProxyClientSecret - string - the client secret that matches the sso proxy client secret
 // Host - string - The host that is in the header that is required on incoming requests
@@ -42,8 +43,10 @@ import (
 // PassUserHeaders - bool (default true) - pass X-Forwarded-User and X-Forwarded-Email information to upstream
 // SetXAuthRequest - set X-Auth-Request-User and X-Auth-Request-Email response headers (useful in Nginx auth_request mode)
 // Provider - provider name
+// ProviderServerID - string - if using Okta as the provider, the authorisation server ID (defaults to 'default')
 // SignInURL - provider sign in endpoint
 // RedeemURL - provider token redemption endpoint
+// RevokeURL - provider revoke token endpoint
 // ProfileURL - provider profile access endpoint
 // ValidateURL - access token validation endpoint
 // Scope - Oauth scope specification
@@ -67,6 +70,8 @@ type Options struct {
 
 	GoogleAdminEmail         string `envconfig:"GOOGLE_ADMIN_EMAIL"`
 	GoogleServiceAccountJSON string `envconfig:"GOOGLE_SERVICE_ACCOUNT_JSON"`
+
+	OrgURL string `envconfig:"OKTA_ORG_URL"`
 
 	Footer string `envconfig:"FOOTER"`
 
@@ -93,9 +98,12 @@ type Options struct {
 	SetXAuthRequest    bool `envconfig:"SET_XAUTHREQUEST" default:"false"`
 
 	// These options allow for other providers besides Google, with potential overrides.
-	Provider       string `envconfig:"PROVIDER" default:"google"`
+	Provider         string `envconfig:"PROVIDER" default:"google"`
+	ProviderServerID string `envconfig:"PROVIDER_SERVER_ID" default:"default"`
+
 	SignInURL      string `envconfig:"SIGNIN_URL"`
 	RedeemURL      string `envconfig:"REDEEM_URL"`
+	RevokeURL      string `envconfig:"REVOKE_URL"`
 	ProfileURL     string `envconfig:"PROFILE_URL"`
 	ValidateURL    string `envconfig:"VALIDATE_URL"`
 	Scope          string `envconfig:"SCOPE"`
@@ -172,6 +180,13 @@ func (o *Options) Validate() error {
 		msgs = append(msgs, "missing setting: required-host-header")
 	}
 
+	if len(o.OrgURL) > 0 {
+		o.OrgURL = strings.Trim(o.OrgURL, `"`)
+	}
+	if len(o.ProviderServerID) > 0 {
+		o.ProviderServerID = strings.Trim(o.ProviderServerID, `"`)
+	}
+
 	o.redirectURL, msgs = parseURL(o.RedirectURL, "redirect", msgs)
 
 	msgs = validateEndpoints(o, msgs)
@@ -222,6 +237,7 @@ func (o *Options) Validate() error {
 func validateEndpoints(o *Options, msgs []string) []string {
 	_, msgs = parseURL(o.SignInURL, "signin", msgs)
 	_, msgs = parseURL(o.RedeemURL, "redeem", msgs)
+	_, msgs = parseURL(o.RevokeURL, "revoke", msgs)
 	_, msgs = parseURL(o.ProfileURL, "profile", msgs)
 	_, msgs = parseURL(o.ValidateURL, "validate", msgs)
 
@@ -246,13 +262,16 @@ func newProvider(o *Options) (providers.Provider, error) {
 	}
 
 	var err error
+
 	if p.SignInURL, err = url.Parse(o.SignInURL); err != nil {
 		return nil, err
 	}
 	if p.RedeemURL, err = url.Parse(o.RedeemURL); err != nil {
 		return nil, err
 	}
-	p.RevokeURL = &url.URL{}
+	if p.RevokeURL, err = url.Parse(o.RevokeURL); err != nil {
+		return nil, err
+	}
 	if p.ProfileURL, err = url.Parse(o.ProfileURL); err != nil {
 		return nil, err
 	}
@@ -277,6 +296,12 @@ func newProvider(o *Options) (providers.Provider, error) {
 		googleProvider.GroupsCache = cache
 		o.GroupsCacheStopFunc = cache.Stop
 		singleFlightProvider = providers.NewSingleFlightProvider(googleProvider)
+	case providers.OktaProviderName:
+		oktaProvider, err := providers.NewOktaProvider(p, o.OrgURL, o.ProviderServerID)
+		if err != nil {
+			return nil, err
+		}
+		singleFlightProvider = providers.NewSingleFlightProvider(oktaProvider)
 	default:
 		return nil, fmt.Errorf("unimplemented provider: %q", o.Provider)
 	}

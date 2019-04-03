@@ -408,3 +408,54 @@ func TestValidateGroupMembers(t *testing.T) {
 		})
 	}
 }
+
+func TestGoogleProviderValidateSession(t *testing.T) {
+	testCases := []struct {
+		name          string
+		resp          oktaProviderValidateSessionResponse
+		httpStatus    int
+		expectedError bool
+		sessionState  *sessions.SessionState
+	}{
+		{
+			name: "valid session state",
+			sessionState: &sessions.SessionState{
+				AccessToken: "a1234",
+			},
+			httpStatus:    http.StatusOK,
+			expectedError: false,
+		},
+		{
+			name: "invalid session state",
+			sessionState: &sessions.SessionState{
+				AccessToken: "a1234",
+			},
+			httpStatus:    http.StatusBadRequest,
+			expectedError: true,
+		},
+		{
+			name:          "missing access token",
+			sessionState:  &sessions.SessionState{},
+			expectedError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := newGoogleProvider(nil)
+			body, err := json.Marshal(tc.resp)
+			testutil.Equal(t, nil, err)
+			var server *httptest.Server
+			p.ValidateURL, server = newProviderServer(body, tc.httpStatus)
+			defer server.Close()
+
+			resp := p.ValidateSessionState(tc.sessionState)
+			if tc.expectedError && resp {
+				t.Errorf("expected false but returned as true")
+			}
+			if !tc.expectedError && !resp {
+				t.Errorf("expected true but returned as false")
+			}
+		})
+	}
+}

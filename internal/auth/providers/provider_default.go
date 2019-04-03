@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
@@ -114,7 +115,51 @@ func (p *ProviderData) ValidateGroup(email string) bool {
 
 // ValidateSessionState attempts to validate the session state's access token.
 func (p *ProviderData) ValidateSessionState(s *sessions.SessionState) bool {
-	return validateToken(p, s.AccessToken, nil)
+	logger := log.NewLogEntry()
+	if s.AccessToken == "" {
+		return false
+	}
+
+	form := url.Values{}
+	form.Add("token", s.AccessToken)
+	form.Add("token_type_hint", "access_token")
+	form.Add("client_id", p.ClientID)
+	form.Add("client_secret", p.ClientSecret)
+
+	var req *http.Request
+	req, err := http.NewRequest("POST", p.ValidateURL.String(), strings.NewReader(form.Encode()))
+	if err != nil {
+		return false
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	var resp *http.Response
+	resp, err = httpClient.Do(req)
+	if err != nil {
+		return false
+	}
+	var body []byte
+	_, err = ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return false
+	}
+
+	if resp.StatusCode != 200 {
+		logger.WithHTTPStatus(resp.StatusCode).WithRedeemURL(
+			p.ValidateURL.String()).WithResponseBody(body).Info()
+		switch resp.StatusCode {
+		case 400:
+			err = ErrBadRequest
+		case 429:
+			err = ErrRateLimitExceeded
+		default:
+			err = ErrServiceUnavailable
+		}
+		return false
+	}
+
+	return true
 }
 
 // RefreshSessionIfNeeded refreshes a session
