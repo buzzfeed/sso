@@ -32,7 +32,7 @@ import (
 // ClientSecret - The OAuth Client Secret
 // DefaultUpstreamTimeout - the default time period to wait for a response from an upstream
 // DefaultUpstreamTCPResetDeadline - the default time period to wait for a response from an upstream
-// TCPWriteTimeout - http server tcp write timeout
+// TCPWriteTimeout - http server tcp write timeout - set to: max(default value specified, max(upstream timeouts))
 // TCPReadTimeout - http server tcp read timeout
 // CookieName - name of the cookie
 // CookieSecret - the seed string for secure cookies (optionally base64 encoded)
@@ -197,6 +197,14 @@ func (o *Options) Validate() error {
 		o.upstreamConfigs, err = loadServiceConfigs(rawBytes, o.Cluster, o.Scheme, templateVars, defaultUpstreamOptionsConfig)
 		if err != nil {
 			msgs = append(msgs, fmt.Sprintf("error parsing upstream configs file %s", err))
+		}
+	}
+
+	if o.upstreamConfigs != nil {
+		for _, uc := range o.upstreamConfigs {
+			if uc.Timeout > o.TCPWriteTimeout {
+				o.TCPWriteTimeout = uc.Timeout
+			}
 		}
 	}
 
