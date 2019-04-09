@@ -796,13 +796,20 @@ func (p *Authenticator) GetProfile(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	accessToken := req.Header.Get("X-Access-Token")
+	if accessToken == "" {
+		// TODO: This should be an error in the future, but is OK to be missing for now
+		// we track an error to see observe how often this occurs
+		p.StatsdClient.Incr("application_error", append(tags, "error:missing_access_token"), 1.0)
+	}
+
 	groupsFormValue := req.FormValue("groups")
 	allowedGroups := []string{}
 	if groupsFormValue != "" {
 		allowedGroups = strings.Split(groupsFormValue, ",")
 	}
 
-	groups, err := p.provider.ValidateGroupMembership(email, allowedGroups)
+	groups, err := p.provider.ValidateGroupMembership(email, allowedGroups, accessToken)
 	if err != nil {
 		tags = append(tags, "error:groups_resource")
 		p.StatsdClient.Incr("provider_error", tags, 1.0)

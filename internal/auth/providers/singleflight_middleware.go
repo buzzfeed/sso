@@ -120,11 +120,11 @@ func (p *SingleFlightProvider) RefreshSessionIfNeeded(s *sessions.SessionState) 
 }
 
 // ValidateGroupMembership wraps the provider's GroupsResource function in a single flight call.
-func (p *SingleFlightProvider) ValidateGroupMembership(email string, allowedGroups []string) ([]string, error) {
+func (p *SingleFlightProvider) ValidateGroupMembership(email string, allowedGroups []string, accessToken string) ([]string, error) {
 	sort.Strings(allowedGroups)
 	response, err := p.do("ValidateGroupMembership", fmt.Sprintf("%s:%s", email, strings.Join(allowedGroups, ",")),
 		func() (interface{}, error) {
-			return p.provider.ValidateGroupMembership(email, allowedGroups)
+			return p.provider.ValidateGroupMembership(email, allowedGroups, accessToken)
 		})
 	if err != nil {
 		return nil, err

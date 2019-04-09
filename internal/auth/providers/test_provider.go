@@ -76,7 +76,7 @@ func (tp *TestProvider) Revoke(*sessions.SessionState) error {
 }
 
 // ValidateGroupMembership returns the mock provider's GroupsError if not nil, or the Groups field value.
-func (tp *TestProvider) ValidateGroupMembership(string, []string) ([]string, error) {
+func (tp *TestProvider) ValidateGroupMembership(string, []string, string) ([]string, error) {
 	return tp.Groups, tp.GroupsError
 }
 

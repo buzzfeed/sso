@@ -332,7 +332,7 @@ func (p *GoogleProvider) PopulateMembers(group string) (groups.MemberSet, error)
 
 // ValidateGroupMembership takes in an email and the allowed groups and returns the groups that the email is part of in that list.
 // If `allGroups` is an empty list, returns an empty list.
-func (p *GoogleProvider) ValidateGroupMembership(email string, allGroups []string) ([]string, error) {
+func (p *GoogleProvider) ValidateGroupMembership(email string, allGroups []string, _ string) ([]string, error) {
 	logger := log.NewLogEntry()
 
 	groups := []string{}

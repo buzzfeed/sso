@@ -11,8 +11,8 @@ type TestProvider struct {
 	RefreshSessionFunc  func(*sessions.SessionState, []string) (bool, error)
 	ValidateSessionFunc func(*sessions.SessionState, []string) bool
 	RedeemFunc          func(string, string) (*sessions.SessionState, error)
-	UserGroupsFunc      func(string, []string) ([]string, error)
-	ValidateGroupsFunc  func(string, []string) ([]string, bool, error)
+	UserGroupsFunc      func(string, []string, string) ([]string, error)
+	ValidateGroupsFunc  func(string, []string, string) ([]string, bool, error)
 	*ProviderData
 }
 
@@ -62,13 +62,13 @@ func (tp *TestProvider) RefreshSession(s *sessions.SessionState, g []string) (bo
 }
 
 // UserGroups mocks the UserGroups function
-func (tp *TestProvider) UserGroups(email string, groups []string) ([]string, error) {
-	return tp.UserGroupsFunc(email, groups)
+func (tp *TestProvider) UserGroups(email string, groups []string, accessToken string) ([]string, error) {
+	return tp.UserGroupsFunc(email, groups, accessToken)
 }
 
 // ValidateGroup mocks the ValidateGroup function
-func (tp *TestProvider) ValidateGroup(email string, groups []string) ([]string, bool, error) {
-	return tp.ValidateGroupsFunc(email, groups)
+func (tp *TestProvider) ValidateGroup(email string, groups []string, accessToken string) ([]string, bool, error) {
+	return tp.ValidateGroupsFunc(email, groups, accessToken)
 }
 
 // GetSignOutURL mocks GetSignOutURL function
