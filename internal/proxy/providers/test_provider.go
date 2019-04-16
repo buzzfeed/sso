@@ -17,28 +17,29 @@ type TestProvider struct {
 }
 
 // NewTestProvider returns a new TestProvider
-func NewTestProvider(providerURL *url.URL, emailAddress string) *TestProvider {
+func NewTestProvider(_ *url.URL, _ string) *TestProvider {
+	host := "localhost"
 	return &TestProvider{
 		ProviderData: &ProviderData{
 			ProviderName: "Test Provider",
 			SignInURL: &url.URL{
 				Scheme: "http",
-				Host:   providerURL.Host,
+				Host:   host,
 				Path:   "/oauth/authorize",
 			},
 			RedeemURL: &url.URL{
 				Scheme: "http",
-				Host:   providerURL.Host,
+				Host:   host,
 				Path:   "/oauth/token",
 			},
 			ProfileURL: &url.URL{
 				Scheme: "http",
-				Host:   providerURL.Host,
+				Host:   host,
 				Path:   "/api/v1/profile",
 			},
 			SignOutURL: &url.URL{
 				Scheme: "http",
-				Host:   providerURL.Host,
+				Host:   host,
 				Path:   "/oauth/sign_out",
 			},
 			Scope: "profile.email",
@@ -78,5 +79,9 @@ func (tp *TestProvider) GetSignOutURL(redirectURL *url.URL) *url.URL {
 
 // GetSignInURL mocks GetSignInURL
 func (tp *TestProvider) GetSignInURL(redirectURL *url.URL, state string) *url.URL {
-	return tp.Data().SignInURL
+	a := *tp.Data().SignInURL
+	params, _ := url.ParseQuery(a.RawQuery)
+	params.Add("state", state)
+	a.RawQuery = params.Encode()
+	return &a
 }

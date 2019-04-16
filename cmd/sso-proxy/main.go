@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"os"
 
-	log "github.com/buzzfeed/sso/internal/pkg/logging"
-	"github.com/buzzfeed/sso/internal/pkg/options"
-	"github.com/buzzfeed/sso/internal/proxy"
 	"github.com/kelseyhightower/envconfig"
+
+	log "github.com/buzzfeed/sso/internal/pkg/logging"
+	"github.com/buzzfeed/sso/internal/proxy"
 )
 
 func init() {
@@ -31,18 +31,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	validator := func(p *proxy.OAuthProxy) error {
-		if len(opts.EmailAddresses) != 0 {
-			p.EmailValidator = options.NewEmailAddressValidator(opts.EmailAddresses)
-		} else {
-			p.EmailValidator = options.NewEmailDomainValidator(opts.EmailDomains)
-		}
-		return nil
-	}
-
-	oauthproxy, err := proxy.NewOAuthProxy(opts, validator, proxy.SetCookieStore(opts))
+	ssoproxy, err := proxy.New(opts)
 	if err != nil {
-		logger.Error(err, "error creating oauthproxy")
+		logger.Error(err, "error creating sso proxy")
 		os.Exit(1)
 	}
 
@@ -50,7 +41,8 @@ func main() {
 		Addr:         fmt.Sprintf(":%d", opts.Port),
 		ReadTimeout:  opts.TCPReadTimeout,
 		WriteTimeout: opts.TCPWriteTimeout,
-		Handler:      proxy.NewLoggingHandler(os.Stdout, oauthproxy.Handler(), opts.RequestLogging, oauthproxy.StatsdClient),
+		Handler:      ssoproxy,
 	}
+
 	logger.Fatal(s.ListenAndServe())
 }

@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -11,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/buzzfeed/sso/internal/pkg/logging"
+	"github.com/buzzfeed/sso/internal/pkg/options"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	"github.com/buzzfeed/sso/internal/proxy/providers"
 
@@ -103,7 +106,8 @@ type Options struct {
 	testTemplateVars map[string]string
 
 	// internal values that are set after config validation
-	upstreamConfigs     []*UpstreamConfig
+	UpstreamConfigs []*UpstreamConfig
+
 	providerURL         *url.URL
 	provider            providers.Provider
 	decodedCookieSecret []byte
@@ -194,14 +198,14 @@ func (o *Options) Validate() error {
 			ResetDeadline: o.DefaultUpstreamTCPResetDeadline,
 		}
 
-		o.upstreamConfigs, err = loadServiceConfigs(rawBytes, o.Cluster, o.Scheme, templateVars, defaultUpstreamOptionsConfig)
+		o.UpstreamConfigs, err = loadServiceConfigs(rawBytes, o.Cluster, o.Scheme, templateVars, defaultUpstreamOptionsConfig)
 		if err != nil {
 			msgs = append(msgs, fmt.Sprintf("error parsing upstream configs file %s", err))
 		}
 	}
 
-	if o.upstreamConfigs != nil {
-		for _, uc := range o.upstreamConfigs {
+	if o.UpstreamConfigs != nil {
+		for _, uc := range o.UpstreamConfigs {
 			if uc.Timeout > o.TCPWriteTimeout {
 				o.TCPWriteTimeout = uc.Timeout
 			}
@@ -340,6 +344,57 @@ func SetCookieStore(opts *Options) func(*OAuthProxy) error {
 		a.csrfStore = cookieStore
 		a.sessionStore = cookieStore
 		a.CookieCipher = cookieStore.CookieCipher
+		return nil
+	}
+}
+
+// SetValidate sets the basic underlying validator
+func SetValidator(opts *Options) func(*OAuthProxy) error {
+	return func(a *OAuthProxy) error {
+		if len(opts.EmailAddresses) != 0 {
+			a.EmailValidator = options.NewEmailAddressValidator(opts.EmailAddresses)
+		} else {
+			a.EmailValidator = options.NewEmailDomainValidator(opts.EmailDomains)
+		}
+		return nil
+	}
+}
+
+// SetRequestSigner sets a request signer
+func SetRequestSigner(signer *RequestSigner) func(*OAuthProxy) error {
+	return func(a *OAuthProxy) error {
+		if signer == nil {
+			log.Warn("Running OAuthProxy without signing key. Requests will not be signed.")
+			return nil
+		}
+
+		certs := make(map[string]string)
+		id, key := signer.PublicKey()
+		certs[id] = key
+
+		certsAsStr, err := json.MarshalIndent(certs, "", "  ")
+		if err != nil {
+			return fmt.Errorf("could not marshal public certs as JSON: %s", err)
+		}
+
+		a.publicCertsJSON = certsAsStr
+
+		return nil
+	}
+}
+
+// SetProxyHandler sets the handler used to proxy requests
+func SetProxyHandler(h http.Handler) func(*OAuthProxy) error {
+	return func(a *OAuthProxy) error {
+		a.handler = h
+		return nil
+	}
+}
+
+// SetUpstreamConfig sets the upstream config for the oauth proxy
+func SetUpstreamConfig(u *UpstreamConfig) func(*OAuthProxy) error {
+	return func(a *OAuthProxy) error {
+		a.upstreamConfig = u
 		return nil
 	}
 }

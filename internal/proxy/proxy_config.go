@@ -60,6 +60,7 @@ type UpstreamConfig struct {
 	FlushInterval         time.Duration
 	HeaderOverrides       map[string]string
 	SkipRequestSigning    bool
+	CookieName            string
 }
 
 // RouteConfig maps to the yaml config fields,

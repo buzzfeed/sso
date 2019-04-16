@@ -15,6 +15,10 @@ func init() {
 	logrus.SetFormatter(&logrus.JSONFormatter{TimestampFormat: "2006-01-02 15:04:05.000"})
 }
 
+var (
+	defaultLogger = NewLogEntry()
+)
+
 // SetServiceName configures the service name to log with each LogEntry.
 func SetServiceName(name string) {
 	serviceName = name
@@ -34,6 +38,43 @@ func NewLogEntry() *LogEntry {
 // Fields returns all the fields that are in the logs
 func (l *LogEntry) Fields() map[string]interface{} {
 	return l.logger.Data
+}
+
+// Convience Wrappers around logging actions
+
+// Info wraps the logrus Info function
+func Info(args ...interface{}) {
+	defaultLogger.logger.Info(args...)
+}
+
+// Warn wraps the logrus Warn function
+func Warn(args ...interface{}) {
+	defaultLogger.logger.Warn(args...)
+}
+
+// Error wraps the logrus Error function
+func Error(err interface{}, args ...interface{}) {
+	defaultLogger.withField("error", err).logger.Error(args...)
+}
+
+// Fatal wraps the logrus Fatal function
+func Fatal(args ...interface{}) {
+	defaultLogger.logger.Fatal(args...)
+}
+
+// Debug wraps the logrus Debug function
+func Debug(args ...interface{}) {
+	defaultLogger.logger.Debug(args...)
+}
+
+// Panic wraps the logrus Panic function
+func Panic(args ...interface{}) {
+	defaultLogger.logger.Panic(args...)
+}
+
+// Printf wraps the logrus Printf function
+func Printf(format string, args ...interface{}) {
+	defaultLogger.logger.Printf(format, args...)
 }
 
 // Wrappers around logging actions

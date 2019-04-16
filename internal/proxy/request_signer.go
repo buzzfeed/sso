@@ -46,6 +46,10 @@ type RequestSigner struct {
 
 // NewRequestSigner constructs a RequestSigner object from a PEM+PKCS8 encoded RSA public key.
 func NewRequestSigner(signingKeyPemStr string) (*RequestSigner, error) {
+	if signingKeyPemStr == "" {
+		return nil, nil
+	}
+
 	var privateKey crypto.Signer
 	var publicKeyPEM []byte
 
