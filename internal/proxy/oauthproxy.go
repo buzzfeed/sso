@@ -63,7 +63,6 @@ type OAuthProxy struct {
 	EmailValidator EmailValidatorFn
 
 	redirectURL       *url.URL // the url to receive requests at
-	provider          providers.Provider
 	skipAuthPreflight bool
 	templates         *template.Template
 
@@ -85,6 +84,7 @@ type route struct {
 	upstreamConfig *UpstreamConfig
 	handler        http.Handler
 	tags           []string
+	provider       providers.Provider
 
 	// only used for ones that have regex
 	regex *regexp.Regexp
@@ -304,8 +304,6 @@ func generateHmacAuth(signatureKey string) (hmacauth.HmacAuth, error) {
 // NewOAuthProxy creates a new OAuthProxy struct.
 func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthProxy, error) {
 	logger := log.NewLogEntry()
-	logger.WithProvider(opts.provider.Data().ProviderName).WithClientID(opts.ClientID).Info(
-		"OAuthProxy configured")
 	domain := opts.CookieDomain
 	if domain == "" {
 		domain = "<default>"
@@ -347,7 +345,6 @@ func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthPr
 		mux:         make(map[string]*route),
 		regexRoutes: make([]*route, 0),
 
-		provider:          opts.provider,
 		redirectURL:       &url.URL{Path: "/oauth2/callback"},
 		skipAuthPreflight: opts.SkipAuthPreflight,
 		templates:         getTemplates(),
@@ -370,12 +367,12 @@ func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthPr
 			reverseProxy := NewReverseProxy(route.ToURL, upstreamConfig)
 			handler, tags := NewReverseProxyHandler(
 				reverseProxy, opts, upstreamConfig, requestSigner)
-			p.Handle(route.FromURL.Host, handler, tags, upstreamConfig)
+			p.Handle(route.FromURL.Host, handler, tags, upstreamConfig, opts.provider)
 		case *RewriteRoute:
 			reverseProxy := NewRewriteReverseProxy(route, upstreamConfig)
 			handler, tags := NewReverseProxyHandler(
 				reverseProxy, opts, upstreamConfig, requestSigner)
-			p.HandleRegex(route.FromRegex, handler, tags, upstreamConfig)
+			p.HandleRegex(route.FromRegex, handler, tags, upstreamConfig, opts.provider)
 		default:
 			return nil, fmt.Errorf("unknown route type")
 		}
@@ -418,27 +415,35 @@ func (p *OAuthProxy) Handler() http.Handler {
 
 // UnknownHost returns an http error for unknown or invalid hosts
 func (p *OAuthProxy) UnknownHost(rw http.ResponseWriter, req *http.Request) {
-	logger := log.NewLogEntry()
-
-	tags := []string{
-		fmt.Sprintf("action:%s", GetActionTag(req)),
-		"error:unknown_host",
-	}
+	remoteAddr := getRemoteAddr(req)
+	logger := log.NewLogEntry().WithRemoteAddress(remoteAddr)
+	tags := []string{"error:unknown_host"}
 	p.StatsdClient.Incr("application_error", tags, 1.0)
 	logger.WithRequestHost(req.Host).Error("unknown host")
 	http.Error(rw, "", statusInvalidHost)
 }
 
 // Handle constructs a route from the given host string and matches it to the provided http.Handler and UpstreamConfig
-func (p *OAuthProxy) Handle(host string, handler http.Handler, tags []string, upstreamConfig *UpstreamConfig) {
+func (p *OAuthProxy) Handle(host string, handler http.Handler, tags []string, upstreamConfig *UpstreamConfig, provider providers.Provider) {
 	tags = append(tags, "route:simple")
-	p.mux[host] = &route{handler: handler, upstreamConfig: upstreamConfig, tags: tags}
+	p.mux[host] = &route{
+		handler:        handler,
+		upstreamConfig: upstreamConfig,
+		tags:           tags,
+		provider:       provider,
+	}
 }
 
 // HandleRegex constructs a route from the given regexp and matches it to the provided http.Handler and UpstreamConfig
-func (p *OAuthProxy) HandleRegex(regex *regexp.Regexp, handler http.Handler, tags []string, upstreamConfig *UpstreamConfig) {
+func (p *OAuthProxy) HandleRegex(regex *regexp.Regexp, handler http.Handler, tags []string, upstreamConfig *UpstreamConfig, provider providers.Provider) {
 	tags = append(tags, "route:rewrite")
-	p.regexRoutes = append(p.regexRoutes, &route{regex: regex, handler: handler, upstreamConfig: upstreamConfig, tags: tags})
+	p.regexRoutes = append(p.regexRoutes, &route{
+		regex:          regex,
+		handler:        handler,
+		upstreamConfig: upstreamConfig,
+		tags:           tags,
+		provider:       provider,
+	})
 }
 
 // router attempts to find a route for a equest. If a route is successfully matched,
@@ -478,12 +483,18 @@ func (p *OAuthProxy) GetRedirectURL(host string) *url.URL {
 	return &u
 }
 
-func (p *OAuthProxy) redeemCode(host, code string) (*sessions.SessionState, error) {
+func (p *OAuthProxy) redeemCode(req *http.Request, code string) (*sessions.SessionState, error) {
 	if code == "" {
 		return nil, errors.New("missing code")
 	}
-	redirectURL := p.GetRedirectURL(host)
-	s, err := p.provider.Redeem(redirectURL.String(), code)
+	redirectURL := p.GetRedirectURL(req.Host)
+
+	route, ok := p.router(req)
+	if !ok {
+		return nil, ErrUnknownHost
+	}
+
+	s, err := route.provider.Redeem(redirectURL.String(), code)
 	if err != nil {
 		return s, err
 	}
@@ -550,13 +561,13 @@ func (p *OAuthProxy) XHRError(rw http.ResponseWriter, req *http.Request, code in
 
 // ErrorPage renders an error page with a given status code, title, and message.
 func (p *OAuthProxy) ErrorPage(rw http.ResponseWriter, req *http.Request, code int, title string, message string) {
+	remoteAddr := getRemoteAddr(req)
+	logger := log.NewLogEntry().WithRemoteAddress(remoteAddr)
+
 	if p.isXHR(req) {
 		p.XHRError(rw, req, code, errors.New(message))
 		return
 	}
-
-	remoteAddr := getRemoteAddr(req)
-	logger := log.NewLogEntry().WithRemoteAddress(remoteAddr)
 
 	logger.WithHTTPStatus(code).WithPageTitle(title).WithPageMessage(message).Info(
 		"error page")
@@ -602,7 +613,18 @@ func (p *OAuthProxy) isXHR(req *http.Request) bool {
 
 // SignOut redirects the request to the provider's sign out url.
 func (p *OAuthProxy) SignOut(rw http.ResponseWriter, req *http.Request) {
+	tags := []string{"action:sign_out"}
+
 	p.sessionStore.ClearSession(rw, req)
+
+	route, ok := p.router(req)
+	if !ok {
+		// this shouldn't happen since we've already matched the host once on this request
+		tags = append(tags, "error:unknown_host")
+		p.StatsdClient.Incr("application_error", tags, 1.0)
+		p.UnknownHost(rw, req)
+		return
+	}
 
 	var scheme string
 
@@ -620,7 +642,7 @@ func (p *OAuthProxy) SignOut(rw http.ResponseWriter, req *http.Request) {
 		Host:   req.Host,
 		Path:   "/",
 	}
-	fullURL := p.provider.GetSignOutURL(redirectURL)
+	fullURL := route.provider.GetSignOutURL(redirectURL)
 	http.Redirect(rw, req, fullURL.String(), http.StatusFound)
 }
 
@@ -628,11 +650,20 @@ func (p *OAuthProxy) SignOut(rw http.ResponseWriter, req *http.Request) {
 func (p *OAuthProxy) OAuthStart(rw http.ResponseWriter, req *http.Request, tags []string) {
 	// The proxy redirects to the authenticator, and provides it with redirectURI (which points
 	// back to the sso proxy).
-	logger := log.NewLogEntry()
 	remoteAddr := getRemoteAddr(req)
+	logger := log.NewLogEntry().WithRemoteAddress(remoteAddr)
+
+	route, ok := p.router(req)
+	if !ok {
+		// this shouldn't happen since we've already matched the host once on this request
+		tags = append(tags, "error:unknown_host")
+		p.StatsdClient.Incr("application_error", tags, 1.0)
+		p.UnknownHost(rw, req)
+		return
+	}
 
 	if p.isXHR(req) {
-		logger.WithRemoteAddress(remoteAddr).Error("aborting start of oauth flow on XHR")
+		logger.Error("aborting start of oauth flow on XHR")
 		p.XHRError(rw, req, http.StatusUnauthorized, errors.New("cannot continue oauth flow on xhr"))
 		return
 	}
@@ -692,7 +723,7 @@ func (p *OAuthProxy) OAuthStart(rw http.ResponseWriter, req *http.Request, tags 
 		return
 	}
 
-	signinURL := p.provider.GetSignInURL(callbackURL, encryptedState)
+	signinURL := route.provider.GetSignInURL(callbackURL, encryptedState)
 	logger.WithSignInURL(signinURL).Info("starting OAuth flow")
 	http.Redirect(rw, req, signinURL.String(), http.StatusFound)
 }
@@ -704,10 +735,18 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 	// We receive the callback from the SSO Authenticator. This request will either contain an
 	// error, or it will contain a `code`; the code can be used to fetch an access token, and
 	// other metadata, from the authenticator.
-	logger := log.NewLogEntry()
-
 	remoteAddr := getRemoteAddr(req)
+	logger := log.NewLogEntry().WithRemoteAddress(remoteAddr)
 	tags := []string{"action:callback"}
+
+	route, ok := p.router(req)
+	if !ok {
+		// this shouldn't happen since we've already matched the host once on this request
+		tags = append(tags, "error:unknown_host")
+		p.StatsdClient.Incr("application_error", tags, 1.0)
+		p.UnknownHost(rw, req)
+		return
+	}
 
 	// finish the oauth cycle
 	err := req.ParseForm()
@@ -725,7 +764,7 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	// We begin the process of redeeming the code for an access token.
-	session, err := p.redeemCode(req.Host, req.Form.Get("code"))
+	session, err := p.redeemCode(req, req.Form.Get("code"))
 	if err != nil {
 		tags = append(tags, "error:redeem_code_error")
 		p.StatsdClient.Incr("provider_error", tags, 1.0)
@@ -798,19 +837,9 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	route, ok := p.router(req)
-	if !ok {
-		// this shouldn't happen since we've already matched the host once on this request
-		tags = append(tags, "error:unknown_host")
-		p.StatsdClient.Incr("application_error", tags, 1.0)
-		logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(
-			"couldn't resolve route from host name for membership check")
-		p.ErrorPage(rw, req, http.StatusInternalServerError, "Internal Error", "Error looking up route for group membership")
-		return
-	}
 	allowedGroups := route.upstreamConfig.AllowedGroups
 
-	inGroups, validGroup, err := p.provider.ValidateGroup(session.Email, allowedGroups, session.AccessToken)
+	inGroups, validGroup, err := route.provider.ValidateGroup(session.Email, allowedGroups, session.AccessToken)
 	if err != nil {
 		tags = append(tags, "error:user_group_failed")
 		p.StatsdClient.Incr("provider_error", tags, 1.0)
@@ -850,7 +879,8 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 
 // AuthenticateOnly calls the Authenticate handler.
 func (p *OAuthProxy) AuthenticateOnly(rw http.ResponseWriter, req *http.Request) {
-	logger := log.NewLogEntry()
+	remoteAddr := getRemoteAddr(req)
+	logger := log.NewLogEntry().WithRemoteAddress(remoteAddr)
 	err := p.Authenticate(rw, req)
 	if err != nil {
 		p.StatsdClient.Incr("application_error", []string{"action:auth", "error:unauthorized_request"}, 1.0)
@@ -863,9 +893,11 @@ func (p *OAuthProxy) AuthenticateOnly(rw http.ResponseWriter, req *http.Request)
 // Proxy authenticates a request, either proxying the request if it is authenticated, or starting the authentication process if not.
 func (p *OAuthProxy) Proxy(rw http.ResponseWriter, req *http.Request) {
 	// Attempts to validate the user and their cookie.
-	logger := log.NewLogEntry()
+	remoteAddr := getRemoteAddr(req)
+	logger := log.NewLogEntry().WithRemoteAddress(remoteAddr)
 	start := time.Now()
 	tags := []string{"action:proxy"}
+
 	var err error
 
 	// If the request is explicitly whitelisted, we skip authentication
@@ -931,7 +963,8 @@ func (p *OAuthProxy) Proxy(rw http.ResponseWriter, req *http.Request) {
 // Authenticate authenticates a request by checking for a session cookie, and validating its expiration,
 // clearing the session cookie if it's invalid and returning an error if necessary..
 func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (err error) {
-	logger := log.NewLogEntry().WithRemoteAddress(getRemoteAddr(req))
+	remoteAddr := getRemoteAddr(req)
+	logger := log.NewLogEntry().WithRemoteAddress(remoteAddr)
 
 	route, ok := p.router(req)
 	if !ok {
@@ -965,7 +998,7 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 	} else if session.RefreshPeriodExpired() {
 		// Refresh period is the period in which the access token is valid. This is ultimately
 		// controlled by the upstream provider and tends to be around 1 hour.
-		ok, err := p.provider.RefreshSession(session, allowedGroups)
+		ok, err := route.provider.RefreshSession(session, allowedGroups)
 		// We failed to refresh the session successfully
 		// clear the cookie and reject the request
 		if err != nil {
@@ -996,7 +1029,7 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 		// check for valid requests. This should be set to something like a minute.
 		// This calls up the provider chain to validate this user is still active
 		// and hasn't been de-authorized.
-		ok := p.provider.ValidateSessionState(session, allowedGroups)
+		ok := route.provider.ValidateSessionState(session, allowedGroups)
 		if !ok {
 			// This user is now no longer authorized, or we failed to
 			// validate the user.

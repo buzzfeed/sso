@@ -652,6 +652,10 @@ func TestAuthOnlyEndpoint(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest("GET", "https://foo.sso.dev/oauth2/auth", nil)
 			resp := httptest.NewRecorder()
+			provider := &providers.TestProvider{
+				RefreshSessionFunc:  func(*sessions.SessionState, []string) (bool, error) { return true, nil },
+				ValidateSessionFunc: func(*sessions.SessionState, []string) bool { return true },
+			}
 
 			opts := NewOptions()
 			opts.CookieSecret = testEncodedCookieSecret
@@ -663,15 +667,12 @@ func TestAuthOnlyEndpoint(t *testing.T) {
 			opts.GracePeriodTTL = time.Duration(3) * time.Hour
 			opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev")
 			opts.Validate()
+			opts.provider = provider
 
 			proxy, err := NewOAuthProxy(opts, setSessionStore(tc.sessionStore), setCSRFStore(&sessions.MockCSRFStore{}), func(p *OAuthProxy) error {
 				p.EmailValidator = func(string) bool { return tc.validEmail }
 				return nil
 			})
-			proxy.provider = &providers.TestProvider{
-				RefreshSessionFunc:  func(*sessions.SessionState, []string) (bool, error) { return true, nil },
-				ValidateSessionFunc: func(*sessions.SessionState, []string) bool { return true },
-			}
 
 			testutil.Ok(t, err)
 			proxy.AuthenticateOnly(resp, req)
@@ -1337,6 +1338,11 @@ func TestAuthenticate(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
 			// setup deafults
+			provider := &providers.TestProvider{
+				RefreshSessionFunc:  tc.RefreshSessionFunc,
+				ValidateSessionFunc: tc.ValidateSessionFunc,
+			}
+
 			opts := NewOptions()
 			opts.CookieSecret = testEncodedCookieSecret
 			opts.CookieExpire = time.Duration(72) * time.Hour
@@ -1347,14 +1353,11 @@ func TestAuthenticate(t *testing.T) {
 			opts.GracePeriodTTL = time.Duration(3) * time.Hour
 			opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev")
 			opts.Validate()
+			opts.provider = provider
 
 			mockCSRF := &sessions.MockCSRFStore{}
 			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true),
 				setSessionStore(tc.SessionStore), setCSRFStore(mockCSRF))
-			proxy.provider = &providers.TestProvider{
-				RefreshSessionFunc:  tc.RefreshSessionFunc,
-				ValidateSessionFunc: tc.ValidateSessionFunc,
-			}
 
 			req, err := http.NewRequest("GET", "https://foo.sso.dev/", strings.NewReader(""))
 			if err != nil {
@@ -1525,12 +1528,8 @@ func TestOAuthStart(t *testing.T) {
 				UnmarshalBytes: marshaled,
 			}
 
-			srv := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-				proxy.OAuthStart(rw, r, []string{})
-			}))
-			defer srv.Close()
-
-			req, err := http.NewRequest("GET", srv.URL, nil)
+			rw := httptest.NewRecorder()
+			req, err := http.NewRequest("GET", "http://foo.sso.dev/", nil)
 			if err != nil {
 				t.Fatalf("expected req to succeeded err:%v", err)
 			}
@@ -1539,15 +1538,12 @@ func TestOAuthStart(t *testing.T) {
 				req.Header.Add("X-Requested-With", "XMLHttpRequest")
 			}
 
-			client := &http.Client{
-				CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
-			}
-			res, err := client.Do(req)
-			if err != nil {
-				t.Fatalf("expected req to succeeded err:%v", err)
-			}
+			proxy.OAuthStart(rw, req, []string{})
+			res := rw.Result()
 
 			if res.StatusCode != tc.expectedStatusCode {
+				t.Errorf("want %v", tc.expectedStatusCode)
+				t.Errorf(" got %v", res.StatusCode)
 				t.Fatalf("unexpected status code response")
 			}
 
