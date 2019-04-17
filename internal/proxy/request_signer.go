@@ -27,6 +27,7 @@ var signedHeaders = []string{
 	"X-Forwarded-User",
 	"X-Forwarded-Email",
 	"X-Forwarded-Groups",
+	"X-Forwarded-Access-Token",
 	"Cookie",
 }
 
