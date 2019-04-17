@@ -12,7 +12,7 @@ var serviceName = "sso"
 
 func init() {
 	logrus.SetOutput(os.Stdout)
-	logrus.SetFormatter(&logrus.JSONFormatter{TimestampFormat: "2006-01-02 15:04:05.123"})
+	logrus.SetFormatter(&logrus.JSONFormatter{TimestampFormat: "2006-01-02 15:04:05.000"})
 }
 
 // SetServiceName configures the service name to log with each LogEntry.
