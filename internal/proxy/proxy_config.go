@@ -60,6 +60,7 @@ type UpstreamConfig struct {
 	FlushInterval         time.Duration
 	HeaderOverrides       map[string]string
 	SkipRequestSigning    bool
+	PassAccessToken       bool
 }
 
 // RouteConfig maps to the yaml config fields,
@@ -89,7 +90,7 @@ type OptionsConfig struct {
 	ResetDeadline      time.Duration     `yaml:"reset_deadline"`
 	FlushInterval      time.Duration     `yaml:"flush_interval"`
 	SkipRequestSigning bool              `yaml:"skip_request_signing"`
-	PassAccesToken     bool              `yaml:"pass_access_token"`
+	PassAccessToken    bool              `yaml:"pass_access_token"`
 }
 
 // ErrParsingConfig is an error specific to config parsing.

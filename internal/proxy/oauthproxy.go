@@ -1055,7 +1055,7 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 
 	req.Header.Set("X-Forwarded-User", session.User)
 
-	if route.upstreamConfig.passAccessToken && session.AccessToken != "" {
+	if route.upstreamConfig.PassAccessToken && session.AccessToken != "" {
 		req.Header.Set("X-Forwarded-Access-Token", session.AccessToken)
 	}
 

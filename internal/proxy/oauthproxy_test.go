@@ -502,7 +502,13 @@ func TestEncodedSlashes(t *testing.T) {
 	}
 }
 
-func generateTestUpstreamConfigs(to string) []*UpstreamConfig {
+func generateTestUpstreamConfigs(to string, defaultUpstreamOpts *OptionsConfig) []*UpstreamConfig {
+	if defaultUpstreamOpts == nil {
+		defaultUpstreamOpts = &OptionsConfig{
+			Timeout: time.Duration(1) * time.Second,
+		}
+	}
+
 	if !strings.Contains(to, "://") {
 		to = fmt.Sprintf("%s://%s", "http", to)
 	}
@@ -514,7 +520,6 @@ func generateTestUpstreamConfigs(to string) []*UpstreamConfig {
 		"root_domain": "dev",
 		"cluster":     "sso",
 	}
-	defaultUpstreamOpts := &OptionsConfig{Timeout: time.Duration(1) * time.Second}
 	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
 - service: foo
   default:
@@ -533,7 +538,7 @@ func TestRobotsTxt(t *testing.T) {
 	opts.ClientSecret = "foobar"
 	opts.CookieSecret = testEncodedCookieSecret
 	opts.ProviderURLString = "https://auth.sso.dev"
-	opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev")
+	opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev", nil)
 	opts.Validate()
 
 	proxy, err := NewOAuthProxy(opts)
@@ -553,7 +558,7 @@ func TestCerts(t *testing.T) {
 	opts.ClientSecret = "foobar"
 	opts.CookieSecret = testEncodedCookieSecret
 	opts.ProviderURLString = "https://auth.sso.dev"
-	opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev")
+	opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev", nil)
 
 	requestSigningKey, err := ioutil.ReadFile("testdata/private_key.pem")
 	testutil.Assert(t, err == nil, "could not read private key from testdata: %s", err)
@@ -592,7 +597,7 @@ func TestFavicon(t *testing.T) {
 	opts.ClientSecret = "foobar"
 	opts.CookieSecret = testEncodedCookieSecret
 	opts.ProviderURLString = "https://auth.sso.dev"
-	opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev")
+	opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev", nil)
 	opts.Validate()
 
 	proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true),
@@ -665,7 +670,7 @@ func TestAuthOnlyEndpoint(t *testing.T) {
 			opts.EmailDomains = []string{"example.com"}
 			opts.ProviderURLString = "https://auth.sso.dev"
 			opts.GracePeriodTTL = time.Duration(3) * time.Hour
-			opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev")
+			opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev", nil)
 			opts.Validate()
 			opts.provider = provider
 
@@ -759,7 +764,7 @@ func TestSkipAuthRequest(t *testing.T) {
 			opts.ClientSecret = "foobar"
 			opts.CookieSecret = testEncodedCookieSecret
 			opts.SkipAuthPreflight = true
-			opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL)
+			opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL, nil)
 			opts.Validate()
 
 			providerURL, _ := url.Parse("https://foo-auth.sso.dev")
@@ -1112,13 +1117,17 @@ func TestHeadersSentToUpstreams(t *testing.T) {
 	}))
 	defer upstream.Close()
 
+	upstreamOptsConfig := &OptionsConfig{
+		PassAccessToken: true,
+		Timeout:         time.Duration(1) * time.Second,
+	}
+
 	opts := NewOptions()
 	opts.ClientID = "bazquux"
 	opts.ClientSecret = "foobar"
 	opts.CookieSecret = testEncodedCookieSecret
 	opts.CookieSecure = false
-	opts.PassAccessToken = true
-	opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL)
+	opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL, upstreamOptsConfig)
 	opts.Validate()
 	providerURL, _ := url.Parse("http://sso-auth.example.com/")
 	opts.provider = providers.NewTestProvider(providerURL, "")
@@ -1351,7 +1360,7 @@ func TestAuthenticate(t *testing.T) {
 			opts.EmailDomains = []string{"example.com"}
 			opts.ProviderURLString = "https://auth.sso.dev"
 			opts.GracePeriodTTL = time.Duration(3) * time.Hour
-			opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev")
+			opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev", nil)
 			opts.Validate()
 			opts.provider = provider
 
@@ -1461,7 +1470,7 @@ func TestProxyXHRErrorHandling(t *testing.T) {
 			opts.ClientSecret = "client secret"
 			opts.EmailDomains = []string{"example.com"}
 			opts.ProviderURLString = "https://auth.sso.dev"
-			opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL)
+			opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL, nil)
 			opts.Validate()
 			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true), setSessionStore(&sessions.MockSessionStore{
 				Session: tc.Session,
@@ -1510,7 +1519,7 @@ func TestOAuthStart(t *testing.T) {
 			opts.ClientSecret = "client secret"
 			opts.EmailDomains = []string{"example.com"}
 			opts.ProviderURLString = "https://auth.sso.dev"
-			opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev")
+			opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev", nil)
 			opts.Validate()
 
 			csrfStore := &sessions.MockCSRFStore{}
@@ -1590,7 +1599,7 @@ func TestPing(t *testing.T) {
 	opts.ClientID = "bazquux"
 	opts.ClientSecret = "foobar"
 	opts.CookieSecret = testEncodedCookieSecret
-	opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL)
+	opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL, nil)
 	opts.Validate()
 
 	providerURL, _ := url.Parse("http://sso-auth.example.com/")
@@ -1662,7 +1671,7 @@ func TestSecurityHeaders(t *testing.T) {
 	opts.ClientSecret = "foobar"
 	opts.CookieSecret = testEncodedCookieSecret
 	opts.CookieSecure = false
-	opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL)
+	opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL, nil)
 	opts.Validate()
 
 	providerURL, _ := url.Parse("http://sso-auth.example.com/")
@@ -1979,7 +1988,7 @@ func TestHTTPSRedirect(t *testing.T) {
 			opts.CookieSecret = testEncodedCookieSecret
 			opts.CookieSecure = tc.cookieSecure
 			opts.provider = provider
-			opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL)
+			opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL, nil)
 			opts.Validate()
 
 			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true), setSessionStore(&sessions.MockSessionStore{}), setCSRFStore(&sessions.MockCSRFStore{}))
