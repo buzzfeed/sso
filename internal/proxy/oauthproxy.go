@@ -62,8 +62,7 @@ type OAuthProxy struct {
 
 	EmailValidator EmailValidatorFn
 
-	redirectURL *url.URL // the url to receive requests at
-	templates   *template.Template
+	templates *template.Template
 
 	StatsdClient *statsd.Client
 
@@ -342,8 +341,7 @@ func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthPr
 		mux:         make(map[string]*route),
 		regexRoutes: make([]*route, 0),
 
-		redirectURL: &url.URL{Path: "/oauth2/callback"},
-		templates:   getTemplates(),
+		templates: getTemplates(),
 
 		requestSigner:   requestSigner,
 		publicCertsJSON: certsAsStr,
@@ -462,32 +460,24 @@ func (p *OAuthProxy) router(req *http.Request) (*route, bool) {
 // GetRedirectURL returns the redirect url for a given OAuthProxy,
 // setting the scheme to be https if CookieSecure is true.
 func (p *OAuthProxy) GetRedirectURL(host string) *url.URL {
-	// TODO: Ensure that we only allow valid upstream hosts in redirect URIs
-	var u url.URL
-	u = *p.redirectURL
-
-	// Build redirect URI from request host
-	if u.Scheme == "" {
-		if p.CookieSecure {
-			u.Scheme = "https"
-		} else {
-			u.Scheme = "http"
-		}
+	return &url.URL{
+		Host:   host,
+		Path:   "/oauth2/callback",
+		Scheme: p.urlScheme(),
 	}
-	u.Host = host
-	return &u
 }
 
 func (p *OAuthProxy) redeemCode(req *http.Request, code string) (*sessions.SessionState, error) {
 	if code == "" {
 		return nil, errors.New("missing code")
 	}
-	redirectURL := p.GetRedirectURL(req.Host)
 
 	route, ok := p.router(req)
 	if !ok {
 		return nil, ErrUnknownHost
 	}
+
+	redirectURL := p.GetRedirectURL(req.Host)
 
 	s, err := route.provider.Redeem(redirectURL.String(), code)
 	if err != nil {
@@ -625,11 +615,7 @@ func (p *OAuthProxy) SignOut(rw http.ResponseWriter, req *http.Request) {
 
 	// Build redirect URI from request host
 	if req.URL.Scheme == "" {
-		if p.CookieSecure {
-			scheme = "https"
-		} else {
-			scheme = "http"
-		}
+		scheme = p.urlScheme()
 	}
 
 	redirectURL := &url.URL{
@@ -1065,4 +1051,11 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 
 	// This user has been OK'd. Allow the request!
 	return nil
+}
+
+func (p *OAuthProxy) urlScheme() string {
+	if p.CookieSecure {
+		return "https"
+	}
+	return "http"
 }
