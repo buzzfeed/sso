@@ -8,7 +8,7 @@ import (
 // ProviderData holds the fields associated with providers
 // necessary to implement the Provider interface.
 type ProviderData struct {
-	ProviderName        string
+	ProviderSlug        string
 	ProviderURL         *url.URL
 	ProviderURLInternal *url.URL
 	ClientID            string

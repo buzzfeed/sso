@@ -505,7 +505,8 @@ func TestEncodedSlashes(t *testing.T) {
 func generateTestUpstreamConfigs(to string, defaultUpstreamOpts *OptionsConfig) []*UpstreamConfig {
 	if defaultUpstreamOpts == nil {
 		defaultUpstreamOpts = &OptionsConfig{
-			Timeout: time.Duration(1) * time.Second,
+			Timeout:      time.Duration(1) * time.Second,
+			ProviderSlug: "sso-auth",
 		}
 	}
 
@@ -672,7 +673,8 @@ func TestAuthOnlyEndpoint(t *testing.T) {
 			opts.GracePeriodTTL = time.Duration(3) * time.Hour
 			opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev", nil)
 			opts.Validate()
-			opts.provider = provider
+
+			opts.providers[opts.DefaultProviderSlug] = provider
 
 			proxy, err := NewOAuthProxy(opts, setSessionStore(tc.sessionStore), setCSRFStore(&sessions.MockCSRFStore{}), func(p *OAuthProxy) error {
 				p.EmailValidator = func(string) bool { return tc.validEmail }
@@ -768,7 +770,7 @@ func TestSkipAuthRequest(t *testing.T) {
 			opts.Validate()
 
 			providerURL, _ := url.Parse("https://foo-auth.sso.dev")
-			opts.provider = providers.NewTestProvider(providerURL, "")
+			opts.providers[opts.DefaultProviderSlug] = providers.NewTestProvider(providerURL, "")
 
 			proxy, _ := NewOAuthProxy(opts, setSessionStore(&sessions.MockSessionStore{Session: testSession()}), func(p *OAuthProxy) error {
 				p.EmailValidator = func(string) bool { return true }
@@ -798,7 +800,10 @@ func generateTestSkipRequestSigningConfig(to string) []*UpstreamConfig {
 		"root_domain": "dev",
 		"cluster":     "sso",
 	}
-	defaultUpstreamOpts := &OptionsConfig{Timeout: time.Duration(1) * time.Second}
+	defaultUpstreamOpts := &OptionsConfig{
+		Timeout:      time.Duration(1) * time.Second,
+		ProviderSlug: "sso-auth",
+	}
 	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
 - service: foo
   default:
@@ -841,7 +846,7 @@ func TestSkipSigningRequest(t *testing.T) {
 	opts.Validate()
 
 	upstreamURL, _ := url.Parse(upstream.URL)
-	opts.provider = providers.NewTestProvider(upstreamURL, "")
+	opts.providers[opts.DefaultProviderSlug] = providers.NewTestProvider(upstreamURL, "")
 
 	proxy, _ := NewOAuthProxy(opts)
 
@@ -873,7 +878,10 @@ func generateMultiTestAuthSkipConfigs(toFoo, toBar string) []*UpstreamConfig {
 		"root_domain": "dev",
 		"cluster":     "sso",
 	}
-	defaultUpstreamOpts := &OptionsConfig{Timeout: time.Duration(1) * time.Second}
+	defaultUpstreamOpts := &OptionsConfig{
+		Timeout:      time.Duration(1) * time.Second,
+		ProviderSlug: "sso-auth",
+	}
 	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
 - service: foo
   default:
@@ -915,7 +923,7 @@ func TestMultiAuthSkipRequests(t *testing.T) {
 	opts.Validate()
 
 	upstreamFooURL, _ := url.Parse(upstreamFoo.URL)
-	opts.provider = providers.NewTestProvider(upstreamFooURL, "")
+	opts.providers[opts.DefaultProviderSlug] = providers.NewTestProvider(upstreamFooURL, "")
 
 	proxy, _ := NewOAuthProxy(opts, setSessionStore(&sessions.MockSessionStore{}), setCSRFStore(&sessions.MockCSRFStore{}), func(p *OAuthProxy) error {
 		p.EmailValidator = func(string) bool { return true }
@@ -981,7 +989,10 @@ func generateSignatureTestUpstreamConfigs(key, to string) []*UpstreamConfig {
 		"cluster":         "sso",
 		"foo_signing_key": key,
 	}
-	defaultUpstreamOpts := &OptionsConfig{Timeout: time.Duration(1) * time.Second}
+	defaultUpstreamOpts := &OptionsConfig{
+		Timeout:      time.Duration(1) * time.Second,
+		ProviderSlug: "sso-auth",
+	}
 	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
 - service: foo
   default:
@@ -1012,9 +1023,9 @@ func NewSignatureTest(key string) *SignatureTest {
 	}
 	provider := httptest.NewServer(http.HandlerFunc(providerHandler))
 	providerURL, _ := url.Parse(provider.URL)
-	opts.provider = providers.NewTestProvider(providerURL, "email1@example.com")
 	opts.upstreamConfigs = generateSignatureTestUpstreamConfigs(key, upstream.URL)
 	opts.Validate()
+	opts.providers[opts.DefaultProviderSlug] = providers.NewTestProvider(providerURL, "email1@example.com")
 
 	return &SignatureTest{
 		opts,
@@ -1120,6 +1131,7 @@ func TestHeadersSentToUpstreams(t *testing.T) {
 	upstreamOptsConfig := &OptionsConfig{
 		PassAccessToken: true,
 		Timeout:         time.Duration(1) * time.Second,
+		ProviderSlug:    "sso-auth",
 	}
 
 	opts := NewOptions()
@@ -1129,8 +1141,9 @@ func TestHeadersSentToUpstreams(t *testing.T) {
 	opts.CookieSecure = false
 	opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL, upstreamOptsConfig)
 	opts.Validate()
+
 	providerURL, _ := url.Parse("http://sso-auth.example.com/")
-	opts.provider = providers.NewTestProvider(providerURL, "")
+	opts.providers[opts.DefaultProviderSlug] = providers.NewTestProvider(providerURL, "")
 
 	state := testSession()
 	state.Email = "foo@example.com"
@@ -1362,7 +1375,8 @@ func TestAuthenticate(t *testing.T) {
 			opts.GracePeriodTTL = time.Duration(3) * time.Hour
 			opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev", nil)
 			opts.Validate()
-			opts.provider = provider
+
+			opts.providers[opts.DefaultProviderSlug] = provider
 
 			mockCSRF := &sessions.MockCSRFStore{}
 			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true),
@@ -1603,7 +1617,7 @@ func TestPing(t *testing.T) {
 	opts.Validate()
 
 	providerURL, _ := url.Parse("http://sso-auth.example.com/")
-	opts.provider = providers.NewTestProvider(providerURL, "")
+	opts.providers[opts.DefaultProviderSlug] = providers.NewTestProvider(providerURL, "")
 
 	testCases := []struct {
 		name          string
@@ -1675,7 +1689,7 @@ func TestSecurityHeaders(t *testing.T) {
 	opts.Validate()
 
 	providerURL, _ := url.Parse("http://sso-auth.example.com/")
-	opts.provider = providers.NewTestProvider(providerURL, "")
+	opts.providers[opts.DefaultProviderSlug] = providers.NewTestProvider(providerURL, "")
 
 	testCases := []struct {
 		name            string
@@ -1760,7 +1774,10 @@ func makeUpstreamConfigWithHeaderOverrides(overrides map[string]string) []*Upstr
 		"root_domain": "dev",
 		"cluster":     "sso",
 	}
-	defaultUpstreamOpts := &OptionsConfig{Timeout: time.Duration(1) * time.Second}
+	defaultUpstreamOpts := &OptionsConfig{
+		Timeout:      time.Duration(1) * time.Second,
+		ProviderSlug: "sso-auth",
+	}
 	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
 - service: foo
   default:
@@ -1815,7 +1832,7 @@ func TestHeaderOverrides(t *testing.T) {
 			opts.Validate()
 
 			providerURL, _ := url.Parse("http://sso-auth.example.com/")
-			opts.provider = providers.NewTestProvider(providerURL, "")
+			opts.providers[opts.DefaultProviderSlug] = providers.NewTestProvider(providerURL, "")
 
 			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true), setSessionStore(&sessions.MockSessionStore{}), setCSRFStore(&sessions.MockCSRFStore{}))
 			proxy.CookieCipher = &aead.MockCipher{}
@@ -1987,9 +2004,10 @@ func TestHTTPSRedirect(t *testing.T) {
 			opts.ClientSecret = "foobar"
 			opts.CookieSecret = testEncodedCookieSecret
 			opts.CookieSecure = tc.cookieSecure
-			opts.provider = provider
 			opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL, nil)
 			opts.Validate()
+
+			opts.providers[opts.DefaultProviderSlug] = provider
 
 			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true), setSessionStore(&sessions.MockSessionStore{}), setCSRFStore(&sessions.MockCSRFStore{}))
 			proxy.CookieCipher = &aead.MockCipher{}
@@ -2140,7 +2158,10 @@ func generateTestRewriteUpstreamConfigs(fromRegex, toTemplate string) []*Upstrea
 		"root_domain": "dev",
 		"cluster":     "sso",
 	}
-	defaultUpstreamOpts := &OptionsConfig{Timeout: time.Duration(1) * time.Second}
+	defaultUpstreamOpts := &OptionsConfig{
+		Timeout:      time.Duration(1) * time.Second,
+		ProviderSlug: "sso-auth",
+	}
 	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
 - service: foo
   default:

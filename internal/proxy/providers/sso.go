@@ -56,7 +56,6 @@ func init() {
 // NewSSOProvider instantiates a new SSOProvider with provider data and
 // a statsd client.
 func NewSSOProvider(p *ProviderData, sc *statsd.Client) *SSOProvider {
-	p.ProviderName = "SSO"
 	base := p.ProviderURL
 	internalBase := base
 

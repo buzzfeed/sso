@@ -360,12 +360,12 @@ func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthPr
 			reverseProxy := NewReverseProxy(route.ToURL, upstreamConfig)
 			handler, tags := NewReverseProxyHandler(
 				reverseProxy, opts, upstreamConfig, requestSigner)
-			p.Handle(route.FromURL.Host, handler, tags, upstreamConfig, opts.provider)
+			p.Handle(route.FromURL.Host, handler, tags, upstreamConfig, opts)
 		case *RewriteRoute:
 			reverseProxy := NewRewriteReverseProxy(route, upstreamConfig)
 			handler, tags := NewReverseProxyHandler(
 				reverseProxy, opts, upstreamConfig, requestSigner)
-			p.HandleRegex(route.FromRegex, handler, tags, upstreamConfig, opts.provider)
+			p.HandleRegex(route.FromRegex, handler, tags, upstreamConfig, opts)
 		default:
 			return nil, fmt.Errorf("unknown route type")
 		}
@@ -417,26 +417,30 @@ func (p *OAuthProxy) UnknownHost(rw http.ResponseWriter, req *http.Request) {
 }
 
 // Handle constructs a route from the given host string and matches it to the provided http.Handler and UpstreamConfig
-func (p *OAuthProxy) Handle(host string, handler http.Handler, tags []string, upstreamConfig *UpstreamConfig, provider providers.Provider) {
+func (p *OAuthProxy) Handle(host string, handler http.Handler, tags []string, upstreamConfig *UpstreamConfig, opts *Options) {
 	tags = append(tags, "route:simple")
 	p.mux[host] = &route{
 		handler:        handler,
 		upstreamConfig: upstreamConfig,
 		tags:           tags,
-		provider:       provider,
+		provider:       opts.providers[upstreamConfig.ProviderSlug],
 	}
+	fmt.Printf("\n\nprovider slug %q\n\n", upstreamConfig.ProviderSlug)
+	fmt.Printf("provider: %v\n\n", opts.providers[upstreamConfig.ProviderSlug])
 }
 
 // HandleRegex constructs a route from the given regexp and matches it to the provided http.Handler and UpstreamConfig
-func (p *OAuthProxy) HandleRegex(regex *regexp.Regexp, handler http.Handler, tags []string, upstreamConfig *UpstreamConfig, provider providers.Provider) {
+func (p *OAuthProxy) HandleRegex(regex *regexp.Regexp, handler http.Handler, tags []string, upstreamConfig *UpstreamConfig, opts *Options) {
 	tags = append(tags, "route:rewrite")
 	p.regexRoutes = append(p.regexRoutes, &route{
 		regex:          regex,
 		handler:        handler,
 		upstreamConfig: upstreamConfig,
 		tags:           tags,
-		provider:       provider,
+		provider:       opts.providers[upstreamConfig.ProviderSlug],
 	})
+	fmt.Printf("\n\nprovider slug %q\n\n", upstreamConfig.ProviderSlug)
+	fmt.Printf("provider: %v\n\n", opts.providers[upstreamConfig.ProviderSlug])
 }
 
 // router attempts to find a route for a equest. If a route is successfully matched,

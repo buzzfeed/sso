@@ -62,6 +62,7 @@ type UpstreamConfig struct {
 	SkipRequestSigning    bool
 	PassAccessToken       bool
 	SkipAuthPreflight     bool
+	ProviderSlug          string
 }
 
 // RouteConfig maps to the yaml config fields,
@@ -93,6 +94,7 @@ type OptionsConfig struct {
 	SkipRequestSigning bool              `yaml:"skip_request_signing"`
 	PassAccessToken    bool              `yaml:"pass_access_token"`
 	SkipAuthPreflight  bool              `yaml:"skip_auth_preflight"`
+	ProviderSlug       string            `yaml:"provider_slug"`
 }
 
 // ErrParsingConfig is an error specific to config parsing.
@@ -395,6 +397,8 @@ func parseOptionsConfig(proxy *UpstreamConfig, defaultOpts *OptionsConfig) error
 	proxy.PreserveHost = dst.PreserveHost
 	proxy.SkipRequestSigning = dst.SkipRequestSigning
 	proxy.PassAccessToken = dst.PassAccessToken
+	proxy.SkipAuthPreflight = dst.SkipAuthPreflight
+	proxy.ProviderSlug = dst.ProviderSlug
 
 	proxy.RouteConfig.Options = nil
 

@@ -20,7 +20,6 @@ type TestProvider struct {
 func NewTestProvider(providerURL *url.URL, emailAddress string) *TestProvider {
 	return &TestProvider{
 		ProviderData: &ProviderData{
-			ProviderName: "Test Provider",
 			SignInURL: &url.URL{
 				Scheme: "http",
 				Host:   providerURL.Host,

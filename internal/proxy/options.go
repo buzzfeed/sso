@@ -41,7 +41,7 @@ import (
 // CookieSecure - set secure (HTTPS) cookie flag
 // CookieHTTPOnly - set HttpOnly cookie flag
 // PassAccessToken - send access token by default in the http headers, can be override per upstream
-// Provider - OAuth provider
+// Providers - A comma separated list of OAuth provider slugs
 // Scope - OAuth scope specification
 // SessionLifetimeTTL - time to live for a session lifetime
 // SessionValidTTL - time to live for a valid session
@@ -70,6 +70,9 @@ type Options struct {
 	DefaultUpstreamTCPResetDeadline time.Duration `envconfig:"DEFAULT_UPSTREAM_TCP_RESET_DEADLINE" default:"60s"`
 	PassAccessToken                 bool          `envconfig:"PASS_ACCESS_TOKEN" default:"false"`
 	SkipAuthPreflight               bool          `envconfig:"SKIP_AUTH_PREFLIGHT" default:"false"`
+	DefaultProviderSlug             string        `envconfig:"DEFAULT_PROVIDER_SLUG" default:"google"`
+
+	Providers []string `envconfig:"PROVIDERS"`
 
 	TCPWriteTimeout time.Duration `envconfig:"TCP_WRITE_TIMEOUT" default:"30s"`
 	TCPReadTimeout  time.Duration `envconfig:"TCP_READ_TIMEOUT" default:"30s"`
@@ -81,9 +84,9 @@ type Options struct {
 	CookieSecure   bool          `envconfig:"COOKIE_SECURE" default:"true"`
 	CookieHTTPOnly bool          `envconfig:"COOKIE_HTTP_ONLY"`
 
-	// These options allow for other providers besides Google, with potential overrides.
-	Provider string `envconfig:"PROVIDER" default:"google"`
-	Scope    string `envconfig:"SCOPE"`
+	// TODO: What should we do with scope? Right now it doesn't seem to make much sense since SSO is fairly opiniated
+	// in what it needs and asks for from identity providers. Do we need to allow this to overridden?
+	Scope string `envconfig:"SCOPE"`
 
 	SessionLifetimeTTL time.Duration `envconfig:"SESSION_LIFETIME_TTL" default:"720h"`
 	SessionValidTTL    time.Duration `envconfig:"SESSION_VALID_TTL" default:"1m"`
@@ -104,7 +107,7 @@ type Options struct {
 	// internal values that are set after config validation
 	upstreamConfigs     []*UpstreamConfig
 	providerURL         *url.URL
-	provider            providers.Provider
+	providers           map[string]providers.Provider
 	decodedCookieSecret []byte
 }
 
@@ -116,14 +119,17 @@ func NewOptions() *Options {
 		CookieHTTPOnly: true,
 		CookieExpire:   time.Duration(168) * time.Hour,
 
-		SkipAuthPreflight: false,
-		RequestLogging:    true,
+		RequestLogging: true,
 
 		DefaultUpstreamTimeout:          time.Duration(1) * time.Second,
 		DefaultUpstreamTCPResetDeadline: time.Duration(1) * time.Minute,
 
+		Providers:            []string{"sso-auth"},
+		DefaultProviderSlug:  "sso-auth",
 		DefaultAllowedGroups: []string{},
 		PassAccessToken:      false,
+
+		providers: make(map[string]providers.Provider),
 	}
 }
 
@@ -188,11 +194,14 @@ func (o *Options) Validate() error {
 		}
 
 		defaultUpstreamOptionsConfig := &OptionsConfig{
-			AllowedGroups:   o.DefaultAllowedGroups,
-			Timeout:         o.DefaultUpstreamTimeout,
-			ResetDeadline:   o.DefaultUpstreamTCPResetDeadline,
-			PassAccessToken: o.PassAccessToken,
+			AllowedGroups:     o.DefaultAllowedGroups,
+			Timeout:           o.DefaultUpstreamTimeout,
+			ResetDeadline:     o.DefaultUpstreamTCPResetDeadline,
+			PassAccessToken:   o.PassAccessToken,
+			SkipAuthPreflight: o.SkipAuthPreflight,
+			ProviderSlug:      o.DefaultProviderSlug,
 		}
+		fmt.Printf("default upstream config opts: %v\n\n", defaultUpstreamOptionsConfig)
 
 		o.upstreamConfigs, err = loadServiceConfigs(rawBytes, o.Cluster, o.Scheme, templateVars, defaultUpstreamOptionsConfig)
 		if err != nil {
@@ -209,9 +218,13 @@ func (o *Options) Validate() error {
 	}
 
 	if o.ProviderURLString != "" {
-		err := parseProviderInfo(o)
-		if err != nil {
-			msgs = append(msgs, fmt.Sprintf("invalid value for provider-url: %s", err.Error()))
+		o.providers = make(map[string]providers.Provider)
+		for _, slug := range o.Providers {
+			p, err := parseProviderInfo(o, slug)
+			if err != nil {
+				msgs = append(msgs, fmt.Sprintf("invalid value for provider-url: %s", err.Error()))
+			}
+			o.providers[slug] = p
 		}
 	}
 
@@ -241,13 +254,13 @@ func (o *Options) Validate() error {
 	return nil
 }
 
-func parseProviderInfo(o *Options) error {
+func parseProviderInfo(o *Options, providerSlug string) (providers.Provider, error) {
 	providerURL, err := url.Parse(o.ProviderURLString)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if providerURL.Scheme == "" || providerURL.Host == "" {
-		return errors.New("provider-url must include scheme and host")
+		return nil, errors.New("provider-url must include scheme and host")
 	}
 
 	var providerURLInternal *url.URL
@@ -255,14 +268,15 @@ func parseProviderInfo(o *Options) error {
 	if o.ProviderURLInternalString != "" {
 		providerURLInternal, err = url.Parse(o.ProviderURLInternalString)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if providerURLInternal.Scheme == "" || providerURLInternal.Host == "" {
-			return errors.New("proxy provider url must include scheme and host")
+			return nil, errors.New("proxy provider url must include scheme and host")
 		}
 	}
 
 	providerData := &providers.ProviderData{
+		ProviderSlug:        providerSlug,
 		ClientID:            o.ClientID,
 		ClientSecret:        o.ClientSecret,
 		ProviderURL:         providerURL,
@@ -273,10 +287,8 @@ func parseProviderInfo(o *Options) error {
 		GracePeriodTTL:      o.GracePeriodTTL,
 	}
 
-	p := providers.New(o.Provider, providerData, o.StatsdClient)
-	o.provider = providers.NewSingleFlightProvider(p, o.StatsdClient)
-
-	return nil
+	p := providers.New(providerData, o.StatsdClient)
+	return providers.NewSingleFlightProvider(p, o.StatsdClient), nil
 }
 
 func validateCookieName(o *Options, msgs []string) []string {

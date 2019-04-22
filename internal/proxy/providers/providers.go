@@ -20,6 +20,6 @@ type Provider interface {
 }
 
 // New returns a new sso Provider
-func New(provider string, p *ProviderData, sc *statsd.Client) Provider {
+func New(p *ProviderData, sc *statsd.Client) Provider {
 	return NewSSOProvider(p, sc)
 }

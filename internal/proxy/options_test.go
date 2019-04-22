@@ -17,6 +17,8 @@ func testOptions() *Options {
 	o.EmailDomains = []string{"*"}
 	o.ProviderURLString = "https://www.example.com"
 	o.UpstreamConfigsFile = "testdata/upstream_configs.yml"
+	o.DefaultProviderSlug = "sso-auth"
+	o.Providers = []string{"sso-auth"}
 	o.Cluster = "sso"
 	o.Scheme = "http"
 	o.StatsdHost = "localhost"
@@ -64,7 +66,7 @@ func TestInitializedOptions(t *testing.T) {
 func TestDefaultProviderApiSettings(t *testing.T) {
 	o := testOptions()
 	testutil.Equal(t, nil, o.Validate())
-	p := o.provider.Data()
+	p := o.providers[o.DefaultProviderSlug].Data()
 	testutil.Equal(t, "https://www.example.com/sign_in",
 		p.SignInURL.String())
 	testutil.Equal(t, "https://www.example.com/sign_out",
@@ -144,10 +146,10 @@ func TestProviderURLValidation(t *testing.T) {
 				}
 			}
 			if tc.expectedSignInURL != "" {
-				testutil.Equal(t, o.provider.Data().SignInURL.String(), tc.expectedSignInURL)
+				testutil.Equal(t, o.providers[o.DefaultProviderSlug].Data().SignInURL.String(), tc.expectedSignInURL)
 			}
 			if tc.expectedProviderURLInternalString != "" {
-				testutil.Equal(t, o.provider.Data().ProviderURLInternal.String(), tc.expectedProviderURLInternalString)
+				testutil.Equal(t, o.providers[o.DefaultProviderSlug].Data().ProviderURLInternal.String(), tc.expectedProviderURLInternalString)
 			}
 		})
 	}

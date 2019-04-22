@@ -96,7 +96,6 @@ func TestSSOProviderDefaults(t *testing.T) {
 	testutil.NotEqual(t, nil, p)
 
 	data := p.Data()
-	testutil.Equal(t, "SSO", data.ProviderName)
 
 	base := fmt.Sprintf("%s://%s", data.ProviderURL.Scheme, data.ProviderURL.Host)
 	internalBase := fmt.Sprintf("%s://%s", data.ProviderURLInternal.Scheme, data.ProviderURLInternal.Host)
