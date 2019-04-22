@@ -24,7 +24,7 @@ import (
 // UpstreamConfigsFile - the path to upstream configs file
 // Cluster - the cluster in which this is running, used for upstream configs
 // Scheme - the default scheme, used for upstream configs
-// SkipAuthPreflight - will skip authentication for OPTIONS requests, default false
+// SkipAuthPreflight - will skip authentication for OPTIONS requests, default false, can be overriden per upstream
 // EmailDomains - csv list of emails with the specified domain to authenticate. Use * to authenticate any email
 // EmailAddresses - []string - authenticate emails with the specified email address (may be given multiple times). Use * to authenticate any email
 // DefaultAllowedGroups - csv list of default allowed groups that are applied to authorize access to upstreams. Will be overriden by groups specified in upstream configs.
@@ -58,18 +58,18 @@ type Options struct {
 	Cluster                   string `envconfig:"CLUSTER"`
 	Scheme                    string `envconfig:"SCHEME" default:"https"`
 
-	SkipAuthPreflight bool `envconfig:"SKIP_AUTH_PREFLIGHT"`
-
-	EmailDomains         []string `envconfig:"EMAIL_DOMAIN"`
-	EmailAddresses       []string `envconfig:"EMAIL_ADDRESSES"`
-	DefaultAllowedGroups []string `envconfig:"DEFAULT_ALLOWED_GROUPS"`
+	EmailDomains   []string `envconfig:"EMAIL_DOMAIN"`
+	EmailAddresses []string `envconfig:"EMAIL_ADDRESSES"`
 
 	ClientID     string `envconfig:"CLIENT_ID"`
 	ClientSecret string `envconfig:"CLIENT_SECRET"`
 
+	// This block contains deafult upstream optional configurations that can be override by upstream configs
+	DefaultAllowedGroups            []string      `envconfig:"DEFAULT_ALLOWED_GROUPS"`
 	DefaultUpstreamTimeout          time.Duration `envconfig:"DEFAULT_UPSTREAM_TIMEOUT" default:"10s"`
 	DefaultUpstreamTCPResetDeadline time.Duration `envconfig:"DEFAULT_UPSTREAM_TCP_RESET_DEADLINE" default:"60s"`
 	PassAccessToken                 bool          `envconfig:"PASS_ACCESS_TOKEN" default:"false"`
+	SkipAuthPreflight               bool          `envconfig:"SKIP_AUTH_PREFLIGHT" default:"false"`
 
 	TCPWriteTimeout time.Duration `envconfig:"TCP_WRITE_TIMEOUT" default:"30s"`
 	TCPReadTimeout  time.Duration `envconfig:"TCP_READ_TIMEOUT" default:"30s"`

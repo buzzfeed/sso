@@ -62,9 +62,8 @@ type OAuthProxy struct {
 
 	EmailValidator EmailValidatorFn
 
-	redirectURL       *url.URL // the url to receive requests at
-	skipAuthPreflight bool
-	templates         *template.Template
+	redirectURL *url.URL // the url to receive requests at
+	templates   *template.Template
 
 	StatsdClient *statsd.Client
 
@@ -343,9 +342,8 @@ func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthPr
 		mux:         make(map[string]*route),
 		regexRoutes: make([]*route, 0),
 
-		redirectURL:       &url.URL{Path: "/oauth2/callback"},
-		skipAuthPreflight: opts.SkipAuthPreflight,
-		templates:         getTemplates(),
+		redirectURL: &url.URL{Path: "/oauth2/callback"},
+		templates:   getTemplates(),
 
 		requestSigner:   requestSigner,
 		publicCertsJSON: certsAsStr,
@@ -583,14 +581,14 @@ func (p *OAuthProxy) ErrorPage(rw http.ResponseWriter, req *http.Request, code i
 
 // IsWhitelistedRequest cheks that proxy host exists and checks the SkipAuthRegex
 func (p *OAuthProxy) IsWhitelistedRequest(req *http.Request) bool {
-	if p.skipAuthPreflight && req.Method == "OPTIONS" {
-		return true
-	}
-
 	route, ok := p.router(req)
 	if !ok {
 		// This proxy host doesn't exist, so not allowed
 		return false
+	}
+
+	if route.upstreamConfig.SkipAuthPreflight && req.Method == "OPTIONS" {
+		return true
 	}
 
 	upstreamConfig := route.upstreamConfig
