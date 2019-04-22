@@ -66,8 +66,6 @@ type OAuthProxy struct {
 	skipAuthPreflight bool
 	templates         *template.Template
 
-	PassAccessToken bool
-
 	StatsdClient *statsd.Client
 
 	csrfStore    sessions.CSRFStore
@@ -348,7 +346,6 @@ func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthPr
 		redirectURL:       &url.URL{Path: "/oauth2/callback"},
 		skipAuthPreflight: opts.SkipAuthPreflight,
 		templates:         getTemplates(),
-		PassAccessToken:   opts.PassAccessToken,
 
 		requestSigner:   requestSigner,
 		publicCertsJSON: certsAsStr,
@@ -1058,7 +1055,7 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 
 	req.Header.Set("X-Forwarded-User", session.User)
 
-	if p.PassAccessToken && session.AccessToken != "" {
+	if route.upstreamConfig.passAccessToken && session.AccessToken != "" {
 		req.Header.Set("X-Forwarded-Access-Token", session.AccessToken)
 	}
 

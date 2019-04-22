@@ -40,7 +40,7 @@ import (
 // CookieExpire - expire timeframe for cookie
 // CookieSecure - set secure (HTTPS) cookie flag
 // CookieHTTPOnly - set HttpOnly cookie flag
-// PassAccessToken - send access token in the http headers
+// PassAccessToken - send access token by default in the http headers, can be override per upstream
 // Provider - OAuth provider
 // Scope - OAuth scope specification
 // SessionLifetimeTTL - time to live for a session lifetime
@@ -69,6 +69,7 @@ type Options struct {
 
 	DefaultUpstreamTimeout          time.Duration `envconfig:"DEFAULT_UPSTREAM_TIMEOUT" default:"10s"`
 	DefaultUpstreamTCPResetDeadline time.Duration `envconfig:"DEFAULT_UPSTREAM_TCP_RESET_DEADLINE" default:"60s"`
+	PassAccessToken                 bool          `envconfig:"PASS_ACCESS_TOKEN" default:"false"`
 
 	TCPWriteTimeout time.Duration `envconfig:"TCP_WRITE_TIMEOUT" default:"30s"`
 	TCPReadTimeout  time.Duration `envconfig:"TCP_READ_TIMEOUT" default:"30s"`
@@ -79,8 +80,6 @@ type Options struct {
 	CookieExpire   time.Duration `envconfig:"COOKIE_EXPIRE" default:"168h"`
 	CookieSecure   bool          `envconfig:"COOKIE_SECURE" default:"true"`
 	CookieHTTPOnly bool          `envconfig:"COOKIE_HTTP_ONLY"`
-
-	PassAccessToken bool `envconfig:"PASS_ACCESS_TOKEN" default:"false"`
 
 	// These options allow for other providers besides Google, with potential overrides.
 	Provider string `envconfig:"PROVIDER" default:"google"`
@@ -189,9 +188,10 @@ func (o *Options) Validate() error {
 		}
 
 		defaultUpstreamOptionsConfig := &OptionsConfig{
-			AllowedGroups: o.DefaultAllowedGroups,
-			Timeout:       o.DefaultUpstreamTimeout,
-			ResetDeadline: o.DefaultUpstreamTCPResetDeadline,
+			AllowedGroups:   o.DefaultAllowedGroups,
+			Timeout:         o.DefaultUpstreamTimeout,
+			ResetDeadline:   o.DefaultUpstreamTCPResetDeadline,
+			PassAccessToken: o.PassAccessToken,
 		}
 
 		o.upstreamConfigs, err = loadServiceConfigs(rawBytes, o.Cluster, o.Scheme, templateVars, defaultUpstreamOptionsConfig)
