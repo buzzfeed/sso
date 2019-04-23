@@ -123,11 +123,11 @@ func TestCookiePrefix(t *testing.T) {
 	}{
 		{"zero bytes", 0, "AA==~"},
 		{"one byte", 1, "AQ==~"},
-		{"max single cookie bytes", CookieMaxLength, "gB4=~"},
-		{"one byte overflow", CookieMaxLength + 1, "gR4=~"},
-		{"max two cookie bytes", CookieMaxLength * 2, "gDw=~"},
-		{"max two cookie bytes with overflow", CookieMaxLength*2 + 1, "gTw=~"},
-		{"a lot of bytes", CookieMaxLength * 600, "gNCMAQ==~"},
+		{"max single cookie bytes", 3840, "gB4=~"},
+		{"one byte overflow", 3840 + 1, "gR4=~"},
+		{"max two cookie bytes", 3840 * 2, "gDw=~"},
+		{"max two cookie bytes with overflow", 3840*2 + 1, "gTw=~"},
+		{"a lot of bytes", 3840 * 700, "gIikAQ==~"},
 	}
 
 	for _, tc := range testCases {
