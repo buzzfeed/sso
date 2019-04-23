@@ -754,7 +754,6 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 		p.ErrorPage(rw, req, http.StatusBadRequest, "Bad Request", err.Error())
 		return
 	}
-	p.csrfStore.ClearCSRF(rw, req)
 
 	encryptedCSRF := c.Value
 	csrfParameter := &StateParameter{}
@@ -841,6 +840,9 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 		p.ErrorPage(rw, req, http.StatusInternalServerError, "Internal Error", "Internal Error")
 		return
 	}
+
+	// Now that we know the request and user is valid, clear the CSRF token
+	p.csrfStore.ClearCSRF(rw, req)
 
 	// This is the redirect back to the original requested application
 	http.Redirect(rw, req, stateParameter.RedirectURI, http.StatusFound)
