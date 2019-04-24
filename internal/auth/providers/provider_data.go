@@ -9,6 +9,7 @@ import (
 // necessary to implement the Provider interface.
 type ProviderData struct {
 	ProviderName       string
+	ProviderSlug       string
 	ClientID           string
 	ClientSecret       string
 	SignInURL          *url.URL

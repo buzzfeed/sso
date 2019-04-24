@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
+	"github.com/datadog/datadog-go/statsd"
 )
 
 // TestProvider is a test implementation of the Provider interface.
@@ -29,6 +30,7 @@ type TestProvider struct {
 func NewTestProvider(providerURL *url.URL) *TestProvider {
 	return &TestProvider{
 		ProviderData: &ProviderData{
+			ProviderSlug: "",
 			ProviderName: "Test Provider",
 			SignInURL: &url.URL{
 				Scheme: "http",
@@ -44,6 +46,11 @@ func NewTestProvider(providerURL *url.URL) *TestProvider {
 				Scheme: "http",
 				Host:   providerURL.Host,
 				Path:   "/profile",
+			},
+			ValidateURL: &url.URL{
+				Scheme: "http",
+				Host:   providerURL.Host,
+				Path:   "/validate",
 			},
 			Scope: "profile.email",
 		},
@@ -89,4 +96,12 @@ func (tp *TestProvider) Redeem(redirectURI, code string) (*sessions.SessionState
 // Stop fulfills the Provider interface
 func (tp *TestProvider) Stop() {
 	return
+}
+
+func (tp *TestProvider) AssignStatsdClient(_ *statsd.Client) {
+	return
+}
+
+func (tp *TestProvider) Data() *ProviderData {
+	return tp.ProviderData
 }

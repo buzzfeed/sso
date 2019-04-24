@@ -428,3 +428,7 @@ func (p *OktaProvider) Revoke(s *sessions.SessionState) error {
 	logger.WithUser(s.Email).Info("revoked access token")
 	return nil
 }
+
+func (p *OktaProvider) AssignStatsdClient(statsdClient *statsd.Client) {
+	p.StatsdClient = statsdClient
+}

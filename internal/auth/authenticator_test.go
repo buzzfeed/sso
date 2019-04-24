@@ -34,13 +34,6 @@ func setMockCSRFStore(store *sessions.MockCSRFStore) func(*Authenticator) error 
 	}
 }
 
-func setMockSessionStore(store *sessions.MockSessionStore) func(*Authenticator) error {
-	return func(a *Authenticator) error {
-		a.sessionStore = store
-		return nil
-	}
-}
-
 func setMockTempl() func(*Authenticator) error {
 	return func(a *Authenticator) error {
 		a.templates = &templates.MockTemplate{}
@@ -59,9 +52,26 @@ func setMockAuthCodeCipher(cipher *aead.MockCipher, s interface{}) func(*Authent
 	}
 }
 
-func setTestProvider(provider *providers.TestProvider) func(*Authenticator) error {
+func setTestProvider(p providers.Provider, store *sessions.MockSessionStore) func(*Authenticator) error {
 	return func(a *Authenticator) error {
-		a.provider = provider
+		if a.identityProviders == nil {
+			a.identityProviders = make(map[string]*IdentityProvider)
+		}
+
+		slug := p.Data().ProviderSlug
+
+		a.identityProviders[slug] = &IdentityProvider{
+			provider:     p,
+			sessionStore: store,
+		}
+
+		return nil
+	}
+}
+
+func setMockValidator(f func(string) bool) func(*Authenticator) error {
+	return func(a *Authenticator) error {
+		a.Validator = f
 		return nil
 	}
 }
@@ -425,20 +435,22 @@ func TestSignIn(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			opts := testOpts("test", "secret")
-			opts.Validate()
-			auth, err := NewAuthenticator(opts, func(p *Authenticator) error {
-				p.Validator = func(string) bool { return tc.validEmail }
-				return nil
-			}, setMockSessionStore(tc.mockSessionStore), setMockTempl(), setMockAuthCodeCipher(tc.mockAuthCodeCipher, nil))
-			testutil.Ok(t, err)
 
+			opts.Validate()
 			// set test provider
 			u, _ := url.Parse("http://example.com")
 			provider := providers.NewTestProvider(u)
 			provider.Refresh = tc.refreshResponse.OK
 			provider.RefreshError = tc.refreshResponse.Error
 			provider.ValidToken = tc.providerValidToken
-			auth.provider = provider
+
+			auth, err := NewAuthenticator(opts,
+				setMockValidator(func(string) bool { return tc.validEmail }),
+				setMockTempl(),
+				setMockAuthCodeCipher(tc.mockAuthCodeCipher, nil),
+				setTestProvider(provider, tc.mockSessionStore),
+			)
+			testutil.Ok(t, err)
 
 			params, _ := url.ParseQuery(u.RawQuery)
 			for paramKey, val := range tc.paramsMap {
@@ -569,11 +581,11 @@ func TestSignOutPage(t *testing.T) {
 			provider := providers.NewTestProvider(u)
 			provider.RevokeError = tc.RevokeError
 
-			p, _ := NewAuthenticator(opts, func(p *Authenticator) error {
-				p.Validator = func(string) bool { return true }
-				return nil
-			}, setMockSessionStore(tc.mockSessionStore),
-				setMockTempl(), setTestProvider(provider))
+			p, _ := NewAuthenticator(opts,
+				setMockValidator(func(string) bool { return true }),
+				setMockTempl(),
+				setTestProvider(provider, tc.mockSessionStore),
+			)
 
 			params, _ := url.ParseQuery(u.RawQuery)
 
@@ -609,7 +621,7 @@ func TestValidateEndpoint(t *testing.T) {
 		Name               string
 		Endpoint           string
 		ExpectedStatusCode int
-		ProviderStatusCode int
+		ValidToken         bool
 		AccessToken        string
 		Method             string
 	}{
@@ -617,7 +629,7 @@ func TestValidateEndpoint(t *testing.T) {
 			Name:               "successful validate request",
 			Endpoint:           "/validate",
 			ExpectedStatusCode: http.StatusOK,
-			ProviderStatusCode: http.StatusOK,
+			ValidToken:         true,
 			AccessToken:        "xyz123",
 			Method:             "GET",
 		},
@@ -625,7 +637,6 @@ func TestValidateEndpoint(t *testing.T) {
 			Name:               "failed provider validate request",
 			Endpoint:           "/validate",
 			ExpectedStatusCode: http.StatusUnauthorized,
-			ProviderStatusCode: http.StatusForbidden,
 			AccessToken:        "xyz123",
 			Method:             "GET",
 		},
@@ -645,19 +656,18 @@ func TestValidateEndpoint(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
-			s := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-				rw.WriteHeader(tc.ProviderStatusCode)
-			}))
-			defer s.Close()
-			validateURL, _ := url.Parse(s.URL)
-
 			opts := testOpts(proxyClientID, proxyClientSecret)
 			opts.Validate()
 
-			proxy, _ := NewAuthenticator(opts)
-			proxy.provider = &providers.ProviderData{
-				ValidateURL: validateURL,
+			validateURL, err := url.Parse("https://example.com")
+			if err != nil {
+				t.Fatalf("unexpected err: %v", err)
 			}
+
+			testProvider := providers.NewTestProvider(validateURL)
+			testProvider.ValidToken = tc.ValidToken
+
+			proxy, _ := NewAuthenticator(opts, setTestProvider(testProvider, &sessions.MockSessionStore{}))
 
 			u, _ := url.Parse(tc.Endpoint)
 			params, _ := url.ParseQuery(u.RawQuery)
@@ -672,9 +682,9 @@ func TestValidateEndpoint(t *testing.T) {
 			proxy.ServeMux.ServeHTTP(rw, req)
 
 			if rw.Code != tc.ExpectedStatusCode {
-				t.Errorf("expected status code %v but response status code is %v", tc.ExpectedStatusCode, rw.Code)
+				t.Errorf("expected status code: %v", tc.ExpectedStatusCode)
+				t.Errorf("     got status code: %v", rw.Code)
 			}
-
 		})
 	}
 }
@@ -858,8 +868,11 @@ func TestRefreshEndpoint(t *testing.T) {
 			opts := testOpts("client_id", "client_secret")
 			opts.Validate()
 
-			p, _ := NewAuthenticator(opts)
-			p.provider = &testRefreshProvider{refreshFunc: tc.refreshFunc}
+			u, _ := url.Parse("http://example.com")
+			testProvider := providers.NewTestProvider(u)
+			testProvider.RefreshFunc = tc.refreshFunc
+			p, _ := NewAuthenticator(opts, setTestProvider(testProvider, &sessions.MockSessionStore{}))
+
 			params := url.Values{}
 			params.Set("refresh_token", tc.refreshToken)
 			req := httptest.NewRequest("POST", "/", bytes.NewBufferString(params.Encode()))
@@ -928,15 +941,16 @@ func TestGetProfile(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			opts := testOpts("client_id", "client_secret")
 			opts.Validate()
-			p, _ := NewAuthenticator(opts, func(p *Authenticator) error {
-				p.Validator = func(string) bool { return true }
-				return nil
-			})
+
 			u, _ := url.Parse("http://example.com")
 			testProvider := providers.NewTestProvider(u)
 			testProvider.Groups = tc.groupEmails
 			testProvider.GroupsError = tc.providerGroupError
-			p.provider = testProvider
+
+			p, _ := NewAuthenticator(opts,
+				setMockValidator(func(string) bool { return true }),
+				setTestProvider(testProvider, &sessions.MockSessionStore{}),
+			)
 
 			req := httptest.NewRequest("GET", fmt.Sprintf("/?email=%s", tc.email), nil)
 			req.Header.Set("Accept", "application/json")
@@ -1032,21 +1046,29 @@ func TestRedeemCode(t *testing.T) {
 			opts := testOpts("client_id", "client_secret")
 			opts.Validate()
 
-			proxy, _ := NewAuthenticator(opts, func(p *Authenticator) error {
-				p.Validator = func(string) bool { return true }
-				return nil
-			})
-
 			testURL, err := url.Parse("example.com")
 			if err != nil {
 				t.Fatalf("error parsing url %s", err.Error())
 			}
-			proxy.redirectURL = testURL
 			testProvider := providers.NewTestProvider(testURL)
 			testProvider.RedeemError = tc.providerRedeemError
 			testProvider.Session = tc.expectedSessionState
-			proxy.provider = testProvider
-			sessionState, err := proxy.redeemCode(testURL.Host, tc.code)
+
+			proxy, _ := NewAuthenticator(opts,
+				setMockValidator(func(string) bool { return true }),
+				setTestProvider(testProvider, &sessions.MockSessionStore{}),
+			)
+
+			v := url.Values{}
+			v.Set("provider_slug", "")
+			v.Set("code", tc.code)
+			proxy.redirectURL = testURL
+			req := &http.Request{
+				Host: testURL.Host,
+				Form: v,
+			}
+
+			sessionState, err := proxy.redeemCode(req)
 			if tc.expectedError && err == nil {
 				t.Errorf("expected error with message %s but no error was returned", tc.expectedErrorString)
 			}
@@ -1148,8 +1170,17 @@ func TestRedeemEndpoint(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			opts := testOpts("client_id", "client_secret")
 			opts.Validate()
-			p, _ := NewAuthenticator(opts, setMockAuthCodeCipher(tc.mockCipher, tc.sessionState),
-				setMockSessionStore(&sessions.MockSessionStore{}))
+
+			testURL, err := url.Parse("http://example.com")
+			if err != nil {
+				t.Fatalf("error parsing test url: %s", err.Error())
+			}
+			testProvider := providers.NewTestProvider(testURL)
+
+			p, _ := NewAuthenticator(opts,
+				setMockAuthCodeCipher(tc.mockCipher, tc.sessionState),
+				setTestProvider(testProvider, &sessions.MockSessionStore{}),
+			)
 
 			params := url.Values{}
 			for k, v := range tc.paramsMap {
@@ -1421,20 +1452,23 @@ func TestOAuthCallback(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			opts := testOpts("client_id", "client_secret")
 			opts.Validate()
-			proxy, _ := NewAuthenticator(opts, func(p *Authenticator) error {
-				p.Validator = func(string) bool { return tc.validEmail }
-				return nil
-			}, setMockCSRFStore(tc.csrfResp), setMockSessionStore(tc.sessionStore))
 
 			testURL, err := url.Parse("http://example.com")
 			if err != nil {
 				t.Fatalf("error parsing test url: %s", err.Error())
 			}
-			proxy.redirectURL = testURL
+
 			testProvider := providers.NewTestProvider(testURL)
 			testProvider.Session = tc.testRedeemResponse.SessionState
 			testProvider.RedeemError = tc.testRedeemResponse.Error
-			proxy.provider = testProvider
+
+			proxy, _ := NewAuthenticator(opts,
+				setMockValidator(func(string) bool { return tc.validEmail }),
+				setTestProvider(testProvider, tc.sessionStore),
+				setMockCSRFStore(tc.csrfResp),
+			)
+
+			proxy.redirectURL = testURL
 
 			params := &url.Values{}
 			for param, val := range tc.paramsMap {
@@ -1546,10 +1580,11 @@ func TestOAuthStart(t *testing.T) {
 			opts.Validate()
 			u, _ := url.Parse("http://example.com")
 			provider := providers.NewTestProvider(u)
-			proxy, _ := NewAuthenticator(opts, setTestProvider(provider), func(p *Authenticator) error {
-				p.Validator = func(string) bool { return true }
-				return nil
-			}, setMockCSRFStore(&sessions.MockCSRFStore{}))
+			proxy, _ := NewAuthenticator(opts,
+				setTestProvider(provider, &sessions.MockSessionStore{}),
+				setMockCSRFStore(&sessions.MockCSRFStore{}),
+				setMockValidator(func(string) bool { return true }),
+			)
 
 			params := url.Values{}
 			if tc.RedirectURI != "" {
@@ -1636,37 +1671,6 @@ func TestHostHeader(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestGoogleProviderApiSettings(t *testing.T) {
-	opts := testOpts("abced", "testtest")
-	opts.Provider = "google"
-	opts.Validate()
-	proxy, _ := NewAuthenticator(opts, AssignProvider(opts), func(p *Authenticator) error {
-		p.Validator = func(string) bool { return true }
-		return nil
-	})
-	p := proxy.provider.Data()
-	testutil.Equal(t, "https://accounts.google.com/o/oauth2/auth?access_type=offline",
-		p.SignInURL.String())
-	testutil.Equal(t, "https://www.googleapis.com/oauth2/v3/token",
-		p.RedeemURL.String())
-	testutil.Equal(t, "", p.ProfileURL.String())
-	testutil.Equal(t, "profile email", p.Scope)
-}
-
-func TestGoogleGroupInvalidFile(t *testing.T) {
-	opts := testOpts("abced", "testtest")
-	opts.Provider = "google"
-	opts.GoogleAdminEmail = "admin@example.com"
-	opts.GoogleServiceAccountJSON = "file_doesnt_exist.json"
-	opts.Validate()
-	_, err := NewAuthenticator(opts, AssignProvider(opts), func(p *Authenticator) error {
-		p.Validator = func(string) bool { return true }
-		return nil
-	})
-	testutil.NotEqual(t, nil, err)
-	testutil.Equal(t, "invalid Google credentials file: file_doesnt_exist.json", err.Error())
 }
 
 func TestUnimplementedProvider(t *testing.T) {

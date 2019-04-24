@@ -12,6 +12,8 @@ import (
 var (
 	// ErrUserNotAuthorized is an error for unauthorized users.
 	ErrUserNotAuthorized = errors.New("user not authorized")
+	// ErrUnknownIdentityProvider denotes an unknown provider
+	ErrUnknownIdentityProvider = errors.New("unknown identity provider")
 )
 
 // HTTPError stores the status code and a message for a given HTTP error.
