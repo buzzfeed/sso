@@ -314,8 +314,13 @@ func newProvider(o *Options) (providers.Provider, error) {
 // AssignStatsdClient.
 func AssignProvider(opts *Options) func(*Authenticator) error {
 	return func(proxy *Authenticator) error {
-		var err error
-		proxy.provider, err = newProvider(opts)
+		provider, err := newProvider(opts)
+		if err != nil {
+			return err
+		}
+		proxy.identityProviders[provider.Data().ProviderSlug] = &IdentityProvider{
+			provider,
+		}
 		return err
 	}
 }
@@ -334,14 +339,10 @@ func AssignStatsdClient(opts *Options) func(*Authenticator) error {
 			"statsd client is running")
 
 		proxy.StatsdClient = StatsdClient
-		switch v := proxy.provider.(type) {
-		case *providers.GoogleProvider:
-			v.SetStatsdClient(StatsdClient)
-		case *providers.SingleFlightProvider:
-			v.AssignStatsdClient(StatsdClient)
-		default:
-			logger.Info("provider does not have statsd client")
+		for _, idp := range proxy.identityProviders {
+			idp.provider.AssignStatsdClient(StatsdClient)
 		}
+
 		return nil
 	}
 }

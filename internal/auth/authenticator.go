@@ -35,6 +35,10 @@ var SignatureHeaders = []string{
 	"Gap-Auth",
 }
 
+type IdentityProvider struct {
+	provider providers.Provider
+}
+
 // Authenticator stores all the information associated with proxying the request.
 type Authenticator struct {
 	Validator        func(string) bool
@@ -47,7 +51,7 @@ type Authenticator struct {
 	sessionStore sessions.SessionStore
 
 	redirectURL        *url.URL // the url to receive requests at
-	provider           providers.Provider
+	identityProviders  map[string]*IdentityProvider
 	ProxyPrefix        string
 	ServeMux           http.Handler
 	SetXAuthRequest    bool
@@ -242,8 +246,14 @@ func (p *Authenticator) SignInPage(rw http.ResponseWriter, req *http.Request, co
 	// validateRedirectURI middleware already ensures that this is a valid URL
 	destinationURL, _ := url.Parse(redirectURL.Query().Get("redirect_uri"))
 
+	idp, err := p.IdentityProvider(req)
+	if err != nil {
+		p.ErrorResponse(rw, req, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	t := signInResp{
-		ProviderName: p.provider.Data().ProviderName,
+		ProviderName: idp.provider.Data().ProviderName,
 		EmailDomains: p.EmailDomains,
 		Redirect:     redirectURL.String(),
 		Destination:  destinationURL.Host,
@@ -255,6 +265,14 @@ func (p *Authenticator) SignInPage(rw http.ResponseWriter, req *http.Request, co
 func (p *Authenticator) authenticate(rw http.ResponseWriter, req *http.Request) (*sessions.SessionState, error) {
 	logger := log.NewLogEntry()
 	remoteAddr := getRemoteAddr(req)
+
+	idp, err := p.IdentityProvider(req)
+	if err != nil {
+		logger.WithRemoteAddress(remoteAddr).Error(err, "unknown identity provider")
+		p.sessionStore.ClearSession(rw, req)
+		return nil, err
+	}
+
 	// TODO remove refresh cookie bool when we remove payloads cipher logic
 	session, err := p.sessionStore.LoadSession(req)
 	if err != nil {
@@ -270,7 +288,7 @@ func (p *Authenticator) authenticate(rw http.ResponseWriter, req *http.Request) 
 	}
 
 	if session.RefreshPeriodExpired() {
-		ok, err := p.provider.RefreshSessionIfNeeded(session)
+		ok, err := idp.provider.RefreshSessionIfNeeded(session)
 		// We failed to refresh the session successfully
 		// clear the cookie and reject the request
 		if err != nil {
@@ -297,7 +315,7 @@ func (p *Authenticator) authenticate(rw http.ResponseWriter, req *http.Request) 
 			return nil, err
 		}
 	} else {
-		ok := p.provider.ValidateSessionState(session)
+		ok := idp.provider.ValidateSessionState(session)
 		if !ok {
 			logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Error("invalid session state")
 			p.sessionStore.ClearSession(rw, req)
@@ -460,11 +478,17 @@ func (p *Authenticator) SignOut(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	err = p.provider.Revoke(session)
-	if err != nil {
-		tags = append(tags, "error:revoke_session")
-		p.StatsdClient.Incr("provider_error", tags, 1.0)
-		logger.Error(err, "error revoking session")
+	errs := []error{}
+	for _, idp := range p.identityProviders {
+		err = idp.provider.Revoke(session)
+		if err != nil {
+			errs = append(errs, err)
+			tags = append(tags, "error:revoke_session")
+			p.StatsdClient.Incr("provider_error", tags, 1.0)
+			logger.WithProviderSlug(idp.provider.Data().ProviderSlug).Error(err, "error revoking session")
+		}
+	}
+	if len(errs) != 0 {
 		p.SignOutPage(rw, req, "An error occurred during sign out. Please try again.")
 		return
 	}
@@ -550,19 +574,35 @@ func (p *Authenticator) OAuthStart(rw http.ResponseWriter, req *http.Request) {
 		p.ErrorResponse(rw, req, "Invalid redirect parameter", http.StatusBadRequest)
 		return
 	}
+
+	idp, err := p.IdentityProvider(req)
+	if err != nil {
+		p.ErrorResponse(rw, req, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	redirectURI := p.GetRedirectURI(req.Host)
 	state := base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%v:%v", nonce, authRedirectURL.String())))
-	signInURL := p.provider.GetSignInURL(redirectURI, state)
+	signInURL := idp.provider.GetSignInURL(redirectURI, state)
 	http.Redirect(rw, req, signInURL, http.StatusFound)
 }
 
-func (p *Authenticator) redeemCode(host, code string) (*sessions.SessionState, error) {
+func (p *Authenticator) redeemCode(req *http.Request) (*sessions.SessionState, error) {
 	// The authenticator redeems `code` for an access token, and uses the token to request user
 	// info from the provider (Google).
+	code := req.Form.Get("code")
+	if code == "" {
+		return nil, HTTPError{Code: http.StatusBadRequest, Message: "Missing Code"}
+	}
 
-	redirectURI := p.GetRedirectURI(host)
+	idp, err := p.IdentityProvider(req)
+	if err != nil {
+		return nil, HTTPError{Code: http.StatusInternalServerError, Message: err.Error()}
+	}
+
+	redirectURI := p.GetRedirectURI(req.Host)
 	// see providers/google.go#Redeem for more info
-	session, err := p.provider.Redeem(redirectURI, code)
+	session, err := idp.provider.Redeem(redirectURI, code)
 	if err != nil {
 		return nil, err
 	}
@@ -577,7 +617,6 @@ func (p *Authenticator) getOAuthCallback(rw http.ResponseWriter, req *http.Reque
 	// After the provider (Google) redirects back to the sso proxy, the proxy uses this
 	// endpoint to set up auth cookies.
 	logger := log.NewLogEntry()
-
 	remoteAddr := getRemoteAddr(req)
 
 	tags := []string{
@@ -596,11 +635,7 @@ func (p *Authenticator) getOAuthCallback(rw http.ResponseWriter, req *http.Reque
 		return "", HTTPError{Code: http.StatusForbidden, Message: errorString}
 	}
 
-	code := req.Form.Get("code")
-	if code == "" {
-		return "", HTTPError{Code: http.StatusBadRequest, Message: "Missing Code"}
-	}
-	session, err := p.redeemCode(req.Host, code)
+	session, err := p.redeemCode(req)
 	if err != nil {
 		tags = append(tags, "error:redeem_code")
 		p.StatsdClient.Incr("provider_error", tags, 1.0)
@@ -743,9 +778,9 @@ func (p *Authenticator) Redeem(rw http.ResponseWriter, req *http.Request) {
 
 // Refresh takes a refresh token and returns a new access token
 func (p *Authenticator) Refresh(rw http.ResponseWriter, req *http.Request) {
-	err := req.ParseForm()
+	idp, err := p.IdentityProvider(req)
 	if err != nil {
-		http.Error(rw, fmt.Sprintf("Bad Request: %s", err.Error()), http.StatusBadRequest)
+		p.ErrorResponse(rw, req, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -755,7 +790,7 @@ func (p *Authenticator) Refresh(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	accessToken, expiresIn, err := p.provider.RefreshAccessToken(refreshToken)
+	accessToken, expiresIn, err := idp.provider.RefreshAccessToken(refreshToken)
 	if err != nil {
 		p.ErrorResponse(rw, req, err.Error(), codeForError(err))
 		return
@@ -788,6 +823,12 @@ func (p *Authenticator) GetProfile(rw http.ResponseWriter, req *http.Request) {
 		"action:profile",
 	}
 
+	idp, err := p.IdentityProvider(req)
+	if err != nil {
+		p.ErrorResponse(rw, req, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	email := req.FormValue("email")
 	if email == "" {
 		tags = append(tags, "error:empty_email")
@@ -809,7 +850,7 @@ func (p *Authenticator) GetProfile(rw http.ResponseWriter, req *http.Request) {
 		allowedGroups = strings.Split(groupsFormValue, ",")
 	}
 
-	groups, err := p.provider.ValidateGroupMembership(email, allowedGroups, accessToken)
+	groups, err := idp.provider.ValidateGroupMembership(email, allowedGroups, accessToken)
 	if err != nil {
 		tags = append(tags, "error:groups_resource")
 		p.StatsdClient.Incr("provider_error", tags, 1.0)
@@ -842,6 +883,12 @@ func (p *Authenticator) ValidateToken(rw http.ResponseWriter, req *http.Request)
 		"action:validate",
 	}
 
+	idp, err := p.IdentityProvider(req)
+	if err != nil {
+		p.ErrorResponse(rw, req, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	if accessToken == "" {
 		tags = append(tags, "error:empty_access_token")
 		p.StatsdClient.Incr("application_error", tags, 1.0)
@@ -849,7 +896,7 @@ func (p *Authenticator) ValidateToken(rw http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	ok := p.provider.ValidateSessionState(&sessions.SessionState{
+	ok := idp.provider.ValidateSessionState(&sessions.SessionState{
 		AccessToken: accessToken,
 	})
 
@@ -866,5 +913,22 @@ func (p *Authenticator) ValidateToken(rw http.ResponseWriter, req *http.Request)
 
 // Stop calls the provider's stop function
 func (p *Authenticator) Stop() {
-	p.provider.Stop()
+	for _, idp := range p.identityProviders {
+		idp.provider.Stop()
+	}
+}
+
+func (p *Authenticator) IdentityProvider(r *http.Request) (*IdentityProvider, error) {
+	err := r.ParseForm()
+	if err != nil {
+		return nil, ErrUnknownIdentityProvider
+	}
+
+	slug := r.Form.Get("provider_slug")
+	idp, ok := p.identityProviders[slug]
+	if !ok {
+		return nil, ErrUnknownIdentityProvider
+	}
+
+	return idp, nil
 }

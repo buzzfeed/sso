@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
+	"github.com/datadog/datadog-go/statsd"
 )
 
 var (
@@ -44,5 +45,6 @@ type Provider interface {
 	ValidateGroupMembership(string, []string, string) ([]string, error)
 	Revoke(*sessions.SessionState) error
 	RefreshAccessToken(string) (string, time.Duration, error)
+	AssignStatsdClient(*statsd.Client)
 	Stop()
 }

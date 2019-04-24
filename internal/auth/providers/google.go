@@ -96,8 +96,8 @@ func NewGoogleProvider(p *ProviderData, adminEmail, credsFilePath string) (*Goog
 	return googleProvider, nil
 }
 
-// SetStatsdClient sets the google provider and admin service statsd client
-func (p *GoogleProvider) SetStatsdClient(statsdClient *statsd.Client) {
+// AssignStatsdClient sets the google provider and admin service statsd client
+func (p *GoogleProvider) AssignStatsdClient(statsdClient *statsd.Client) {
 	logger := log.NewLogEntry()
 
 	p.StatsdClient = statsdClient

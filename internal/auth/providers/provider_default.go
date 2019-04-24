@@ -12,6 +12,7 @@ import (
 
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
+	"github.com/datadog/datadog-go/statsd"
 )
 
 // Redeem takes in a redirect url and code and calls the redeem url endpoint, returning a session state if a valid
@@ -184,5 +185,10 @@ func (p *ProviderData) ValidateGroupMembership(string, []string, string) ([]stri
 
 // Stop fulfills the Provider interface
 func (p *ProviderData) Stop() {
+	return
+}
+
+// AssignStatsdClient fulfills the Provider interface
+func (p *ProviderData) AssignStatsdClient(_ *statsd.Client) {
 	return
 }

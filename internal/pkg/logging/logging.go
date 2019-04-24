@@ -279,3 +279,8 @@ func (l *LogEntry) WithUserGroup(group string) *LogEntry {
 func (l *LogEntry) WithAction(action string) *LogEntry {
 	return l.withField("action", action)
 }
+
+// WithProviderSlug appends a `provider_slug` tag to a LogEntry indicating with provider is used.
+func (l *LogEntry) WithProviderSlug(slug string) *LogEntry {
+	return l.withField("provider_slug", slug)
+}
