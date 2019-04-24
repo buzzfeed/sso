@@ -2,7 +2,6 @@ package providers
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,154 +9,148 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/buzzfeed/sso/internal/auth/circuit"
-	"github.com/buzzfeed/sso/internal/pkg/groups"
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	"github.com/datadog/datadog-go/statsd"
 )
 
-// GoogleProvider is an implementation of the Provider interface.
-type GoogleProvider struct {
+// OktaProvider is an implementation of the Provider interface.
+type OktaProvider struct {
 	*ProviderData
 	StatsdClient *statsd.Client
-	AdminService AdminService
 	cb           *circuit.Breaker
-	GroupsCache  groups.MemberSetCache
 }
 
-// NewGoogleProvider returns a new GoogleProvider and sets the provider url endpoints.
-func NewGoogleProvider(p *ProviderData, adminEmail, credsFilePath string) (*GoogleProvider, error) {
-	if adminEmail != "" || credsFilePath != "" {
-		if adminEmail == "" {
-			return nil, errors.New("missing setting: google-admin-email")
+type GetUserProfileResponse struct {
+	EmailAddress  string   `json:"email"`
+	EmailVerified bool     `json:"email_verified"`
+	Groups        []string `json:"groups"`
+}
+
+// NewOktaProvider returns a new OktaProvider and sets the provider url endpoints.
+func NewOktaProvider(p *ProviderData, OrgURL, providerServerID string) (*OktaProvider, error) {
+	if OrgURL != "" || providerServerID != "" {
+		if OrgURL == "" {
+			return nil, errors.New("missing setting: okta_org_url")
 		}
-		if credsFilePath == "" {
-			return nil, errors.New("missing setting: google-service-account-json")
+		if providerServerID == "" {
+			return nil, errors.New("missing setting: provider_server_id")
 		}
 	}
 
-	p.ProviderName = "Google"
+	p.ProviderName = "Okta"
+	scheme := "https"
+	// interact with resource owner and obtain an authorization grant
 	if p.SignInURL.String() == "" {
-		p.SignInURL = &url.URL{Scheme: "https",
-			Host: "accounts.google.com",
-			Path: "/o/oauth2/auth",
-			// to get a refresh token. see https://developers.google.com/identity/protocols/OAuth2WebServer#offline
-			RawQuery: "access_type=offline",
-		}
+		p.SignInURL = &url.URL{
+			Scheme: scheme,
+			Host:   OrgURL,
+			Path:   fmt.Sprintf("/oauth2/%s/v1/authorize", providerServerID)}
+		// to get a refresh token. see https://developer.okta.com/authentication-guide/tokens/refreshing-tokens/
 	}
+	// returns access tokens, ID tokens or refresh tokens
 	if p.RedeemURL.String() == "" {
-		p.RedeemURL = &url.URL{Scheme: "https",
-			Host: "www.googleapis.com",
-			Path: "/oauth2/v3/token"}
+		p.RedeemURL = &url.URL{
+			Scheme: scheme,
+			Host:   OrgURL,
+			Path:   fmt.Sprintf("/oauth2/%s/v1/token", providerServerID)}
 	}
+	// revokes an access or refresh token
 	if p.RevokeURL.String() == "" {
-		p.RevokeURL = &url.URL{Scheme: "https",
-			Host: "accounts.google.com",
-			Path: "/o/oauth2/revoke"}
+		p.RevokeURL = &url.URL{
+			Scheme: scheme,
+			Host:   OrgURL,
+			Path:   fmt.Sprintf("/oauth2/%s/v1/revoke", providerServerID)}
 	}
+	// takes an access token and returns claims for the currently logged-in user
+	if p.ProfileURL.String() == "" {
+		p.ProfileURL = &url.URL{
+			Scheme: scheme,
+			Host:   OrgURL,
+			Path:   fmt.Sprintf("/oauth2/%s/v1/userinfo", providerServerID)}
+	}
+	// takes token as a URL query and returns active/inactive, and further info if active.
 	if p.ValidateURL.String() == "" {
-		p.ValidateURL = &url.URL{Scheme: "https",
-			Host: "www.googleapis.com",
-			Path: "/oauth2/v3/tokeninfo"}
+		p.ValidateURL = &url.URL{
+			Scheme: scheme,
+			Host:   OrgURL,
+			Path:   fmt.Sprintf("/oauth2/%s/v1/introspect", providerServerID)}
 	}
 	if p.Scope == "" {
-		p.Scope = "profile email"
+		// https://developer.okta.com/docs/api/resources/oidc/#scopes
+		p.Scope = "openid profile email groups offline_access"
 	}
 
-	googleProvider := &GoogleProvider{
+	oktaProvider := &OktaProvider{
 		ProviderData: p,
 	}
 
-	googleProvider.cb = circuit.NewBreaker(&circuit.Options{
+	oktaProvider.cb = circuit.NewBreaker(&circuit.Options{
 		HalfOpenConcurrentRequests: 2,
-		OnStateChange:              googleProvider.cbStateChange,
-		OnBackoff:                  googleProvider.cbBackoff,
+		OnStateChange:              oktaProvider.cbStateChange,
+		OnBackoff:                  oktaProvider.cbBackoff,
 		ShouldTripFunc:             func(c circuit.Counts) bool { return c.ConsecutiveFailures >= 3 },
 		ShouldResetFunc:            func(c circuit.Counts) bool { return c.ConsecutiveSuccesses >= 6 },
 		BackoffDurationFunc: circuit.ExponentialBackoffDuration(
 			time.Duration(200)*time.Second, time.Duration(500)*time.Millisecond,
 		),
 	})
-	if credsFilePath != "" {
-		credsReader, err := os.Open(credsFilePath)
-		if err != nil {
-			return nil, errors.New("could not read google credentials file")
-		}
-		googleProvider.AdminService = &GoogleAdminService{
-			adminService: getAdminService(adminEmail, credsReader),
-			cb:           googleProvider.cb,
-		}
-	}
-	return googleProvider, nil
-}
-
-// SetStatsdClient sets the google provider and admin service statsd client
-func (p *GoogleProvider) SetStatsdClient(statsdClient *statsd.Client) {
-	logger := log.NewLogEntry()
-
-	p.StatsdClient = statsdClient
-
-	switch s := p.AdminService.(type) {
-	case *GoogleAdminService:
-		s.StatsdClient = statsdClient
-	default:
-		logger.Info("admin service does not have statsd client")
-	}
-
-	switch g := p.GroupsCache.(type) {
-	case *groups.FillCache:
-		g.StatsdClient = statsdClient
-	default:
-		logger.Info("groups cache does not have statsd client")
-	}
+	return oktaProvider, nil
 }
 
 // ValidateSessionState attempts to validate the session state's access token.
-func (p *GoogleProvider) ValidateSessionState(s *sessions.SessionState) bool {
+func (p *OktaProvider) ValidateSessionState(s *sessions.SessionState) bool {
 	if s.AccessToken == "" {
 		return false
 	}
 
-	var endpoint url.URL
-	endpoint = *p.ValidateURL
-	q := endpoint.Query()
-	q.Add("access_token", s.AccessToken)
-	endpoint.RawQuery = q.Encode()
+	var response struct {
+		Active bool `json:"active"`
+	}
 
-	err := p.googleRequest("POST", endpoint.String(), nil, []string{"action:validate"}, nil)
+	form := url.Values{}
+	form.Add("token", s.AccessToken)
+	form.Add("token_type_hint", "access_token")
+	form.Add("client_id", p.ClientID)
+	form.Add("client_secret", p.ClientSecret)
+
+	err := p.oktaRequest("POST", p.ValidateURL.String(), form, []string{"action:validate"}, nil, &response)
 	if err != nil {
 		return false
 	}
+	if !response.Active {
+		return false
+	}
+
 	return true
 }
 
 // GetSignInURL returns the sign in url with typical oauth parameters
-func (p *GoogleProvider) GetSignInURL(redirectURI, state string) string {
+func (p *OktaProvider) GetSignInURL(redirectURI, state string) string {
+	// https://developer.okta.com/docs/api/resources/oidc/#authorize
 	var a url.URL
 	a = *p.SignInURL
 	params, _ := url.ParseQuery(a.RawQuery)
 	params.Set("redirect_uri", redirectURI)
-	params.Set("approval_prompt", p.ApprovalPrompt)
 	params.Add("scope", p.Scope)
 	params.Set("client_id", p.ClientID)
+	params.Add("response_mode", "query")
 	params.Set("response_type", "code")
 	params.Add("state", state)
 	a.RawQuery = params.Encode()
 	return a.String()
 }
 
-func (p *GoogleProvider) googleRequest(method, endpoint string, params url.Values, tags []string, response interface{}) error {
+func (p *OktaProvider) oktaRequest(method, endpoint string, params url.Values, tags []string, header http.Header, response interface{}) error {
 	logger := log.NewLogEntry()
 
 	startTS := time.Now()
 	var body io.Reader
 
-	tags = append(tags, "provider:google")
+	tags = append(tags, "provider:okta")
 	switch method {
 	case "POST":
 		body = bytes.NewBufferString(params.Encode())
@@ -176,8 +169,10 @@ func (p *GoogleProvider) googleRequest(method, endpoint string, params url.Value
 	if err != nil {
 		return err
 	}
+	if header != nil {
+		req.Header = header
+	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
 	p.StatsdClient.Incr("provider.request", tags, 1.0)
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -197,7 +192,6 @@ func (p *GoogleProvider) googleRequest(method, endpoint string, params url.Value
 		p.StatsdClient.Incr("provider.internal_error", tags, 1.0)
 		return err
 	}
-
 	if resp.StatusCode != http.StatusOK {
 		p.StatsdClient.Incr("provider.error", tags, 1.0)
 		logger.WithHTTPStatus(resp.StatusCode).WithEndpoint(stripToken(endpoint)).WithResponseBody(
@@ -232,42 +226,7 @@ func (p *GoogleProvider) googleRequest(method, endpoint string, params url.Value
 	return nil
 }
 
-func emailFromIDToken(idToken string) (string, error) {
-
-	// id_token is a base64 encode ID token payload
-	// https://developers.google.com/accounts/docs/OAuth2Login#obtainuserinfo
-	jwt := strings.Split(idToken, ".")
-	b, err := jwtDecodeSegment(jwt[1])
-	if err != nil {
-		return "", err
-	}
-
-	var email struct {
-		Email         string `json:"email"`
-		EmailVerified bool   `json:"email_verified"`
-	}
-	err = json.Unmarshal(b, &email)
-	if err != nil {
-		return "", err
-	}
-	if email.Email == "" {
-		return "", errors.New("missing email")
-	}
-	if !email.EmailVerified {
-		return "", fmt.Errorf("email %s not listed as verified", email.Email)
-	}
-	return email.Email, nil
-}
-
-func jwtDecodeSegment(seg string) ([]byte, error) {
-	if l := len(seg) % 4; l > 0 {
-		seg += strings.Repeat("=", 4-l)
-	}
-
-	return base64.URLEncoding.DecodeString(seg)
-}
-
-func (p *GoogleProvider) cbBackoff(duration time.Duration, reset time.Time) {
+func (p *OktaProvider) cbBackoff(duration time.Duration, reset time.Time) {
 	logger := log.NewLogEntry()
 
 	p.StatsdClient.Timing("provider.backoff", duration, nil, 1.0)
@@ -275,7 +234,7 @@ func (p *GoogleProvider) cbBackoff(duration time.Duration, reset time.Time) {
 		"circuit breaker backoff set")
 }
 
-func (p *GoogleProvider) cbStateChange(from, to circuit.State) {
+func (p *OktaProvider) cbStateChange(from, to circuit.State) {
 	logger := log.NewLogEntry()
 
 	p.StatsdClient.Incr("provider.circuit_change", []string{fmt.Sprintf("from_state:%s", from), fmt.Sprintf("to_state:%s", to)}, 1.0)
@@ -283,17 +242,17 @@ func (p *GoogleProvider) cbStateChange(from, to circuit.State) {
 }
 
 // Redeem fulfills the Provider interface.
-// The authenticator uses this method to redeem the code provided to /callback after the user logs into their Google account.
+// The authenticator uses this method to redeem the code provided to /callback after the user logs into their Okta account.
 // The code is redeemed for an access token and refresh token
-// 1. POSTs the code and grant_type to https://www.googleapis.com/oauth2/v3/token
+// 1. POSTs the code and grant_type to https://developer.okta.com/docs/api/resources/oidc/#token
 // 2. If the request fails, the authenticator will return a 500 and display an error page (see oauth_proxy.go#OAuthCallback)
-// 3. If the request succeeds, the data from Google contains:
-//     - the access token which we use to get data from Google
+// 3. If the request succeeds, the data from Okta contains:
+//     - the access token which we use to get data from Okta
 //     - the refresh token which we can use to get a new access_token
 //     - the expiration time of the access token
 //     - a Base64 encoded id token which contains the user's email
 //       address and whether or not that email address is verified
-func (p *GoogleProvider) Redeem(redirectURL, code string) (*sessions.SessionState, error) {
+func (p *OktaProvider) Redeem(redirectURL, code string) (*sessions.SessionState, error) {
 	if code == "" {
 		return nil, ErrBadRequest
 	}
@@ -303,6 +262,7 @@ func (p *GoogleProvider) Redeem(redirectURL, code string) (*sessions.SessionStat
 	params.Add("client_secret", p.ClientSecret)
 	params.Add("code", code)
 	params.Add("grant_type", "authorization_code")
+	params.Add("scope", p.Scope)
 
 	var response struct {
 		AccessToken  string `json:"access_token"`
@@ -310,14 +270,12 @@ func (p *GoogleProvider) Redeem(redirectURL, code string) (*sessions.SessionStat
 		ExpiresIn    int64  `json:"expires_in"`
 		IDToken      string `json:"id_token"`
 	}
-
-	err := p.googleRequest("POST", p.RedeemURL.String(), params, []string{"action:redeem"}, &response)
+	err := p.oktaRequest("POST", p.RedeemURL.String(), params, []string{"action:redeem"}, nil, &response)
 	if err != nil {
 		return nil, err
 	}
-
 	var email string
-	email, err = emailFromIDToken(response.IDToken)
+	email, err = p.verifyEmailWithAccessToken(response.AccessToken)
 	if err != nil {
 		return nil, err
 	}
@@ -331,60 +289,85 @@ func (p *GoogleProvider) Redeem(redirectURL, code string) (*sessions.SessionStat
 	}, nil
 }
 
-// PopulateMembers is the fill function for the groups cache
-func (p *GoogleProvider) PopulateMembers(group string) (groups.MemberSet, error) {
-	members, err := p.AdminService.ListMemberships(group, 4)
+// verifyEmailWithAccessToken takes in an access token and
+// checks if it is verified with Okta. Conditionally returns
+// an empty string, or if validated the email address in question.
+func (p *OktaProvider) verifyEmailWithAccessToken(AccessToken string) (string, error) {
+	if AccessToken == "" {
+		return "", ErrBadRequest
+	}
+
+	userinfo, err := p.GetUserProfile(AccessToken)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	memberSet := map[string]struct{}{}
-	for _, member := range members {
-		memberSet[member] = struct{}{}
+	if userinfo.EmailAddress == "" {
+		return "", errors.New("missing email")
 	}
-	return memberSet, nil
+	if !userinfo.EmailVerified {
+		return "", errors.New("email not verified")
+	}
+
+	return userinfo.EmailAddress, nil
 }
 
-// ValidateGroupMembership takes in an email and the allowed groups and returns the groups that the email is part of in that list.
-// If `allGroups` is an empty list, returns an empty list.
-func (p *GoogleProvider) ValidateGroupMembership(email string, allGroups []string, _ string) ([]string, error) {
-	logger := log.NewLogEntry()
+// ValidateGroupMembership takes in an email, a list of allowed groups an access token
+// - sends a request to the /userinfo endpoint to return a slice of users' group membership
+// - compares allowed groups to users' groups.
+// Conditionally returns an empty (nil) slice or a slice of the matching groups.
+func (p *OktaProvider) ValidateGroupMembership(email string, allowedGroups []string, accessToken string) ([]string, error) {
+	if accessToken == "" {
+		return nil, ErrBadRequest
+	}
 
-	groups := []string{}
-	var useGroupsResource bool
-
-	// if `allGroups` is empty, we return an empty list
-	if len(allGroups) == 0 {
+	if len(allowedGroups) == 0 {
 		return []string{}, nil
 	}
 
-	// iterate over the groups, if a set isn't populated only call the GroupsResource once and check all groups
-	for _, group := range allGroups {
-		memberSet, ok := p.GroupsCache.Get(group)
-		if !ok {
-			useGroupsResource = true
-			if started := p.GroupsCache.RefreshLoop(group); started {
-				logger.WithUserGroup(group).Info(
-					"no member set cached for group; refresh loops started")
-				p.StatsdClient.Incr("cache_refresh_loop", []string{"action:profile", fmt.Sprintf("group:%s", group)}, 1.0)
+	userinfo, err := p.GetUserProfile(accessToken)
+	if err != nil {
+		return nil, err
+	}
+	if len(userinfo.Groups) == 0 {
+		return nil, errors.New("no group membership found")
+	}
+
+	matchingGroups := []string{}
+	for _, x := range allowedGroups {
+		for _, y := range userinfo.Groups {
+			if x == y {
+				matchingGroups = append(matchingGroups, x)
+				break
 			}
 		}
-		if _, exists := memberSet[email]; exists {
-			groups = append(groups, group)
-		}
+	}
+	return matchingGroups, nil
+}
+
+// GetUserProfile takes in an access token and sends a request to the /userinfo endpoint.
+// Conditionally returns nil response or a struct of specified claims.
+func (p *OktaProvider) GetUserProfile(AccessToken string) (*GetUserProfileResponse, error) {
+	// https://developer.okta.com/docs/api/resources/oidc/#userinfo
+	response := &GetUserProfileResponse{}
+
+	if AccessToken == "" {
+		return nil, ErrBadRequest
+	}
+	bearer := fmt.Sprintf("Bearer %s", AccessToken)
+	header := http.Header{}
+	header.Set("Authorization", bearer)
+
+	err := p.oktaRequest("GET", p.ProfileURL.String(), nil, []string{"action:userinfo"}, header, response)
+	if err != nil {
+		return nil, err
 	}
 
-	// if a cached member set was not populated, use the groups resource to get all the groups and filter out the ones that are in `allGroups`
-	if useGroupsResource {
-		return p.AdminService.CheckMemberships(allGroups, email)
-	}
-
-	return groups, nil
-
+	return response, nil
 }
 
 // RefreshSessionIfNeeded takes in a SessionState and
 // returns false if the session is not refreshed and true if it is.
-func (p *GoogleProvider) RefreshSessionIfNeeded(s *sessions.SessionState) (bool, error) {
+func (p *OktaProvider) RefreshSessionIfNeeded(s *sessions.SessionState) (bool, error) {
 	if s == nil || !s.RefreshPeriodExpired() || s.RefreshToken == "" {
 		return false, nil
 	}
@@ -404,8 +387,8 @@ func (p *GoogleProvider) RefreshSessionIfNeeded(s *sessions.SessionState) (bool,
 }
 
 // RefreshAccessToken takes in a refresh token and returns the new access token along with an expiration date.
-func (p *GoogleProvider) RefreshAccessToken(refreshToken string) (token string, expires time.Duration, err error) {
-	// https://developers.google.com/identity/protocols/OAuth2WebServer#refresh
+func (p *OktaProvider) RefreshAccessToken(refreshToken string) (token string, expires time.Duration, err error) {
+	// https://developer.okta.com/docs/api/resources/oidc/#token
 
 	params := url.Values{}
 	params.Add("client_id", p.ClientID)
@@ -418,7 +401,7 @@ func (p *GoogleProvider) RefreshAccessToken(refreshToken string) (token string, 
 		ExpiresIn   int64  `json:"expires_in"`
 	}
 
-	err = p.googleRequest("POST", p.RedeemURL.String(), params, []string{"action:redeem"}, &response)
+	err = p.oktaRequest("POST", p.RedeemURL.String(), params, []string{"action:refresh"}, nil, &response)
 	if err != nil {
 		return
 	}
@@ -429,11 +412,13 @@ func (p *GoogleProvider) RefreshAccessToken(refreshToken string) (token string, 
 }
 
 // Revoke revokes the access token a given session state.
-func (p *GoogleProvider) Revoke(s *sessions.SessionState) error {
+func (p *OktaProvider) Revoke(s *sessions.SessionState) error {
+	// https://developer.okta.com/docs/api/resources/oidc/#revoke
 	params := url.Values{}
+	params.Add("client_id", p.ClientID)
 	params.Add("token", s.AccessToken)
 
-	err := p.googleRequest("GET", p.RevokeURL.String(), params, []string{"action:revoke"}, nil)
+	err := p.oktaRequest("POST", p.RevokeURL.String(), params, []string{"action:revoke"}, nil, nil)
 
 	if err != nil && err != ErrTokenRevoked {
 		return err
@@ -442,9 +427,4 @@ func (p *GoogleProvider) Revoke(s *sessions.SessionState) error {
 
 	logger.WithUser(s.Email).Info("revoked access token")
 	return nil
-}
-
-// Stop calls stop on the groups cache
-func (p *GoogleProvider) Stop() {
-	p.GroupsCache.Stop()
 }
