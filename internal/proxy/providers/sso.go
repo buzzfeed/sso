@@ -112,6 +112,7 @@ func (p *SSOProvider) Redeem(redirectURL, code string) (*sessions.SessionState, 
 	// TODO: remove "grant_type" and "redirect_uri", unused by authenticator
 	params := url.Values{}
 	params.Add("redirect_uri", redirectURL)
+	params.Add("provider_slug", p.ProviderSlug)
 	params.Add("client_id", p.ClientID)
 	params.Add("client_secret", p.ClientSecret)
 	params.Add("code", code)
@@ -198,6 +199,7 @@ func (p *SSOProvider) ValidateGroup(email string, allowedGroups []string, access
 func (p *SSOProvider) UserGroups(email string, groups []string, accessToken string) ([]string, error) {
 	params := url.Values{}
 	params.Add("email", email)
+	params.Add("provider_slug", p.ProviderSlug)
 	params.Add("client_id", p.ClientID)
 	params.Add("groups", strings.Join(groups, ","))
 
@@ -290,6 +292,7 @@ func (p *SSOProvider) RefreshSession(s *sessions.SessionState, allowedGroups []s
 func (p *SSOProvider) redeemRefreshToken(refreshToken string) (token string, expires time.Duration, err error) {
 	// https://developers.google.com/identity/protocols/OAuth2WebServer#refresh
 	params := url.Values{}
+	params.Add("provider_slug", p.ProviderSlug)
 	params.Add("client_id", p.ClientID)
 	params.Add("client_secret", p.ClientSecret)
 	params.Add("refresh_token", refreshToken)
@@ -338,6 +341,7 @@ func (p *SSOProvider) ValidateSessionState(s *sessions.SessionState, allowedGrou
 
 	// we validate the user's access token is valid
 	params := url.Values{}
+	params.Add("provider_slug", p.ProviderSlug)
 	params.Add("client_id", p.ClientID)
 	req, err := p.newRequest("GET", fmt.Sprintf("%s?%s", p.ValidateURL.String(), params.Encode()), nil)
 	if err != nil {
@@ -408,6 +412,7 @@ func (p *SSOProvider) GetSignInURL(redirectURL *url.URL, state string) *url.URL 
 	params, _ := url.ParseQuery(a.RawQuery)
 	params.Set("redirect_uri", rawRedirect)
 	params.Add("scope", p.Scope)
+	params.Add("provider_slug", p.ProviderSlug)
 	params.Set("client_id", p.ClientID)
 	params.Set("response_type", "code")
 	params.Add("state", state)

@@ -79,3 +79,10 @@ func (tp *TestProvider) GetSignOutURL(redirectURL *url.URL) *url.URL {
 func (tp *TestProvider) GetSignInURL(redirectURL *url.URL, state string) *url.URL {
 	return tp.Data().SignInURL
 }
+
+func (tp *TestProvider) Data() *ProviderData {
+	if tp.ProviderData == nil {
+		tp.ProviderData = &ProviderData{}
+	}
+	return tp.ProviderData
+}

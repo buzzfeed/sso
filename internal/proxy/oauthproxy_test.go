@@ -505,8 +505,7 @@ func TestEncodedSlashes(t *testing.T) {
 func generateTestUpstreamConfigs(to string, defaultUpstreamOpts *OptionsConfig) []*UpstreamConfig {
 	if defaultUpstreamOpts == nil {
 		defaultUpstreamOpts = &OptionsConfig{
-			Timeout:      time.Duration(1) * time.Second,
-			ProviderSlug: "sso-auth",
+			Timeout: time.Duration(1) * time.Second,
 		}
 	}
 
@@ -801,8 +800,7 @@ func generateTestSkipRequestSigningConfig(to string) []*UpstreamConfig {
 		"cluster":     "sso",
 	}
 	defaultUpstreamOpts := &OptionsConfig{
-		Timeout:      time.Duration(1) * time.Second,
-		ProviderSlug: "sso-auth",
+		Timeout: time.Duration(1) * time.Second,
 	}
 	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
 - service: foo
@@ -879,8 +877,7 @@ func generateMultiTestAuthSkipConfigs(toFoo, toBar string) []*UpstreamConfig {
 		"cluster":     "sso",
 	}
 	defaultUpstreamOpts := &OptionsConfig{
-		Timeout:      time.Duration(1) * time.Second,
-		ProviderSlug: "sso-auth",
+		Timeout: time.Duration(1) * time.Second,
 	}
 	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
 - service: foo
@@ -990,8 +987,7 @@ func generateSignatureTestUpstreamConfigs(key, to string) []*UpstreamConfig {
 		"foo_signing_key": key,
 	}
 	defaultUpstreamOpts := &OptionsConfig{
-		Timeout:      time.Duration(1) * time.Second,
-		ProviderSlug: "sso-auth",
+		Timeout: time.Duration(1) * time.Second,
 	}
 	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
 - service: foo
@@ -1131,7 +1127,6 @@ func TestHeadersSentToUpstreams(t *testing.T) {
 	upstreamOptsConfig := &OptionsConfig{
 		PassAccessToken: true,
 		Timeout:         time.Duration(1) * time.Second,
-		ProviderSlug:    "sso-auth",
 	}
 
 	opts := NewOptions()
@@ -1775,8 +1770,7 @@ func makeUpstreamConfigWithHeaderOverrides(overrides map[string]string) []*Upstr
 		"cluster":     "sso",
 	}
 	defaultUpstreamOpts := &OptionsConfig{
-		Timeout:      time.Duration(1) * time.Second,
-		ProviderSlug: "sso-auth",
+		Timeout: time.Duration(1) * time.Second,
 	}
 	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
 - service: foo
@@ -2159,8 +2153,7 @@ func generateTestRewriteUpstreamConfigs(fromRegex, toTemplate string) []*Upstrea
 		"cluster":     "sso",
 	}
 	defaultUpstreamOpts := &OptionsConfig{
-		Timeout:      time.Duration(1) * time.Second,
-		ProviderSlug: "sso-auth",
+		Timeout: time.Duration(1) * time.Second,
 	}
 	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
 - service: foo

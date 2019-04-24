@@ -124,8 +124,7 @@ func NewOptions() *Options {
 		DefaultUpstreamTimeout:          time.Duration(1) * time.Second,
 		DefaultUpstreamTCPResetDeadline: time.Duration(1) * time.Minute,
 
-		Providers:            []string{"sso-auth"},
-		DefaultProviderSlug:  "sso-auth",
+		Providers:            []string{""},
 		DefaultAllowedGroups: []string{},
 		PassAccessToken:      false,
 

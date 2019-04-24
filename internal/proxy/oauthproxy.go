@@ -48,6 +48,7 @@ var (
 	ErrLifetimeExpired   = errors.New("user lifetime expired")
 	ErrUserNotAuthorized = errors.New("user not authorized")
 	ErrUnknownHost       = errors.New("unknown host")
+	ErrIncorrectProvider = errors.New("user authorized with incorrect provider")
 )
 
 const statusInvalidHost = 421
@@ -425,8 +426,6 @@ func (p *OAuthProxy) Handle(host string, handler http.Handler, tags []string, up
 		tags:           tags,
 		provider:       opts.providers[upstreamConfig.ProviderSlug],
 	}
-	fmt.Printf("\n\nprovider slug %q\n\n", upstreamConfig.ProviderSlug)
-	fmt.Printf("provider: %v\n\n", opts.providers[upstreamConfig.ProviderSlug])
 }
 
 // HandleRegex constructs a route from the given regexp and matches it to the provided http.Handler and UpstreamConfig
@@ -439,8 +438,6 @@ func (p *OAuthProxy) HandleRegex(regex *regexp.Regexp, handler http.Handler, tag
 		tags:           tags,
 		provider:       opts.providers[upstreamConfig.ProviderSlug],
 	})
-	fmt.Printf("\n\nprovider slug %q\n\n", upstreamConfig.ProviderSlug)
-	fmt.Printf("provider: %v\n\n", opts.providers[upstreamConfig.ProviderSlug])
 }
 
 // router attempts to find a route for a equest. If a route is successfully matched,
@@ -902,6 +899,10 @@ func (p *OAuthProxy) Proxy(rw http.ResponseWriter, req *http.Request) {
 			// No cookie is set, start the oauth flow
 			p.OAuthStart(rw, req, tags)
 			return
+		case ErrIncorrectProvider:
+			// Incorrect provider, start the oauth flow
+			p.OAuthStart(rw, req, tags)
+			return
 		case ErrUserNotAuthorized:
 			tags = append(tags, "error:user_unauthorized")
 			p.StatsdClient.Incr("application_error", tags, 1.0)
@@ -971,6 +972,11 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 		// We loaded a cookie but it wasn't valid, clear it, and reject the request
 		logger.Error(err, "error authenticating user")
 		return err
+	}
+
+	if session.ProviderSlug != route.provider.Data().ProviderSlug {
+		logger.WithUser(session.Email).Info("user authenticated with incorrect provider")
+		return ErrIncorrectProvider
 	}
 
 	// Lifetime period is the entire duration in which the session is valid.
