@@ -319,7 +319,7 @@ func AssignProvider(opts *Options) func(*Authenticator) error {
 			return err
 		}
 		proxy.identityProviders[provider.Data().ProviderSlug] = &IdentityProvider{
-			provider,
+			provider: provider,
 		}
 		return err
 	}

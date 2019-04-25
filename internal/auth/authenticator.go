@@ -36,7 +36,8 @@ var SignatureHeaders = []string{
 }
 
 type IdentityProvider struct {
-	provider providers.Provider
+	provider     providers.Provider
+	sessionStore sessions.SessionStore
 }
 
 // Authenticator stores all the information associated with proxying the request.
@@ -47,8 +48,7 @@ type Authenticator struct {
 	Host             string
 	CookieSecure     bool
 
-	csrfStore    sessions.CSRFStore
-	sessionStore sessions.SessionStore
+	csrfStore sessions.CSRFStore
 
 	redirectURL        *url.URL // the url to receive requests at
 	identityProviders  map[string]*IdentityProvider
@@ -117,7 +117,6 @@ func SetCookieStore(opts *Options) func(*Authenticator) error {
 		}
 
 		a.csrfStore = cookieStore
-		a.sessionStore = cookieStore
 		a.AuthCodeCipher = authCodeCipher
 		return nil
 	}
@@ -262,28 +261,33 @@ func (p *Authenticator) SignInPage(rw http.ResponseWriter, req *http.Request, co
 	p.templates.ExecuteTemplate(rw, "sign_in.html", t)
 }
 
-func (p *Authenticator) authenticate(rw http.ResponseWriter, req *http.Request) (*sessions.SessionState, error) {
+func (p *Authenticator) authenticate(rw http.ResponseWriter, req *http.Request) (session *sessions.SessionState, err error) {
 	logger := log.NewLogEntry()
 	remoteAddr := getRemoteAddr(req)
 
 	idp, err := p.IdentityProvider(req)
 	if err != nil {
 		logger.WithRemoteAddress(remoteAddr).Error(err, "unknown identity provider")
-		p.sessionStore.ClearSession(rw, req)
+		idp.sessionStore.ClearSession(rw, req)
 		return nil, err
 	}
 
-	// TODO remove refresh cookie bool when we remove payloads cipher logic
-	session, err := p.sessionStore.LoadSession(req)
+	session, err = idp.sessionStore.LoadSession(req)
 	if err != nil {
 		logger.WithRemoteAddress(remoteAddr).Error(err, "error loading session")
-		p.sessionStore.ClearSession(rw, req)
+		idp.sessionStore.ClearSession(rw, req)
 		return nil, err
 	}
+
+	// Clear the session cookie if anything goes wrong.
+	defer func() {
+		if err != nil {
+			idp.sessionStore.ClearSession(rw, req)
+		}
+	}()
 
 	if session.LifetimePeriodExpired() {
 		logger.WithUser(session.Email).Info("lifetime has expired, restarting authentication")
-		p.sessionStore.ClearSession(rw, req)
 		return nil, sessions.ErrLifetimeExpired
 	}
 
@@ -293,7 +297,6 @@ func (p *Authenticator) authenticate(rw http.ResponseWriter, req *http.Request) 
 		// clear the cookie and reject the request
 		if err != nil {
 			logger.WithUser(session.Email).Error(err, "refreshing session failed")
-			p.sessionStore.ClearSession(rw, req)
 			return nil, err
 		}
 
@@ -301,33 +304,29 @@ func (p *Authenticator) authenticate(rw http.ResponseWriter, req *http.Request) 
 			// User is not authorized after refresh
 			// clear the cookie and reject the request
 			logger.WithUser(session.Email).Error("not authorized after refreshing the session")
-			p.sessionStore.ClearSession(rw, req)
 			return nil, ErrUserNotAuthorized
 		}
 
-		err = p.sessionStore.SaveSession(rw, req, session)
+		err = idp.sessionStore.SaveSession(rw, req, session)
 		if err != nil {
 			// We refreshed the session successfully, but failed to save it.
 			// This could be from failing to encode the session properly.
 			// But, we clear the session cookie and reject the request
 			logger.WithUser(session.Email).Error(err, "could not save refreshed session")
-			p.sessionStore.ClearSession(rw, req)
 			return nil, err
 		}
 	} else {
 		ok := idp.provider.ValidateSessionState(session)
 		if !ok {
 			logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Error("invalid session state")
-			p.sessionStore.ClearSession(rw, req)
 			return nil, ErrUserNotAuthorized
 		}
-		err = p.sessionStore.SaveSession(rw, req, session)
+		err = idp.sessionStore.SaveSession(rw, req, session)
 		if err != nil {
 			// We validated the session successfully, but failed to save it.
 			// This could be from failing to encode the session properly.
 			// But, we clear the session cookie and reject the request!
 			logger.WithUser(session.Email).Error(err, "could not save validated session")
-			p.sessionStore.ClearSession(rw, req)
 			return nil, err
 		}
 	}
@@ -358,6 +357,7 @@ func (p *Authenticator) SignIn(rw http.ResponseWriter, req *http.Request) {
 		"action:sign_in",
 		fmt.Sprintf("proxy_host:%s", proxyHost),
 	}
+
 	session, err := p.authenticate(rw, req)
 	switch err {
 	case nil:
@@ -367,7 +367,6 @@ func (p *Authenticator) SignIn(rw http.ResponseWriter, req *http.Request) {
 	case http.ErrNoCookie:
 		p.SignInPage(rw, req, http.StatusOK)
 	case sessions.ErrLifetimeExpired, sessions.ErrInvalidSession:
-		p.sessionStore.ClearSession(rw, req)
 		p.SignInPage(rw, req, http.StatusOK)
 	default:
 		tags = append(tags, "error:sign_in_error")
@@ -462,24 +461,23 @@ func (p *Authenticator) SignOut(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	session, err := p.sessionStore.LoadSession(req)
-	switch err {
-	case nil:
-		break
-	// if there's no cookie in the session we can just redirect
-	case http.ErrNoCookie:
-		http.Redirect(rw, req, redirectURI, http.StatusFound)
-		return
-	default:
-		// a different error, clear the session cookie and redirect
-		logger.Error(err, "error loading cookie session")
-		p.sessionStore.ClearSession(rw, req)
-		http.Redirect(rw, req, redirectURI, http.StatusFound)
-		return
-	}
-
 	errs := []error{}
 	for _, idp := range p.identityProviders {
+		session, err := idp.sessionStore.LoadSession(req)
+		switch err {
+		case nil:
+			break
+		// if there's no cookie in the session we can just redirect
+		case http.ErrNoCookie:
+			http.Redirect(rw, req, redirectURI, http.StatusFound)
+			continue
+		default:
+			// a different error, clear the session cookie and redirect
+			logger.Error(err, "error loading cookie session")
+			idp.sessionStore.ClearSession(rw, req)
+			continue
+		}
+
 		err = idp.provider.Revoke(session)
 		if err != nil {
 			errs = append(errs, err)
@@ -487,13 +485,13 @@ func (p *Authenticator) SignOut(rw http.ResponseWriter, req *http.Request) {
 			p.StatsdClient.Incr("provider_error", tags, 1.0)
 			logger.WithProviderSlug(idp.provider.Data().ProviderSlug).Error(err, "error revoking session")
 		}
+		idp.sessionStore.ClearSession(rw, req)
 	}
 	if len(errs) != 0 {
 		p.SignOutPage(rw, req, "An error occurred during sign out. Please try again.")
 		return
 	}
 
-	p.sessionStore.ClearSession(rw, req)
 	http.Redirect(rw, req, redirectURI, http.StatusFound)
 }
 
@@ -512,7 +510,13 @@ func (p *Authenticator) SignOutPage(rw http.ResponseWriter, req *http.Request, m
 	// validateRedirectURI middleware already ensures that this is a valid URL
 	redirectURI := req.Form.Get("redirect_uri")
 
-	session, err := p.sessionStore.LoadSession(req)
+	idp, err := p.IdentityProvider(req)
+	if err != nil {
+		p.ErrorResponse(rw, req, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	session, err := idp.sessionStore.LoadSession(req)
 	if err != nil {
 		http.Redirect(rw, req, redirectURI, http.StatusFound)
 		return
@@ -688,8 +692,16 @@ func (p *Authenticator) getOAuthCallback(rw http.ResponseWriter, req *http.Reque
 		return "", HTTPError{Code: http.StatusForbidden, Message: "Invalid Account"}
 	}
 
+	idp, err := p.IdentityProvider(req)
+	if err != nil {
+		tags = append(tags, "error:unknown_identity_provider")
+		p.StatsdClient.Incr("application_error", tags, 1.0)
+		logger.WithRemoteAddress(remoteAddr).Error(err, "unknown identity provider")
+		return "", HTTPError{Code: http.StatusBadRequest, Message: "Unknown Identity Provider"}
+	}
+
 	logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info("authentication complete")
-	err = p.sessionStore.SaveSession(rw, req, session)
+	err = idp.sessionStore.SaveSession(rw, req, session)
 	if err != nil {
 		tags = append(tags, "error:save_session_failed")
 		p.StatsdClient.Incr("application_error", tags, 1.0)
@@ -749,12 +761,20 @@ func (p *Authenticator) Redeem(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	idp, ok := p.identityProviders[session.ProviderSlug]
+	if !ok {
+		tags = append(tags, "error:invalid_session")
+		p.StatsdClient.Incr("application_error", tags, 1.0)
+		logger.WithHTTPStatus(http.StatusUnauthorized).Error("unknown provider")
+		http.Error(rw, "Unknown Provider", http.StatusUnauthorized)
+		return
+	}
+
 	if session != nil && (session.RefreshPeriodExpired() || session.LifetimePeriodExpired()) {
 		tags = append(tags, "error:expired_session")
 		p.StatsdClient.Incr("application_error", tags, 1.0)
 		logger.WithUser(session.Email).WithRefreshDeadline(session.RefreshDeadline).WithLifetimeDeadline(session.LifetimeDeadline).Error("expired session")
-		p.sessionStore.ClearSession(rw, req)
-
+		idp.sessionStore.ClearSession(rw, req)
 		http.Error(rw, fmt.Sprintf("expired session"), http.StatusUnauthorized)
 		return
 	}

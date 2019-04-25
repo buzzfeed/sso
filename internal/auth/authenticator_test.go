@@ -34,13 +34,6 @@ func setMockCSRFStore(store *sessions.MockCSRFStore) func(*Authenticator) error 
 	}
 }
 
-func setMockSessionStore(store *sessions.MockSessionStore) func(*Authenticator) error {
-	return func(a *Authenticator) error {
-		a.sessionStore = store
-		return nil
-	}
-}
-
 func setMockTempl() func(*Authenticator) error {
 	return func(a *Authenticator) error {
 		a.templates = &templates.MockTemplate{}
@@ -59,18 +52,17 @@ func setMockAuthCodeCipher(cipher *aead.MockCipher, s interface{}) func(*Authent
 	}
 }
 
-func setTestProvider(p providers.Provider) func(*Authenticator) error {
+func setTestProvider(p providers.Provider, store *sessions.MockSessionStore) func(*Authenticator) error {
 	return func(a *Authenticator) error {
 		if a.identityProviders == nil {
 			a.identityProviders = make(map[string]*IdentityProvider)
 		}
 
-		data := p.Data()
-
-		slug := data.ProviderSlug
+		slug := p.Data().ProviderSlug
 
 		a.identityProviders[slug] = &IdentityProvider{
-			provider: p,
+			provider:     p,
+			sessionStore: store,
 		}
 
 		return nil
@@ -454,10 +446,9 @@ func TestSignIn(t *testing.T) {
 
 			auth, err := NewAuthenticator(opts,
 				setMockValidator(func(string) bool { return tc.validEmail }),
-				setMockSessionStore(tc.mockSessionStore),
 				setMockTempl(),
 				setMockAuthCodeCipher(tc.mockAuthCodeCipher, nil),
-				setTestProvider(provider),
+				setTestProvider(provider, tc.mockSessionStore),
 			)
 			testutil.Ok(t, err)
 
@@ -592,9 +583,8 @@ func TestSignOutPage(t *testing.T) {
 
 			p, _ := NewAuthenticator(opts,
 				setMockValidator(func(string) bool { return true }),
-				setMockSessionStore(tc.mockSessionStore),
 				setMockTempl(),
-				setTestProvider(provider),
+				setTestProvider(provider, tc.mockSessionStore),
 			)
 
 			params, _ := url.ParseQuery(u.RawQuery)
@@ -677,7 +667,7 @@ func TestValidateEndpoint(t *testing.T) {
 			testProvider := providers.NewTestProvider(validateURL)
 			testProvider.ValidToken = tc.ValidToken
 
-			proxy, _ := NewAuthenticator(opts, setTestProvider(testProvider))
+			proxy, _ := NewAuthenticator(opts, setTestProvider(testProvider, &sessions.MockSessionStore{}))
 
 			u, _ := url.Parse(tc.Endpoint)
 			params, _ := url.ParseQuery(u.RawQuery)
@@ -881,7 +871,7 @@ func TestRefreshEndpoint(t *testing.T) {
 			u, _ := url.Parse("http://example.com")
 			testProvider := providers.NewTestProvider(u)
 			testProvider.RefreshFunc = tc.refreshFunc
-			p, _ := NewAuthenticator(opts, setTestProvider(testProvider))
+			p, _ := NewAuthenticator(opts, setTestProvider(testProvider, &sessions.MockSessionStore{}))
 
 			params := url.Values{}
 			params.Set("refresh_token", tc.refreshToken)
@@ -959,7 +949,7 @@ func TestGetProfile(t *testing.T) {
 
 			p, _ := NewAuthenticator(opts,
 				setMockValidator(func(string) bool { return true }),
-				setTestProvider(testProvider),
+				setTestProvider(testProvider, &sessions.MockSessionStore{}),
 			)
 
 			req := httptest.NewRequest("GET", fmt.Sprintf("/?email=%s", tc.email), nil)
@@ -1066,7 +1056,7 @@ func TestRedeemCode(t *testing.T) {
 
 			proxy, _ := NewAuthenticator(opts,
 				setMockValidator(func(string) bool { return true }),
-				setTestProvider(testProvider),
+				setTestProvider(testProvider, &sessions.MockSessionStore{}),
 			)
 
 			v := url.Values{}
@@ -1180,8 +1170,17 @@ func TestRedeemEndpoint(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			opts := testOpts("client_id", "client_secret")
 			opts.Validate()
-			p, _ := NewAuthenticator(opts, setMockAuthCodeCipher(tc.mockCipher, tc.sessionState),
-				setMockSessionStore(&sessions.MockSessionStore{}))
+
+			testURL, err := url.Parse("http://example.com")
+			if err != nil {
+				t.Fatalf("error parsing test url: %s", err.Error())
+			}
+			testProvider := providers.NewTestProvider(testURL)
+
+			p, _ := NewAuthenticator(opts,
+				setMockAuthCodeCipher(tc.mockCipher, tc.sessionState),
+				setTestProvider(testProvider, &sessions.MockSessionStore{}),
+			)
 
 			params := url.Values{}
 			for k, v := range tc.paramsMap {
@@ -1465,9 +1464,8 @@ func TestOAuthCallback(t *testing.T) {
 
 			proxy, _ := NewAuthenticator(opts,
 				setMockValidator(func(string) bool { return tc.validEmail }),
-				setTestProvider(testProvider),
+				setTestProvider(testProvider, tc.sessionStore),
 				setMockCSRFStore(tc.csrfResp),
-				setMockSessionStore(tc.sessionStore),
 			)
 
 			proxy.redirectURL = testURL
@@ -1582,10 +1580,11 @@ func TestOAuthStart(t *testing.T) {
 			opts.Validate()
 			u, _ := url.Parse("http://example.com")
 			provider := providers.NewTestProvider(u)
-			proxy, _ := NewAuthenticator(opts, setTestProvider(provider), func(p *Authenticator) error {
-				p.Validator = func(string) bool { return true }
-				return nil
-			}, setMockCSRFStore(&sessions.MockCSRFStore{}))
+			proxy, _ := NewAuthenticator(opts,
+				setTestProvider(provider, &sessions.MockSessionStore{}),
+				setMockCSRFStore(&sessions.MockCSRFStore{}),
+				setMockValidator(func(string) bool { return true }),
+			)
 
 			params := url.Values{}
 			if tc.RedirectURI != "" {

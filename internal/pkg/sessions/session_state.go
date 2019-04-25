@@ -17,6 +17,8 @@ var (
 
 // SessionState is our object that keeps track of a user's session state
 type SessionState struct {
+	ProviderSlug string `json:"provider_slug"`
+
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 
