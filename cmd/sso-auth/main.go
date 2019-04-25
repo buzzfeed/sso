@@ -41,7 +41,13 @@ func main() {
 		return nil
 	}
 
-	authenticator, err := auth.NewAuthenticator(opts, emailValidator, auth.AssignProvider(opts), auth.SetCookieStore(opts), auth.AssignStatsdClient(opts))
+	authenticator, err := auth.NewAuthenticator(opts,
+		emailValidator,
+		auth.AssignProvider(opts),
+		auth.SetCSRFStore(opts),
+		auth.SetAuthCodeCipher(opts),
+		auth.AssignStatsdClient(opts),
+	)
 	if err != nil {
 		logger.Error(err, "error creating new Authenticator")
 		os.Exit(1)

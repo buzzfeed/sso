@@ -13,6 +13,7 @@ import (
 	"github.com/buzzfeed/sso/internal/auth/providers"
 	"github.com/buzzfeed/sso/internal/pkg/groups"
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
+	"github.com/buzzfeed/sso/internal/pkg/sessions"
 )
 
 // Options are config options that can be set by environment variables
@@ -43,6 +44,7 @@ import (
 // PassUserHeaders - bool (default true) - pass X-Forwarded-User and X-Forwarded-Email information to upstream
 // SetXAuthRequest - set X-Auth-Request-User and X-Auth-Request-Email response headers (useful in Nginx auth_request mode)
 // Provider - provider name
+// ProviderSlug - slug of provider
 // ProviderServerID - string - if using Okta as the provider, the authorisation server ID (defaults to 'default')
 // SignInURL - provider sign in endpoint
 // RedeemURL - provider token redemption endpoint
@@ -99,6 +101,7 @@ type Options struct {
 
 	// These options allow for other providers besides Google, with potential overrides.
 	Provider         string `envconfig:"PROVIDER" default:"google"`
+	ProviderSlug     string `envconfig:"PROVIDER_SLUG" default:"google"`
 	ProviderServerID string `envconfig:"PROVIDER_SERVER_ID" default:"default"`
 
 	SignInURL      string `envconfig:"SIGNIN_URL"`
@@ -259,6 +262,7 @@ func newProvider(o *Options) (providers.Provider, error) {
 		ClientSecret:       o.ClientSecret,
 		ApprovalPrompt:     o.ApprovalPrompt,
 		SessionLifetimeTTL: o.SessionLifetimeTTL,
+		ProviderSlug:       o.ProviderSlug,
 	}
 
 	var err error
@@ -318,9 +322,27 @@ func AssignProvider(opts *Options) func(*Authenticator) error {
 		if err != nil {
 			return err
 		}
-		proxy.identityProviders[provider.Data().ProviderSlug] = &IdentityProvider{
-			provider: provider,
+
+		cookieStore, err := sessions.NewCookieStore(
+			fmt.Sprintf("%s_%s", opts.CookieName, provider.Data().ProviderSlug),
+			sessions.CreateMiscreantCookieCipher(opts.decodedCookieSecret),
+			func(c *sessions.CookieStore) error {
+				c.CookieDomain = opts.CookieDomain
+				c.CookieHTTPOnly = opts.CookieHTTPOnly
+				c.CookieExpire = opts.CookieExpire
+				c.CookieSecure = opts.CookieSecure
+				return nil
+			},
+		)
+		if err != nil {
+			return err
 		}
+
+		proxy.identityProviders[provider.Data().ProviderSlug] = &IdentityProvider{
+			provider:     provider,
+			sessionStore: cookieStore,
+		}
+
 		return err
 	}
 }

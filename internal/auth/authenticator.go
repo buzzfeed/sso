@@ -122,6 +122,44 @@ func SetCookieStore(opts *Options) func(*Authenticator) error {
 	}
 }
 
+// SetCSRFStore sets the csrf store to use a miscreant cipher
+func SetCSRFStore(opts *Options) func(*Authenticator) error {
+	return func(a *Authenticator) error {
+		cookieStore, err := sessions.NewCookieStore(opts.CookieName,
+			sessions.CreateMiscreantCookieCipher(opts.decodedCookieSecret),
+			func(c *sessions.CookieStore) error {
+				c.CookieDomain = opts.CookieDomain
+				c.CookieHTTPOnly = opts.CookieHTTPOnly
+				c.CookieExpire = opts.CookieExpire
+				c.CookieSecure = opts.CookieSecure
+				return nil
+			})
+
+		if err != nil {
+			return err
+		}
+
+		a.csrfStore = cookieStore
+		return nil
+	}
+}
+
+// SetAuthCodeCipher sets the auth code cipher used for encrypting auth codes
+func SetAuthCodeCipher(opts *Options) func(*Authenticator) error {
+	return func(a *Authenticator) error {
+		decodedAuthCodeSecret, err := base64.StdEncoding.DecodeString(opts.AuthCodeSecret)
+		if err != nil {
+			return err
+		}
+		authCodeCipher, err := aead.NewMiscreantCipher([]byte(decodedAuthCodeSecret))
+		if err != nil {
+			return err
+		}
+		a.AuthCodeCipher = authCodeCipher
+		return nil
+	}
+}
+
 // NewAuthenticator creates a Authenticator struct and applies the optional functions slice to the struct.
 func NewAuthenticator(opts *Options, optionFuncs ...func(*Authenticator) error) (*Authenticator, error) {
 	logger := log.NewLogEntry()
