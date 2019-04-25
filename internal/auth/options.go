@@ -338,6 +338,7 @@ func AssignProvider(opts *Options) func(*Authenticator) error {
 			return err
 		}
 
+		proxy.identityProviders = make(map[string]*IdentityProvider)
 		proxy.identityProviders[provider.Data().ProviderSlug] = &IdentityProvider{
 			provider:     provider,
 			sessionStore: cookieStore,
