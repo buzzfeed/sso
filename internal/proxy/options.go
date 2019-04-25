@@ -200,7 +200,6 @@ func (o *Options) Validate() error {
 			SkipAuthPreflight: o.SkipAuthPreflight,
 			ProviderSlug:      o.DefaultProviderSlug,
 		}
-		fmt.Printf("default upstream config opts: %v\n\n", defaultUpstreamOptionsConfig)
 
 		o.upstreamConfigs, err = loadServiceConfigs(rawBytes, o.Cluster, o.Scheme, templateVars, defaultUpstreamOptionsConfig)
 		if err != nil {
