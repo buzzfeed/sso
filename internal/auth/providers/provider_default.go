@@ -12,7 +12,13 @@ import (
 
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
+	"github.com/datadog/datadog-go/statsd"
 )
+
+// SetStatsdClient fulfills the Provider interface
+func (p *ProviderData) SetStatsdClient(*statsd.Client) {
+	return
+}
 
 // Redeem takes in a redirect url and code and calls the redeem url endpoint, returning a session state if a valid
 // access token is redeemed.

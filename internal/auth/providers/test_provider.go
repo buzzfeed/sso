@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
+	"github.com/datadog/datadog-go/statsd"
 )
 
 // TestProvider is a test implementation of the Provider interface.
@@ -48,6 +49,11 @@ func NewTestProvider(providerURL *url.URL) *TestProvider {
 			Scope: "profile.email",
 		},
 	}
+}
+
+// SetStatsdClient fulfills the Provider interface
+func (tp *TestProvider) SetStatsdClient(*statsd.Client) {
+	return
 }
 
 // ValidateSessionState returns the mock provider's ValidToken field value.

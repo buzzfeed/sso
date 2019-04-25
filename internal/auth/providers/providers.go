@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
+	"github.com/datadog/datadog-go/statsd"
 )
 
 var (
@@ -36,6 +37,7 @@ const (
 
 // Provider is an interface exposing functions necessary to authenticate with a given provider.
 type Provider interface {
+	SetStatsdClient(*statsd.Client)
 	Data() *ProviderData
 	Redeem(string, string) (*sessions.SessionState, error)
 	ValidateSessionState(*sessions.SessionState) bool

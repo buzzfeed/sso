@@ -59,13 +59,10 @@ func (p *SingleFlightProvider) do(endpoint, key string, fn func() (interface{}, 
 	return resp, err
 }
 
-// AssignStatsdClient adds a statsd client to the provider if possible.
-func (p *SingleFlightProvider) AssignStatsdClient(StatsdClient *statsd.Client) {
+// SetStatsdClient calls the provider's SetStatsdClient function.
+func (p *SingleFlightProvider) SetStatsdClient(StatsdClient *statsd.Client) {
 	p.StatsdClient = StatsdClient
-	switch v := p.provider.(type) {
-	case *GoogleProvider:
-		v.SetStatsdClient(StatsdClient)
-	}
+	p.provider.SetStatsdClient(StatsdClient)
 }
 
 // Data returns the provider data

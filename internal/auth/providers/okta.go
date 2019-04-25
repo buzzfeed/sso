@@ -101,6 +101,11 @@ func NewOktaProvider(p *ProviderData, OrgURL, providerServerID string) (*OktaPro
 	return oktaProvider, nil
 }
 
+// Sets the providers StatsdClient
+func (p *OktaProvider) SetStatsdClient(statsdClient *statsd.Client) {
+	p.StatsdClient = statsdClient
+}
+
 // ValidateSessionState attempts to validate the session state's access token.
 func (p *OktaProvider) ValidateSessionState(s *sessions.SessionState) bool {
 	if s.AccessToken == "" {
@@ -323,7 +328,6 @@ func (p *OktaProvider) ValidateGroupMembership(email string, allowedGroups []str
 	if len(allowedGroups) == 0 {
 		return []string{}, nil
 	}
-
 	userinfo, err := p.GetUserProfile(accessToken)
 	if err != nil {
 		return nil, err
