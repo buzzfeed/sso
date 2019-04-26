@@ -66,6 +66,7 @@ Secured by <b>SSO</b>{{end}}`))
 
             <form method="GET" action="/start">
                 <input type="hidden" name="redirect_uri" value="{{.Redirect}}">
+                <input type="hidden" name="provider_slug" value="{{.ProviderSlug}}">
                 <button type="submit" class="btn">Sign in with {{.ProviderName}}</button>
             </form>
         </div>

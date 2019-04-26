@@ -268,6 +268,7 @@ type signInResp struct {
 	Redirect     string
 	Destination  string
 	Version      string
+	ProviderSlug string
 }
 
 // SignInPage directs the user to the sign in page
@@ -295,6 +296,7 @@ func (p *Authenticator) SignInPage(rw http.ResponseWriter, req *http.Request, co
 		Redirect:     redirectURL.String(),
 		Destination:  destinationURL.Host,
 		Version:      VERSION,
+		ProviderSlug: idp.provider.Data().ProviderSlug,
 	}
 	p.templates.ExecuteTemplate(rw, "sign_in.html", t)
 }
