@@ -1,19 +1,14 @@
 package proxy
 
 import (
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
-	"net"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"reflect"
-	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/buzzfeed/sso/internal/pkg/aead"
@@ -21,7 +16,6 @@ import (
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	"github.com/buzzfeed/sso/internal/proxy/providers"
 
-	"github.com/18F/hmacauth"
 	"github.com/datadog/datadog-go/statsd"
 )
 
@@ -172,240 +166,10 @@ func SetProvider(provider providers.Provider) func(*OAuthProxy) error {
 	}
 }
 
-type route struct {
-	upstreamConfig *UpstreamConfig
-	handler        http.Handler
-	tags           []string
-
-	// only used for ones that have regex
-	regex *regexp.Regexp
-}
-
 // StateParameter holds the redirect id along with the session id.
 type StateParameter struct {
 	SessionID   string `json:"session_id"`
 	RedirectURI string `json:"redirect_uri"`
-}
-
-// UpstreamProxy stores information necessary for proxying the request back to the upstream.
-type UpstreamProxy struct {
-	name          string
-	cookieName    string
-	handler       http.Handler
-	auth          hmacauth.HmacAuth
-	requestSigner *RequestSigner
-	statsdClient  *statsd.Client
-}
-
-// deleteSSOCookieHeader deletes the session cookie from the request header string.
-func deleteSSOCookieHeader(req *http.Request, cookieName string) {
-	headers := []string{}
-	for _, cookie := range req.Cookies() {
-		if cookie.Name != cookieName {
-			headers = append(headers, cookie.String())
-		}
-	}
-
-	if len(headers) == 0 {
-		// there are no cookies other then session cookie so we delete the header entirely
-		req.Header.Del("Cookie")
-		return
-	}
-
-	// if there are other headers to keep, we set them minus the session cookie
-	req.Header.Set("Cookie", strings.Join(headers, ";"))
-}
-
-// ServeHTTP signs the http request and deletes cookie headers
-// before calling the upstream's ServeHTTP function.
-func (u *UpstreamProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	deleteSSOCookieHeader(r, u.cookieName)
-	if u.auth != nil {
-		u.auth.SignRequest(r)
-	}
-	if u.requestSigner != nil {
-		u.requestSigner.Sign(r)
-	}
-
-	start := time.Now()
-	u.handler.ServeHTTP(w, r)
-	duration := time.Now().Sub(start)
-
-	tags := []string{
-		fmt.Sprintf("service_name:%s", u.name),
-	}
-	u.statsdClient.Timing("proxy_request", duration, tags, 1.0)
-}
-
-// upstreamTransport is used to ensure that upstreams cannot override the
-// security headers applied by sso_proxy. Also includes functionality to rotate
-// http.Transport objects to ensure tcp connection reset deadlines are not exceeded
-type upstreamTransport struct {
-	mux sync.Mutex
-
-	deadAfter     time.Time
-	resetDeadline time.Duration
-
-	transport          *http.Transport
-	insecureSkipVerify bool
-}
-
-// RoundTrip round trips the request and deletes security headers before returning the response.
-func (t *upstreamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	transport := t.getTransport()
-
-	resp, err := transport.RoundTrip(req)
-	if err != nil {
-		logger := log.NewLogEntry()
-		logger.Error(err, "error in upstreamTransport RoundTrip")
-		return nil, err
-	}
-
-	// NOTE: This logic for this feature is spread out in various parts of the
-	// request lifecycle. We require *our* special reverse proxy to delete the security
-	// headers, if any specified by he upstream *before* we set them on our response.
-	//
-	// We do this to ensure *every* response, either originating from the upstream or
-	// from the sso proxy itself contains these security headers.
-	//
-	// * If we just specified this behavior in the reverse proxy itself, responses
-	//   that originate from the sso proxy would not have security headers.
-	// * If we just specified this beahvior in sso proxy w/out deleting headers,
-	//   we wouldn't be able to override the headers as they sent upstream, we'd just
-	//   send multiple headers
-	for key := range securityHeaders {
-		resp.Header.Del(key)
-	}
-	return resp, err
-}
-
-// getTransport gets either a cached http transport or allocates a new one
-func (t *upstreamTransport) getTransport() *http.Transport {
-	t.mux.Lock()
-	defer t.mux.Unlock()
-
-	if t.transport == nil || time.Now().After(t.deadAfter) {
-		t.deadAfter = time.Now().Add(t.resetDeadline)
-		t.transport = &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			DialContext: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
-				DualStack: true,
-			}).DialContext,
-			MaxIdleConns:          100,
-			IdleConnTimeout:       90 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			TLSClientConfig:       &tls.Config{InsecureSkipVerify: t.insecureSkipVerify},
-			ExpectContinueTimeout: 1 * time.Second,
-		}
-	}
-
-	return t.transport
-}
-
-// NewReverseProxy creates a reverse proxy to a specified url.
-// It adds an X-Forwarded-Host header that is the request's host.
-func NewReverseProxy(to *url.URL, config *UpstreamConfig) *httputil.ReverseProxy {
-	proxy := httputil.NewSingleHostReverseProxy(to)
-	proxy.Transport = &upstreamTransport{
-		resetDeadline:      config.ResetDeadline,
-		insecureSkipVerify: config.TLSSkipVerify,
-	}
-	director := proxy.Director
-	proxy.Director = func(req *http.Request) {
-		req.Header.Add("X-Forwarded-Host", req.Host)
-		director(req)
-		if !config.PreserveHost {
-			req.Host = to.Host
-		}
-	}
-	return proxy
-}
-
-// NewRewriteReverseProxy creates a reverse proxy that is capable of creating upstream
-// urls on the fly based on a from regex and a templated to field.
-// It adds an X-Forwarded-Host header to the the upstream's request.
-func NewRewriteReverseProxy(route *RewriteRoute, config *UpstreamConfig) *httputil.ReverseProxy {
-	proxy := &httputil.ReverseProxy{}
-	proxy.Transport = &upstreamTransport{
-		resetDeadline:      config.ResetDeadline,
-		insecureSkipVerify: config.TLSSkipVerify,
-	}
-	proxy.Director = func(req *http.Request) {
-		// we do this to rewrite requests
-		rewritten := route.FromRegex.ReplaceAllString(req.Host, route.ToTemplate.Opaque)
-
-		// we use to favor scheme's used in the regex, else we use the default passed in via the template
-		target, err := urlParse(route.ToTemplate.Scheme, rewritten)
-		if err != nil {
-			logger := log.NewLogEntry()
-			// we aren't in an error handling context so we have to fake it(thanks stdlib!)
-			logger.WithRequestHost(req.Host).WithRewriteRoute(route).Error(
-				err, "unable to parse and replace rewrite url")
-			req.URL = nil // this will raise an error in http.RoundTripper
-			return
-		}
-		director := httputil.NewSingleHostReverseProxy(target).Director
-
-		req.Header.Add("X-Forwarded-Host", req.Host)
-		director(req)
-		if !config.PreserveHost {
-			req.Host = target.Host
-		}
-	}
-	return proxy
-}
-
-// NewReverseProxyHandler creates a new http.Handler given a httputil.ReverseProxy
-func NewReverseProxyHandler(reverseProxy *httputil.ReverseProxy, opts *Options, config *UpstreamConfig, signer *RequestSigner) http.Handler {
-	upstreamProxy := &UpstreamProxy{
-		name:         config.Service,
-		handler:      reverseProxy,
-		auth:         config.HMACAuth,
-		cookieName:   opts.CookieName,
-		statsdClient: opts.StatsdClient,
-	}
-	if !config.SkipRequestSigning {
-		upstreamProxy.requestSigner = signer
-	}
-	if config.FlushInterval != 0 {
-		return NewStreamingHandler(upstreamProxy, opts, config)
-	}
-	if config.Timeout != 0 {
-		return NewTimeoutHandler(upstreamProxy, config)
-	}
-
-	return upstreamProxy
-}
-
-// NewTimeoutHandler creates a new handler with a configure timeout.
-func NewTimeoutHandler(handler http.Handler, config *UpstreamConfig) http.Handler {
-	timeoutMsg := fmt.Sprintf("%s failed to respond within the %s timeout period", config.Service, config.Timeout)
-	return http.TimeoutHandler(handler, config.Timeout, timeoutMsg)
-}
-
-// NewStreamingHandler creates a new handler capable of proxying a stream
-func NewStreamingHandler(handler http.Handler, opts *Options, config *UpstreamConfig) http.Handler {
-	upstreamProxy := handler.(*UpstreamProxy)
-	reverseProxy := upstreamProxy.handler.(*httputil.ReverseProxy)
-	reverseProxy.FlushInterval = config.FlushInterval
-	return upstreamProxy
-}
-
-func generateHmacAuth(signatureKey string) (hmacauth.HmacAuth, error) {
-	components := strings.Split(signatureKey, ":")
-	if len(components) != 2 {
-		return nil, fmt.Errorf("invalid signature hash:key spec")
-	}
-
-	algorithm, secret := components[0], components[1]
-	hash, err := hmacauth.DigestNameToCryptoHash(algorithm)
-	if err != nil {
-		return nil, fmt.Errorf("unsupported signature hash algorithm: %s", algorithm)
-	}
-	auth := hmacauth.NewHmacAuth(hash, []byte(secret), HMACSignatureHeader, SignatureHeaders)
-	return auth, nil
 }
 
 // NewOAuthProxy creates a new OAuthProxy struct.

@@ -19,22 +19,21 @@ var securityHeaders = map[string]string{
 // Note: the Strict-Transport-Security header is set by the requireHTTPS
 // middleware below, to avoid issues with development environments that must
 // allow plain HTTP.
-func setSecurityHeaders(h http.Handler) http.Handler {
+func setHeaders(h http.Handler, headers map[string]string) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		for key, val := range securityHeaders {
+		for key, val := range headers {
 			rw.Header().Set(key, val)
 		}
 		h.ServeHTTP(rw, req)
 	})
 }
 
+func setSecurityHeaders(h http.Handler) http.Handler {
+	return setHeaders(h, securityHeaders)
+}
+
 func (p *OAuthProxy) setResponseHeaderOverrides(upstreamConfig *UpstreamConfig, h http.Handler) http.Handler {
-	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		for key, val := range upstreamConfig.HeaderOverrides {
-			rw.Header().Set(key, val)
-		}
-		h.ServeHTTP(rw, req)
-	})
+	return setHeaders(h, upstreamConfig.HeaderOverrides)
 }
 
 func requireHTTPS(h http.Handler) http.Handler {
