@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/sha256"
 	"encoding/hex"
@@ -21,13 +22,13 @@ import (
 	"time"
 
 	"github.com/18F/hmacauth"
+	"github.com/mccutchen/go-httpbin/httpbin"
+
 	"github.com/buzzfeed/sso/internal/pkg/aead"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	"github.com/buzzfeed/sso/internal/pkg/testutil"
 	"github.com/buzzfeed/sso/internal/proxy/providers"
 )
-
-var testEncodedCookieSecret = "tJgzIEug8M/6Asjn5mvpWxxef5d5duU7BwpuD0GCHRI="
 
 func init() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
@@ -36,9 +37,16 @@ func init() {
 
 func testValidatorFunc(valid bool) func(*OAuthProxy) error {
 	return func(p *OAuthProxy) error {
-		p.EmailValidator = func(string) bool {
+		p.emailValidator = func(string) bool {
 			return valid
 		}
+		return nil
+	}
+}
+
+func setValidator(f func(string) bool) func(*OAuthProxy) error {
+	return func(p *OAuthProxy) error {
+		p.emailValidator = f
 		return nil
 	}
 }
@@ -57,27 +65,115 @@ func setSessionStore(s sessions.SessionStore) func(*OAuthProxy) error {
 	}
 }
 
-// testCookieCipher is specifically for testing marshaling outside of the cookie store
-func testCookieCipher(a aead.Cipher) func(*OAuthProxy) error {
+func setSkipAuthPreflight(skip bool) func(*OAuthProxy) error {
+	return func(p *OAuthProxy) error {
+		p.skipAuthPreflight = skip
+		return nil
+	}
+}
+
+// setCookieCipher is specifically for testing marshaling outside of the cookie store
+func setCookieCipher(a aead.Cipher) func(*OAuthProxy) error {
 	return func(p *OAuthProxy) error {
 		if a != nil {
-			p.CookieCipher = a
+			p.cookieCipher = a
 		}
 		return nil
 	}
 }
 
+func setCookieSecure(cookieSecure bool) func(*OAuthProxy) error {
+	return func(p *OAuthProxy) error {
+		p.cookieSecure = cookieSecure
+		return nil
+	}
+}
+
 func testSession() *sessions.SessionState {
-	theFuture := time.Now().AddDate(100, 0, 0)
+	theFuture := time.Now().AddDate(100, 100, 100)
 
 	return &sessions.SessionState{
 		Email:       "michael.bland@gsa.gov",
 		AccessToken: "my_access_token",
+		Groups:      []string{"foo", "bar"},
 
 		RefreshDeadline:  theFuture,
 		LifetimeDeadline: theFuture,
 		ValidDeadline:    theFuture,
 	}
+}
+
+func testHTTPBin(t *testing.T) (*url.URL, func()) {
+	h := httpbin.NewHTTPBin()
+
+	backend := httptest.NewServer(h.Handler())
+	backendURL, err := url.Parse(backend.URL)
+	testutil.Assert(t, err == nil, "could not parse ural from httptest server: %v", err)
+	return backendURL, backend.Close
+}
+
+func testNewOAuthProxy(t *testing.T, optFuncs ...func(*OAuthProxy) error) (*OAuthProxy, func()) {
+	backendURL, close := testHTTPBin(t)
+
+	opts := NewOptions()
+	providerURL, _ := url.Parse("http://localhost/")
+	provider := providers.NewTestProvider(providerURL, "")
+
+	requestSigningKey, err := ioutil.ReadFile("testdata/private_key.pem")
+	if err != nil {
+		t.Fatalf("could not read private key from testdata: %s", err)
+	}
+
+	requestSigner, err := NewRequestSigner(string(requestSigningKey))
+	if err != nil {
+		t.Fatalf("could not create request signer from testdata: %s", err)
+	}
+
+	if requestSigner == nil {
+		t.Fatalf("request signer is nil")
+	}
+
+	session := testSession()
+
+	upstreamConfig := &UpstreamConfig{
+		Route: &SimpleRoute{
+			ToURL: backendURL,
+		},
+		AllowedGroups: session.Groups,
+	}
+
+	reverseProxy := NewReverseProxy(backendURL, upstreamConfig)
+	handler := NewReverseProxyHandler(reverseProxy, opts, upstreamConfig, requestSigner)
+
+	if requestSigner == nil {
+		t.Fatalf("request signer is nil")
+	}
+
+	standardOptFuncs := []func(*OAuthProxy) error{
+		testValidatorFunc(true),
+		SetProvider(provider),
+		setSessionStore(&sessions.MockSessionStore{Session: testSession()}),
+		SetUpstreamConfig(upstreamConfig),
+		SetProxyHandler(handler),
+		SetRequestSigner(requestSigner),
+		setCSRFStore(&sessions.MockCSRFStore{}),
+		setCookieCipher(&aead.MockCipher{}),
+	}
+
+	if requestSigner == nil {
+		t.Fatalf("request signer is nil")
+	}
+
+	standardOptFuncs = append(standardOptFuncs, optFuncs...)
+
+	proxy, err := NewOAuthProxy(opts, standardOptFuncs...)
+	testutil.Assert(t, err == nil, "could not create upstream reverse proxy: %v", err)
+
+	if requestSigner == nil {
+		t.Fatalf("request signer is nil")
+	}
+
+	return proxy, close
 }
 
 func TestNewReverseProxy(t *testing.T) {
@@ -485,15 +581,29 @@ func TestEncodedSlashes(t *testing.T) {
 	}))
 	defer backend.Close()
 
-	b, _ := url.Parse(backend.URL)
-	proxyHandler := NewReverseProxy(b, &UpstreamConfig{TLSSkipVerify: false, PreserveHost: false})
+	backendURL, err := url.Parse(backend.URL)
+	if err != nil {
+		t.Fatalf("unexpected err parsing backend url: %v", err)
+	}
+	proxyHandler := NewReverseProxy(backendURL, &UpstreamConfig{TLSSkipVerify: false, PreserveHost: false})
 	frontend := httptest.NewServer(proxyHandler)
 	defer frontend.Close()
 
-	f, _ := url.Parse(frontend.URL)
+	frontendURL, err := url.Parse(frontend.URL)
+	if err != nil {
+		t.Fatalf("unexpected err parsing frontend url: %v", err)
+	}
+
 	encodedPath := "/a%2Fb/?c=1"
-	getReq := &http.Request{URL: &url.URL{Scheme: "http", Host: f.Host, Opaque: encodedPath}}
-	_, err := http.DefaultClient.Do(getReq)
+	getReq := &http.Request{
+		URL: &url.URL{
+			Scheme: "http",
+			Host:   frontendURL.Host,
+			Opaque: encodedPath,
+		},
+	}
+
+	_, err = http.DefaultClient.Do(getReq)
 	if err != nil {
 		t.Fatalf("err %s", err)
 	}
@@ -502,104 +612,54 @@ func TestEncodedSlashes(t *testing.T) {
 	}
 }
 
-func generateTestUpstreamConfigs(to string) []*UpstreamConfig {
-	if !strings.Contains(to, "://") {
-		to = fmt.Sprintf("%s://%s", "http", to)
-	}
-	parsed, err := url.Parse(to)
-	if err != nil {
-		panic(err)
-	}
-	templateVars := map[string]string{
-		"root_domain": "dev",
-		"cluster":     "sso",
-	}
-	defaultUpstreamOpts := &OptionsConfig{Timeout: time.Duration(1) * time.Second}
-	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
-- service: foo
-  default:
-    from: foo.sso.dev
-    to: %s
-`, parsed)), "sso", "http", templateVars, defaultUpstreamOpts)
-	if err != nil {
-		panic(err)
-	}
-	return upstreamConfigs
-}
-
 func TestRobotsTxt(t *testing.T) {
-	opts := NewOptions()
-	opts.ClientID = "bazquux"
-	opts.ClientSecret = "foobar"
-	opts.CookieSecret = testEncodedCookieSecret
-	opts.ProviderURLString = "https://auth.sso.dev"
-	opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev")
-	opts.Validate()
+	proxy, close := testNewOAuthProxy(t)
+	defer close()
 
-	proxy, err := NewOAuthProxy(opts)
-	if err != nil {
-		t.Errorf("unexpected error %s", err)
-	}
 	rw := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "https://foo.sso.dev/robots.txt", nil)
+	req := httptest.NewRequest("GET", "https://localhost/robots.txt", nil)
 	proxy.Handler().ServeHTTP(rw, req)
 	testutil.Equal(t, 200, rw.Code)
 	testutil.Equal(t, "User-agent: *\nDisallow: /", rw.Body.String())
 }
 
 func TestCerts(t *testing.T) {
-	opts := NewOptions()
-	opts.ClientID = "bazquux"
-	opts.ClientSecret = "foobar"
-	opts.CookieSecret = testEncodedCookieSecret
-	opts.ProviderURLString = "https://auth.sso.dev"
-	opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev")
-
-	requestSigningKey, err := ioutil.ReadFile("testdata/private_key.pem")
-	testutil.Assert(t, err == nil, "could not read private key from testdata: %s", err)
-	opts.RequestSigningKey = string(requestSigningKey)
-	opts.Validate()
-
 	expectedPublicKey, err := ioutil.ReadFile("testdata/public_key.pub")
 	testutil.Assert(t, err == nil, "could not read public key from testdata: %s", err)
 
-	var keyHash []byte
 	hasher := sha256.New()
 	_, _ = hasher.Write(expectedPublicKey)
+
+	var keyHash []byte
 	keyHash = hasher.Sum(keyHash)
 
-	proxy, err := NewOAuthProxy(opts)
-	if err != nil {
-		t.Errorf("unexpected error %s", err)
-		return
-	}
+	proxy, close := testNewOAuthProxy(t)
+	defer close()
+
 	rw := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "https://foo.sso.dev/oauth2/v1/certs", nil)
+	req := httptest.NewRequest("GET", "https://localhost/oauth2/v1/certs", nil)
+
 	proxy.Handler().ServeHTTP(rw, req)
 	testutil.Equal(t, 200, rw.Code)
 
+	body := rw.Body.String()
+
 	var certs map[string]string
-	if err := json.Unmarshal([]byte(rw.Body.String()), &certs); err != nil {
-		t.Errorf("failed to unmarshal certs from json response: %s", err)
-		return
-	}
+	err = json.Unmarshal([]byte(body), &certs)
+
+	testutil.Assert(t, err == nil, "could not unmarshal body: %s err:%v", body, err)
 	testutil.Equal(t, string(expectedPublicKey), certs[hex.EncodeToString(keyHash)])
 }
 
 func TestFavicon(t *testing.T) {
-	opts := NewOptions()
-	opts.ClientID = "bazquux"
-	opts.ClientSecret = "foobar"
-	opts.CookieSecret = testEncodedCookieSecret
-	opts.ProviderURLString = "https://auth.sso.dev"
-	opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev")
-	opts.Validate()
+	proxy, close := testNewOAuthProxy(t)
+	defer close()
 
-	proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true),
-		setSessionStore(&sessions.MockSessionStore{LoadError: http.ErrNoCookie}), setCSRFStore(&sessions.MockCSRFStore{}))
 	rw := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "https://foo.sso.dev/favicon.ico", nil)
+	req := httptest.NewRequest("GET", "https://localhost/favicon.ico", nil)
+
 	proxy.Handler().ServeHTTP(rw, req)
+
 	testutil.Equal(t, http.StatusNotFound, rw.Code)
 }
 
@@ -650,30 +710,19 @@ func TestAuthOnlyEndpoint(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "https://foo.sso.dev/oauth2/auth", nil)
+			proxy, close := testNewOAuthProxy(t,
+				setSessionStore(tc.sessionStore),
+				setValidator(func(_ string) bool { return tc.validEmail }),
+				SetProvider(&providers.TestProvider{
+					RefreshSessionFunc:  func(*sessions.SessionState, []string) (bool, error) { return true, nil },
+					ValidateSessionFunc: func(*sessions.SessionState, []string) bool { return true },
+				}),
+			)
+			defer close()
+
+			req := httptest.NewRequest("GET", "https://localhost/oauth2/auth", nil)
 			resp := httptest.NewRecorder()
 
-			opts := NewOptions()
-			opts.CookieSecret = testEncodedCookieSecret
-			opts.CookieExpire = time.Duration(72) * time.Hour
-			opts.ClientID = "client ID"
-			opts.ClientSecret = "client secret"
-			opts.EmailDomains = []string{"example.com"}
-			opts.ProviderURLString = "https://auth.sso.dev"
-			opts.GracePeriodTTL = time.Duration(3) * time.Hour
-			opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev")
-			opts.Validate()
-
-			proxy, err := NewOAuthProxy(opts, setSessionStore(tc.sessionStore), setCSRFStore(&sessions.MockCSRFStore{}), func(p *OAuthProxy) error {
-				p.EmailValidator = func(string) bool { return tc.validEmail }
-				return nil
-			})
-			proxy.provider = &providers.TestProvider{
-				RefreshSessionFunc:  func(*sessions.SessionState, []string) (bool, error) { return true, nil },
-				ValidateSessionFunc: func(*sessions.SessionState, []string) bool { return true },
-			}
-
-			testutil.Ok(t, err)
 			proxy.AuthenticateOnly(resp, req)
 			testutil.Equal(t, tc.expectedCode, resp.Code)
 			bodyBytes, _ := ioutil.ReadAll(resp.Body)
@@ -683,402 +732,160 @@ func TestAuthOnlyEndpoint(t *testing.T) {
 	}
 }
 
-// TODO: move this into a separate yaml file so that it's more accessible to understand the config
-func generateTestAuthSkipConfigs(to string) []*UpstreamConfig {
-	if !strings.Contains(to, "://") {
-		to = fmt.Sprintf("%s://%s", "http", to)
-	}
-	parsed, err := url.Parse(to)
-	if err != nil {
-		panic(err)
-	}
-	templateVars := map[string]string{
-		"root_domain": "dev",
-		"cluster":     "sso",
-	}
-	defaultUpstreamOpts := &OptionsConfig{Timeout: time.Duration(1) * time.Second}
-	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
-- service: foo
-  default:
-    from: foo.sso.dev
-    to: %s
-    options:
-      skip_auth_regex:
-        - ^\/allow$
-`, parsed)), "sso", "http", templateVars, defaultUpstreamOpts)
-	if err != nil {
-		panic(err)
-	}
-	return upstreamConfigs
-}
-
 func TestSkipAuthRequest(t *testing.T) {
 	// start an upstream server
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Write([]byte("response"))
-	}))
-	defer upstream.Close()
-
 	testCases := []struct {
-		name                 string
-		method               string
-		url                  string
-		expectedCode         int
-		expectedResponseBody string
+		name         string
+		method       string
+		url          string
+		expectedCode int
 	}{
-		{
-			name:                 "skip auth on preflight requests",
-			method:               "OPTIONS",
-			url:                  "https://foo.sso.dev/preflight-request",
-			expectedCode:         http.StatusOK,
-			expectedResponseBody: "response",
-		},
 		{
 			name:   "rejected request",
 			method: "GET",
-			url:    "https://foo.sso.dev/rejected",
+			url:    "https://localhost/rejected",
 			// We get a 302 here, status found, and attempt to authenticate
-			expectedCode:         http.StatusOK,
-			expectedResponseBody: "response",
+			expectedCode: http.StatusFound,
 		},
 		{
-			name:                 "allowed request",
-			method:               "GET",
-			url:                  "https://foo.sso.dev/allow",
-			expectedCode:         http.StatusOK,
-			expectedResponseBody: "response",
+			name:         "skip auth on preflight requests",
+			method:       "OPTIONS",
+			url:          "https://localhost/preflight-request",
+			expectedCode: http.StatusOK,
+		},
+		{
+			name:         "allowed request",
+			method:       "GET",
+			url:          "https://localhost/allow",
+			expectedCode: http.StatusOK,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			opts := NewOptions()
-			opts.ClientID = "bazquux"
-			opts.ClientSecret = "foobar"
-			opts.CookieSecret = testEncodedCookieSecret
-			opts.SkipAuthPreflight = true
-			opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL)
-			opts.Validate()
-
-			providerURL, _ := url.Parse("https://foo-auth.sso.dev")
-			opts.provider = providers.NewTestProvider(providerURL, "")
-
-			proxy, _ := NewOAuthProxy(opts, setSessionStore(&sessions.MockSessionStore{Session: testSession()}), func(p *OAuthProxy) error {
-				p.EmailValidator = func(string) bool { return true }
-				return nil
+			backend := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
 			})
 
+			config := &UpstreamConfig{
+				SkipAuthCompiledRegex: []*regexp.Regexp{
+					regexp.MustCompile(`^\/allow$`),
+				},
+			}
+
+			proxy, close := testNewOAuthProxy(t,
+				setSkipAuthPreflight(true),
+				SetProxyHandler(backend),
+				SetUpstreamConfig(config),
+				setSessionStore(&sessions.MockSessionStore{LoadError: http.ErrNoCookie}),
+			)
+			defer close()
+
 			rw := httptest.NewRecorder()
-			req, _ := http.NewRequest(tc.method, tc.url, nil)
+			req := httptest.NewRequest(tc.method, tc.url, nil)
 
 			proxy.Handler().ServeHTTP(rw, req)
 
 			testutil.Equal(t, tc.expectedCode, rw.Code)
-			testutil.Equal(t, tc.expectedResponseBody, rw.Body.String())
 		})
 	}
 }
 
-func generateTestSkipRequestSigningConfig(to string) []*UpstreamConfig {
-	if !strings.Contains(to, "://") {
-		to = fmt.Sprintf("%s://%s", "http", to)
+func TestHMACSignatures(t *testing.T) {
+	testCases := map[string]struct {
+		signatureKey string
+		method       string
+		body         io.Reader
+		signer       hmacauth.HmacAuth
+	}{
+		"Test Get Request": {
+			signatureKey: "sha1:foobar",
+			method:       "GET",
+			signer: hmacauth.NewHmacAuth(crypto.SHA1,
+				[]byte(`foobar`),
+				HMACSignatureHeader,
+				SignatureHeaders,
+			),
+		},
+		"Test POST Request": {
+			signatureKey: "sha1:foobar",
+			method:       "POST",
+			body:         bytes.NewBufferString(`{ "hello": "world!" }`),
+			signer: hmacauth.NewHmacAuth(crypto.SHA1,
+				[]byte(`foobar`),
+				HMACSignatureHeader,
+				SignatureHeaders,
+			),
+		},
 	}
-	parsed, err := url.Parse(to)
-	if err != nil {
-		panic(err)
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// this signer acts as an upstream attempting to authenticate the request
+				result, have, want := tc.signer.AuthenticateRequest(r)
+				switch result {
+				case hmacauth.ResultNoSignature:
+					t.Fatalf("no signature received: %v", result)
+				case hmacauth.ResultMismatch:
+					t.Logf("have: %v", have)
+					t.Logf("want: %v", want)
+					t.Fatalf("expected hmac signature to match")
+				case hmacauth.ResultMatch:
+					break
+				default:
+					t.Fatalf("unexpected result: %v", result)
+				}
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer upstream.Close()
+			upstreamURL, err := url.Parse(upstream.URL)
+			if err != nil {
+				t.Fatalf("unexpected err parsing upstream url: %v", err)
+			}
+
+			hmacSigner, err := generateHmacAuth(tc.signatureKey)
+			if err != nil {
+				t.Fatalf("unexpected err creating hmac auth: %v", err)
+			}
+
+			upstreamConfig := &UpstreamConfig{
+				HMACAuth: hmacSigner,
+			}
+
+			opts := NewOptions()
+			reverseProxy := NewReverseProxy(upstreamURL, upstreamConfig)
+			handler := NewReverseProxyHandler(reverseProxy, opts, upstreamConfig, nil)
+
+			proxy, close := testNewOAuthProxy(t,
+				SetUpstreamConfig(upstreamConfig),
+				SetProxyHandler(handler),
+				setCookieSecure(false),
+			)
+			defer close()
+
+			proxyServer := httptest.NewServer(proxy.Handler())
+			defer proxyServer.Close()
+
+			req, err := http.NewRequest(tc.method, proxyServer.URL, tc.body)
+			if err != nil {
+				t.Fatalf("got unexpected error creating http request: %v", err)
+			}
+
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatalf("got unexpected error doing http request: %v", err)
+			}
+
+			if resp.StatusCode != http.StatusOK {
+				t.Logf("have: %v", resp.StatusCode)
+				t.Logf("want: %v", http.StatusOK)
+				t.Fatalf("got unexpected status code")
+			}
+		})
 	}
-	templateVars := map[string]string{
-		"root_domain": "dev",
-		"cluster":     "sso",
-	}
-	defaultUpstreamOpts := &OptionsConfig{Timeout: time.Duration(1) * time.Second}
-	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
-- service: foo
-  default:
-    from: foo.sso.dev
-    to: %s
-    options:
-      skip_request_signing: true
-      skip_auth_regex:
-        - ^.*$
-`, parsed)), "sso", "http", templateVars, defaultUpstreamOpts)
-	if err != nil {
-		panic(err)
-	}
-	return upstreamConfigs
-}
-
-func TestSkipSigningRequest(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, ok := r.Header["Sso-Signature"]
-		testutil.Assert(t, !ok, "found unexpected SSO-Signature header in request")
-
-		_, ok = r.Header["kid"]
-		testutil.Assert(t, !ok, "found unexpected signing key id header in request")
-
-		w.WriteHeader(200)
-		w.Write([]byte("response"))
-	}))
-	defer upstream.Close()
-
-	signingKey, err := ioutil.ReadFile("testdata/private_key.pem")
-	testutil.Assert(t, err == nil, "could not read private key from testdata: %s", err)
-
-	opts := NewOptions()
-	opts.ClientID = "bazquux"
-	opts.ClientSecret = "foobar"
-	opts.CookieSecret = testEncodedCookieSecret
-	opts.SkipAuthPreflight = true
-	opts.RequestSigningKey = string(signingKey)
-	opts.upstreamConfigs = generateTestSkipRequestSigningConfig(upstream.URL)
-	opts.Validate()
-
-	upstreamURL, _ := url.Parse(upstream.URL)
-	opts.provider = providers.NewTestProvider(upstreamURL, "")
-
-	proxy, _ := NewOAuthProxy(opts)
-
-	// Expect OK
-	allowRW := httptest.NewRecorder()
-	allowReq, _ := http.NewRequest("GET", "https://foo.sso.dev/endpoint", nil)
-	proxy.Handler().ServeHTTP(allowRW, allowReq)
-	testutil.Equal(t, http.StatusOK, allowRW.Code)
-	testutil.Equal(t, "response", allowRW.Body.String())
-}
-
-func generateMultiTestAuthSkipConfigs(toFoo, toBar string) []*UpstreamConfig {
-	if !strings.Contains(toFoo, "://") {
-		toFoo = fmt.Sprintf("%s://%s", "http", toFoo)
-	}
-	parsedFoo, err := url.Parse(toFoo)
-	if err != nil {
-		panic(err)
-	}
-
-	if !strings.Contains(toBar, "://") {
-		toBar = fmt.Sprintf("%s://%s", "http", toBar)
-	}
-	parsedBar, err := url.Parse(toBar)
-	if err != nil {
-		panic(err)
-	}
-	templateVars := map[string]string{
-		"root_domain": "dev",
-		"cluster":     "sso",
-	}
-	defaultUpstreamOpts := &OptionsConfig{Timeout: time.Duration(1) * time.Second}
-	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
-- service: foo
-  default:
-    from: foo.sso.dev
-    to: %s
-    options:
-      skip_auth_regex:
-        - ^\/allow$
-- service: bar
-  default:
-    from: bar.sso.dev
-    to: %s
-`, parsedFoo, parsedBar)), "sso", "http", templateVars, defaultUpstreamOpts)
-	if err != nil {
-		panic(err)
-	}
-	return upstreamConfigs
-}
-
-func TestMultiAuthSkipRequests(t *testing.T) {
-	upstreamFoo := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Write([]byte("foo"))
-	}))
-	defer upstreamFoo.Close()
-
-	upstreamBar := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Write([]byte("bar"))
-	}))
-	defer upstreamBar.Close()
-
-	opts := NewOptions()
-	opts.ClientID = "bazquux"
-	opts.ClientSecret = "foobar"
-	opts.CookieSecret = testEncodedCookieSecret
-	opts.SkipAuthPreflight = true
-	opts.upstreamConfigs = generateMultiTestAuthSkipConfigs(upstreamFoo.URL, upstreamBar.URL)
-	opts.Validate()
-
-	upstreamFooURL, _ := url.Parse(upstreamFoo.URL)
-	opts.provider = providers.NewTestProvider(upstreamFooURL, "")
-
-	proxy, _ := NewOAuthProxy(opts, setSessionStore(&sessions.MockSessionStore{}), setCSRFStore(&sessions.MockCSRFStore{}), func(p *OAuthProxy) error {
-		p.EmailValidator = func(string) bool { return true }
-		return nil
-	})
-	proxy.CookieCipher = &aead.MockCipher{}
-
-	// expect to get rejected
-	rejectedRW := httptest.NewRecorder()
-	rejectedReq, _ := http.NewRequest("GET", "https://bar.sso.dev/allow", nil)
-	proxy.Handler().ServeHTTP(rejectedRW, rejectedReq)
-	// We get a 302 here, status found, and attempt to authenticate
-	testutil.Equal(t, http.StatusFound, rejectedRW.Code)
-
-	// Expect OK
-	allowRW := httptest.NewRecorder()
-	allowReq, _ := http.NewRequest("GET", "https://foo.sso.dev/allow", nil)
-	proxy.Handler().ServeHTTP(allowRW, allowReq)
-	testutil.Equal(t, http.StatusOK, allowRW.Code)
-	testutil.Equal(t, "foo", allowRW.Body.String())
-}
-
-type SignatureAuthenticator struct {
-	auth hmacauth.HmacAuth
-}
-
-func (v *SignatureAuthenticator) Authenticate(w http.ResponseWriter, r *http.Request) {
-	result, headerSig, computedSig := v.auth.AuthenticateRequest(r)
-	if result == hmacauth.ResultNoSignature {
-		w.Write([]byte("no signature received"))
-	} else if result == hmacauth.ResultMatch {
-		w.Write([]byte("signatures match"))
-	} else if result == hmacauth.ResultMismatch {
-		w.Write([]byte("signatures do not match:" +
-			"\n  received: " + headerSig +
-			"\n  computed: " + computedSig))
-	} else {
-		panic("Unknown result value: " + result.String())
-	}
-}
-
-type SignatureTest struct {
-	opts          *Options
-	upstream      *httptest.Server
-	upstreamHost  string
-	provider      *httptest.Server
-	header        http.Header
-	rw            *httptest.ResponseRecorder
-	authenticator *SignatureAuthenticator
-}
-
-func generateSignatureTestUpstreamConfigs(key, to string) []*UpstreamConfig {
-
-	if !strings.Contains(to, "://") {
-		to = fmt.Sprintf("%s://%s", "http", to)
-	}
-	parsed, err := url.Parse(to)
-	if err != nil {
-		panic(err)
-	}
-	templateVars := map[string]string{
-		"root_domain":     "dev",
-		"cluster":         "sso",
-		"foo_signing_key": key,
-	}
-	defaultUpstreamOpts := &OptionsConfig{Timeout: time.Duration(1) * time.Second}
-	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
-- service: foo
-  default:
-    from: foo.{{cluster}}.{{root_domain}}
-    to: %s
-`, parsed)), "sso", "http", templateVars, defaultUpstreamOpts)
-	if err != nil {
-		panic(err)
-	}
-
-	return upstreamConfigs
-}
-
-func NewSignatureTest(key string) *SignatureTest {
-	opts := NewOptions()
-	opts.CookieSecret = testEncodedCookieSecret
-	opts.ClientID = "client ID"
-	opts.ClientSecret = "client secret"
-	opts.EmailDomains = []string{"example.com"}
-
-	authenticator := &SignatureAuthenticator{}
-	upstream := httptest.NewServer(
-		http.HandlerFunc(authenticator.Authenticate))
-	upstreamURL, _ := url.Parse(upstream.URL)
-
-	providerHandler := func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"access_token": "my_auth_token"}`))
-	}
-	provider := httptest.NewServer(http.HandlerFunc(providerHandler))
-	providerURL, _ := url.Parse(provider.URL)
-	opts.provider = providers.NewTestProvider(providerURL, "email1@example.com")
-	opts.upstreamConfigs = generateSignatureTestUpstreamConfigs(key, upstream.URL)
-	opts.Validate()
-
-	return &SignatureTest{
-		opts,
-		upstream,
-		upstreamURL.Host,
-		provider,
-		make(http.Header),
-		httptest.NewRecorder(),
-		authenticator,
-	}
-}
-
-func (st *SignatureTest) Close() {
-	st.provider.Close()
-	st.upstream.Close()
-}
-
-// fakeNetConn simulates an http.Request.Body buffer that will be consumed
-// when it is read by the hmacauth.HmacAuth if not handled properly. See:
-//   https://github.com/18F/hmacauth/pull/4
-type fakeNetConn struct {
-	reqBody string
-}
-
-func (fnc *fakeNetConn) Read(p []byte) (n int, err error) {
-	if bodyLen := len(fnc.reqBody); bodyLen != 0 {
-		copy(p, fnc.reqBody)
-		fnc.reqBody = ""
-		return bodyLen, io.EOF
-	}
-	return 0, io.EOF
-}
-
-func (st *SignatureTest) MakeRequestWithExpectedKey(method, body, key string) {
-	proxy, _ := NewOAuthProxy(st.opts, testValidatorFunc(true), setSessionStore(&sessions.MockSessionStore{Session: testSession()}))
-	var bodyBuf io.ReadCloser
-	if body != "" {
-		bodyBuf = ioutil.NopCloser(&fakeNetConn{reqBody: body})
-	}
-	req := httptest.NewRequest(method, "https://foo.sso.dev/foo/bar", bodyBuf)
-	req.Header = st.header
-
-	// This is used by the upstream to validate the signature.
-	st.authenticator.auth = hmacauth.NewHmacAuth(
-		crypto.SHA1, []byte(key), HMACSignatureHeader, SignatureHeaders)
-	proxy.Handler().ServeHTTP(st.rw, req)
-}
-
-func TestRequestSignatureGetRequest(t *testing.T) {
-	st := NewSignatureTest("sha1:foobar")
-	defer st.Close()
-	st.MakeRequestWithExpectedKey("GET", "", "foobar")
-	testutil.Equal(t, 200, st.rw.Code)
-	testutil.Equal(t, st.rw.Body.String(), "signatures match")
-}
-
-func TestRequestSignaturePostRequest(t *testing.T) {
-	st := NewSignatureTest("sha1:foobar")
-	defer st.Close()
-	payload := `{ "hello": "world!" }`
-	st.MakeRequestWithExpectedKey("POST", payload, "foobar")
-	testutil.Equal(t, 200, st.rw.Code)
-	testutil.Equal(t, st.rw.Body.String(), "signatures match")
 }
 
 func TestHeadersSentToUpstreams(t *testing.T) {
-	type headersResponse struct {
-		Headers http.Header `json:"headers"`
-	}
-
 	testCases := []struct {
 		name                 string
 		otherCookies         []*http.Cookie
@@ -1098,42 +905,13 @@ func TestHeadersSentToUpstreams(t *testing.T) {
 		},
 	}
 
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, err := json.Marshal(&headersResponse{
-			Headers: r.Header,
-		})
-		if err != nil {
-			t.Errorf("error marshaling headersResponse: %s", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Write(body)
-	}))
-	defer upstream.Close()
-
-	opts := NewOptions()
-	opts.ClientID = "bazquux"
-	opts.ClientSecret = "foobar"
-	opts.CookieSecret = testEncodedCookieSecret
-	opts.CookieSecure = false
-	opts.PassAccessToken = true
-	opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL)
-	opts.Validate()
-	providerURL, _ := url.Parse("http://sso-auth.example.com/")
-	opts.provider = providers.NewTestProvider(providerURL, "")
-
-	state := testSession()
-	state.Email = "foo@example.com"
-	state.User = "foo"
-	state.AccessToken = "SupErSensItiveAccesSToken"
-	state.Groups = []string{"fooGroup"}
-	proxy, err := NewOAuthProxy(opts, testValidatorFunc(true), setSessionStore(&sessions.MockSessionStore{Session: state}))
-	testutil.Ok(t, err)
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			proxy, close := testNewOAuthProxy(t)
+			defer close()
 
 			rw := httptest.NewRecorder()
-			req, _ := http.NewRequest("GET", "http://foo.sso.dev/bar", nil)
+			req := httptest.NewRequest("GET", "https://localhost/headers", nil)
 
 			for _, c := range tc.otherCookies {
 				req.AddCookie(c)
@@ -1145,18 +923,22 @@ func TestHeadersSentToUpstreams(t *testing.T) {
 				t.Errorf("expected status = 200, got %d", rw.Code)
 			}
 
+			type headersResponse struct {
+				Headers http.Header `json:"headers"`
+			}
+
 			resp := &headersResponse{}
-			err = json.Unmarshal(rw.Body.Bytes(), resp)
+			err := json.Unmarshal(rw.Body.Bytes(), resp)
 			if err != nil {
 				t.Errorf("error unmarshaling response: %s", err)
 			}
 
+			session := testSession()
 			expectedHeaders := map[string]string{
-				"X-Forwarded-Email":        "foo@example.com",
-				"X-Forwarded-User":         "foo",
-				"X-Forwarded-Groups":       "fooGroup",
-				"X-Forwarded-Access-Token": "SupErSensItiveAccesSToken",
-				"Cookie":                   tc.expectedCookieHeader,
+				"X-Forwarded-Email":  session.Email,
+				"X-Forwarded-User":   session.User,
+				"X-Forwarded-Groups": strings.Join(session.Groups, ","),
+				"Cookie":             tc.expectedCookieHeader,
 			}
 
 			for key, val := range expectedHeaders {
@@ -1164,11 +946,8 @@ func TestHeadersSentToUpstreams(t *testing.T) {
 					t.Errorf("expected header %s=%q, got %s=%q", key, val, key, resp.Headers.Get(key))
 				}
 			}
-
 		})
-
 	}
-
 }
 
 func TestAuthenticate(t *testing.T) {
@@ -1336,34 +1115,21 @@ func TestAuthenticate(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
-			// setup deafults
-			opts := NewOptions()
-			opts.CookieSecret = testEncodedCookieSecret
-			opts.CookieExpire = time.Duration(72) * time.Hour
-			opts.ClientID = "client ID"
-			opts.ClientSecret = "client secret"
-			opts.EmailDomains = []string{"example.com"}
-			opts.ProviderURLString = "https://auth.sso.dev"
-			opts.GracePeriodTTL = time.Duration(3) * time.Hour
-			opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev")
-			opts.Validate()
-
-			mockCSRF := &sessions.MockCSRFStore{}
-			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true),
-				setSessionStore(tc.SessionStore), setCSRFStore(mockCSRF))
-			proxy.provider = &providers.TestProvider{
+			provider := &providers.TestProvider{
 				RefreshSessionFunc:  tc.RefreshSessionFunc,
 				ValidateSessionFunc: tc.ValidateSessionFunc,
 			}
 
-			req, err := http.NewRequest("GET", "https://foo.sso.dev/", strings.NewReader(""))
-			if err != nil {
-				t.Fatalf("unexpected err creating request err:%s", err)
-			}
+			proxy, close := testNewOAuthProxy(t,
+				SetProvider(provider),
+				setSessionStore(tc.SessionStore),
+			)
+			defer close()
 
+			req := httptest.NewRequest("GET", "https://localhost", nil)
 			rw := httptest.NewRecorder()
 
-			gotErr := proxy.Authenticate(rw, req)
+			err := proxy.Authenticate(rw, req)
 
 			switch tc.CookieExpectation {
 			case ClearCookie:
@@ -1374,8 +1140,8 @@ func TestAuthenticate(t *testing.T) {
 				testutil.Equal(t, tc.SessionStore.ResponseSession, "")
 			}
 
-			if gotErr != tc.ExpectedErr {
-				t.Logf(" got error: %#v", gotErr)
+			if err != tc.ExpectedErr {
+				t.Logf(" got error: %#v", err)
 				t.Logf("want error: %#v", tc.ExpectedErr)
 				t.Error("unexpected error value for authenticate")
 			}
@@ -1384,12 +1150,6 @@ func TestAuthenticate(t *testing.T) {
 }
 
 func TestProxyXHRErrorHandling(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Write([]byte("upstream"))
-	}))
-
-	defer upstream.Close()
 	testCases := []struct {
 		Name         string
 		Session      *sessions.SessionState
@@ -1449,29 +1209,18 @@ func TestProxyXHRErrorHandling(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
-			// setup deafults
-			opts := NewOptions()
-			opts.SkipAuthPreflight = true
-			opts.CookieSecret = testEncodedCookieSecret
-			opts.CookieExpire = time.Duration(72) * time.Hour
-			opts.ClientID = "client ID"
-			opts.ClientSecret = "client secret"
-			opts.EmailDomains = []string{"example.com"}
-			opts.ProviderURLString = "https://auth.sso.dev"
-			opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL)
-			opts.Validate()
-			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true), setSessionStore(&sessions.MockSessionStore{
-				Session: tc.Session,
-			}), setCSRFStore(&sessions.MockCSRFStore{}))
-			proxy.CookieCipher = &aead.MockCipher{}
+			proxy, close := testNewOAuthProxy(t,
+				setSessionStore(&sessions.MockSessionStore{Session: tc.Session}),
+			)
+			defer close()
 
-			req := httptest.NewRequest("GET", "http://foo.sso.dev", nil)
+			req := httptest.NewRequest(tc.Method, "https://localhost/", nil)
 			for k, v := range tc.Header {
 				req.Header.Set(k, v)
 			}
-
 			rw := httptest.NewRecorder()
-			proxy.Proxy(rw, req)
+
+			proxy.Handler().ServeHTTP(rw, req)
 
 			if tc.ExpectedCode != rw.Code {
 				t.Errorf("expected code %d, got %d", tc.ExpectedCode, rw.Code)
@@ -1500,52 +1249,36 @@ func TestOAuthStart(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// setup deafults
-			opts := NewOptions()
-			opts.CookieSecret = testEncodedCookieSecret
-			opts.CookieExpire = time.Duration(72) * time.Hour
-			opts.ClientID = "client ID"
-			opts.ClientSecret = "client secret"
-			opts.EmailDomains = []string{"example.com"}
-			opts.ProviderURLString = "https://auth.sso.dev"
-			opts.upstreamConfigs = generateTestUpstreamConfigs("foo-internal.sso.dev")
-			opts.Validate()
-
 			csrfStore := &sessions.MockCSRFStore{}
-			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true), setSessionStore(&sessions.MockSessionStore{}), setCSRFStore(csrfStore))
 
 			s := &StateParameter{
 				SessionID:   "abcdefg123",
 				RedirectURI: "example.com/redirect",
 			}
+
 			marshaled, err := json.Marshal(s)
 			testutil.Ok(t, err)
 
-			proxy.CookieCipher = &aead.MockCipher{
+			cookieCipher := &aead.MockCipher{
 				MarshalString:  string(marshaled),
 				UnmarshalBytes: marshaled,
 			}
 
-			srv := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-				proxy.OAuthStart(rw, r, []string{})
-			}))
-			defer srv.Close()
+			proxy, close := testNewOAuthProxy(t,
+				setSessionStore(&sessions.MockSessionStore{}),
+				setCSRFStore(csrfStore),
+				setCookieCipher(cookieCipher),
+			)
+			defer close()
 
-			req, err := http.NewRequest("GET", srv.URL, nil)
-			if err != nil {
-				t.Fatalf("expected req to succeeded err:%v", err)
-			}
-
+			rw := httptest.NewRecorder()
+			req := httptest.NewRequest("GET", "https://localhost/", nil)
 			if tc.isXHR {
 				req.Header.Add("X-Requested-With", "XMLHttpRequest")
 			}
 
-			client := &http.Client{
-				CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
-			}
-			res, err := client.Do(req)
-			if err != nil {
-				t.Fatalf("expected req to succeeded err:%v", err)
-			}
+			proxy.OAuthStart(rw, req, []string{})
+			res := rw.Result()
 
 			if res.StatusCode != tc.expectedStatusCode {
 				t.Fatalf("unexpected status code response")
@@ -1565,12 +1298,15 @@ func TestOAuthStart(t *testing.T) {
 			cookieParameter := &StateParameter{}
 			err = json.Unmarshal([]byte(csrfStore.ResponseCSRF), cookieParameter)
 			if err != nil {
+				t.Errorf("response csrf: %v", csrfStore.ResponseCSRF)
 				t.Fatalf("unexpected err during unmarshal: %v", err)
 			}
 
 			stateParameter := &StateParameter{}
 			err = json.Unmarshal([]byte(state), stateParameter)
 			if err != nil {
+				t.Errorf("location: %v", location)
+				t.Errorf("state: %v", state)
 				t.Fatalf("unexpected err during unmarshal: %v", err)
 			}
 
@@ -1583,95 +1319,7 @@ func TestOAuthStart(t *testing.T) {
 	}
 }
 
-func TestPing(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Write([]byte("upstream"))
-	}))
-	defer upstream.Close()
-
-	opts := NewOptions()
-	opts.ClientID = "bazquux"
-	opts.ClientSecret = "foobar"
-	opts.CookieSecret = testEncodedCookieSecret
-	opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL)
-	opts.Validate()
-
-	providerURL, _ := url.Parse("http://sso-auth.example.com/")
-	opts.provider = providers.NewTestProvider(providerURL, "")
-
-	testCases := []struct {
-		name          string
-		url           string
-		host          string
-		authenticated bool
-		expectedCode  int
-	}{
-		{
-			name:          "ping never reaches upstream",
-			url:           "http://foo.sso.dev/ping",
-			authenticated: true,
-			expectedCode:  http.StatusOK,
-		},
-		{
-			name:         "ping skips host check with no host set",
-			url:          "/ping",
-			expectedCode: http.StatusOK,
-		},
-		{
-			name:         "ping skips host check with unknown host set",
-			url:          "/ping",
-			host:         "example.com",
-			expectedCode: http.StatusOK,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			rw := httptest.NewRecorder()
-			req, _ := http.NewRequest("GET", tc.url, nil)
-
-			var state *sessions.SessionState
-			if tc.authenticated {
-				state = testSession()
-			}
-			proxy, _ := NewOAuthProxy(opts, setSessionStore(&sessions.MockSessionStore{Session: state}))
-			proxy.Handler().ServeHTTP(rw, req)
-
-			if tc.expectedCode != rw.Code {
-				t.Errorf("expected code %d, got %d", tc.expectedCode, rw.Code)
-			}
-			if rw.Body.String() != "OK" {
-				t.Errorf("expected body = %q, got %q", "OK", rw.Body.String())
-			}
-		})
-	}
-}
-
 func TestSecurityHeaders(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/add-header":
-			w.Header().Set("X-Test-Header", "true")
-		case "/override-security-header":
-			w.Header().Set("X-Frame-Options", "OVERRIDE")
-		}
-		w.WriteHeader(200)
-		w.Write([]byte(r.URL.RequestURI()))
-	}))
-	defer upstream.Close()
-
-	opts := NewOptions()
-	opts.ClientID = "bazquux"
-	opts.ClientSecret = "foobar"
-	opts.CookieSecret = testEncodedCookieSecret
-	opts.CookieSecure = false
-	opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL)
-	opts.Validate()
-
-	providerURL, _ := url.Parse("http://sso-auth.example.com/")
-	opts.provider = providers.NewTestProvider(providerURL, "")
-
 	testCases := []struct {
 		name            string
 		path            string
@@ -1715,31 +1363,78 @@ func TestSecurityHeaders(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			rw := httptest.NewRecorder()
-			req, _ := http.NewRequest("GET", fmt.Sprintf("http://foo.sso.dev%s", tc.path), nil)
-			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true), setSessionStore(&sessions.MockSessionStore{}),
-				setCSRFStore(&sessions.MockCSRFStore{}))
-
-			if tc.authenticated {
-				proxy, _ = NewOAuthProxy(opts, testValidatorFunc(true),
-					setSessionStore(&sessions.MockSessionStore{Session: testSession()}), setCSRFStore(&sessions.MockCSRFStore{}))
+			backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/add-header":
+					w.Header().Set("X-Test-Header", "true")
+				case "/override-security-header":
+					w.Header().Set("X-Frame-Options", "OVERRIDE")
+				}
+				w.WriteHeader(200)
+				w.Write([]byte(r.URL.RequestURI()))
+			}))
+			defer backend.Close()
+			backendURL, err := url.Parse(backend.URL)
+			if err != nil {
+				t.Fatalf("unexpected err parsing backend url: %v", err)
 			}
-			proxy.CookieCipher = &aead.MockCipher{}
+
+			upstreamConfig := &UpstreamConfig{
+				Route: &SimpleRoute{
+					ToURL: backendURL,
+				},
+			}
+			opts := NewOptions()
+
+			// NOTE: This logic particularly hard to test as it requires *our* special reverse proxy
+			// to behavior to delete the security headers passed by the upstream *before* we set
+			// them on our response.
+			//
+			// We do this to ensure *every* response, either originating from the upstream or
+			// from the sso proxy itself contains these security headers.
+			//
+			// * If we just specified this behavior in the reverse proxy itself, responses
+			//   that originate from the sso proxy would not have security headers.
+			// * If we just specified this beahvior in sso proxy w/out deleting headers,
+			//   we wouldn't be able to override the headers as they sent upstream, we'd just
+			//   send multiple headers
+			reverseProxy := NewReverseProxy(backendURL, upstreamConfig)
+			handler := NewReverseProxyHandler(reverseProxy, opts, upstreamConfig, nil)
+
+			sessionStore := &sessions.MockSessionStore{}
+			if tc.authenticated {
+				sessionStore = &sessions.MockSessionStore{Session: testSession()}
+			}
+			proxy, close := testNewOAuthProxy(t,
+				setSessionStore(sessionStore),
+				SetUpstreamConfig(upstreamConfig),
+				SetProxyHandler(handler),
+			)
+			defer close()
+
+			rw := httptest.NewRecorder()
+			req := httptest.NewRequest("GET", fmt.Sprintf("https://localhost%s", tc.path), nil)
 
 			proxy.Handler().ServeHTTP(rw, req)
+			resp := rw.Result()
 
-			if tc.expectedCode != rw.Code {
-				t.Errorf("expected code %d, got %d", tc.expectedCode, rw.Code)
+			if tc.expectedCode != resp.StatusCode {
+				t.Fatalf("expected code %d, got %d", tc.expectedCode, resp.StatusCode)
 			}
+
 			if tc.expectedCode == http.StatusOK {
-				if rw.Body.String() != tc.path {
-					t.Errorf("expected body = %q, got %q", tc.path, rw.Body.String())
+				body, err := ioutil.ReadAll(resp.Body)
+				defer resp.Body.Close()
+				testutil.Assert(t, err == nil, "could not read http response body: %v", err)
+				if string(body) != tc.path {
+					t.Errorf("expected body = %q, got %q", tc.path, string(body))
 				}
 			}
+
 			for key, val := range tc.expectedHeaders {
-				vals, found := rw.HeaderMap[http.CanonicalHeaderKey(key)]
+				vals, found := resp.Header[http.CanonicalHeaderKey(key)]
 				if !found {
-					t.Errorf("expected header %s not found", key)
+					t.Errorf("expected header %s but not found in headers: %v", key, resp.Header)
 				} else if len(vals) > 1 {
 					t.Errorf("got duplicate values for headers %s: %v", key, vals)
 				} else if vals[0] != val {
@@ -1750,41 +1445,15 @@ func TestSecurityHeaders(t *testing.T) {
 	}
 }
 
-func makeUpstreamConfigWithHeaderOverrides(overrides map[string]string) []*UpstreamConfig {
-	templateVars := map[string]string{
-		"root_domain": "dev",
-		"cluster":     "sso",
-	}
-	defaultUpstreamOpts := &OptionsConfig{Timeout: time.Duration(1) * time.Second}
-	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
-- service: foo
-  default:
-    from: foo.sso.dev
-    to: foo-internal.sso.dev
-
-- service: bar
-  default:
-    from: bar.sso.dev
-    to: bar-internal.sso.dev
-`)), "sso", "http", templateVars, defaultUpstreamOpts)
-	if err != nil {
-		panic(err)
-	}
-	upstreamConfigs[0].HeaderOverrides = overrides // we override foo and not bar
-	return upstreamConfigs
-}
-
 func TestHeaderOverrides(t *testing.T) {
 	testCases := []struct {
 		name            string
 		overrides       map[string]string
-		expectedCode    int
 		expectedHeaders map[string]string
 	}{
 		{
 			name:            "security headers are added to requests",
 			overrides:       nil,
-			expectedCode:    http.StatusOK,
 			expectedHeaders: securityHeaders,
 		},
 		{
@@ -1792,7 +1461,6 @@ func TestHeaderOverrides(t *testing.T) {
 			overrides: map[string]string{
 				"X-Frame-Options": "ALLOW-FROM nsa.gov",
 			},
-			expectedCode: http.StatusOK,
 			expectedHeaders: map[string]string{
 				"X-Frame-Options": "ALLOW-FROM nsa.gov",
 			},
@@ -1801,41 +1469,27 @@ func TestHeaderOverrides(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			opts := NewOptions()
-			opts.ClientID = "bazquux"
-			opts.ClientSecret = "foobar"
-			opts.CookieSecret = testEncodedCookieSecret
-			opts.CookieSecure = false
-			opts.upstreamConfigs = makeUpstreamConfigWithHeaderOverrides(tc.overrides)
-			opts.Validate()
+			backend := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})
 
-			providerURL, _ := url.Parse("http://sso-auth.example.com/")
-			opts.provider = providers.NewTestProvider(providerURL, "")
-
-			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true), setSessionStore(&sessions.MockSessionStore{}), setCSRFStore(&sessions.MockCSRFStore{}))
-			proxy.CookieCipher = &aead.MockCipher{}
-
-			// Check Foo
-			rw := httptest.NewRecorder()
-			req, _ := http.NewRequest("GET", "http://foo.sso.dev/", nil)
-			proxy.Handler().ServeHTTP(rw, req)
-			for key, val := range tc.expectedHeaders {
-				vals, found := rw.HeaderMap[http.CanonicalHeaderKey(key)]
-				if !found {
-					t.Errorf("expected header %s not found", key)
-				} else if len(vals) > 1 {
-					t.Errorf("got duplicate values for headers %s: %v", key, vals)
-				} else if vals[0] != val {
-					t.Errorf("expected header %s=%q, got %s=%q\n", key, val, key, vals[0])
-				}
+			config := &UpstreamConfig{
+				HeaderOverrides: tc.overrides,
 			}
 
-			// Check Bar
-			rwBar := httptest.NewRecorder()
-			reqBar, _ := http.NewRequest("GET", "http://bar.sso.dev/", nil)
-			proxy.Handler().ServeHTTP(rwBar, reqBar)
-			for key, val := range securityHeaders {
-				vals, found := rwBar.HeaderMap[http.CanonicalHeaderKey(key)]
+			proxy, close := testNewOAuthProxy(t,
+				SetUpstreamConfig(config),
+				SetProxyHandler(backend),
+			)
+			defer close()
+
+			rw := httptest.NewRecorder()
+			req := httptest.NewRequest("GET", "http://localhost/", nil)
+
+			proxy.Handler().ServeHTTP(rw, req)
+
+			for key, val := range tc.expectedHeaders {
+				vals, found := rw.HeaderMap[http.CanonicalHeaderKey(key)]
 				if !found {
 					t.Errorf("expected header %s not found", key)
 				} else if len(vals) > 1 {
@@ -1849,14 +1503,6 @@ func TestHeaderOverrides(t *testing.T) {
 }
 
 func TestHTTPSRedirect(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(r.URL.String()))
-	}))
-	defer upstream.Close()
-
-	providerURL, _ := url.Parse("http://sso-auth.example.com/")
-	provider := providers.NewTestProvider(providerURL, "")
-
 	testCases := []struct {
 		name                 string
 		url                  string
@@ -1871,7 +1517,7 @@ func TestHTTPSRedirect(t *testing.T) {
 	}{
 		{
 			name:          "no https redirect with http and cookie_secure=false and authenticated=true",
-			url:           "http://foo.sso.dev/",
+			url:           "http://localhost/",
 			cookieSecure:  false,
 			authenticated: true,
 			expectedCode:  http.StatusOK,
@@ -1879,16 +1525,16 @@ func TestHTTPSRedirect(t *testing.T) {
 		},
 		{
 			name:                 "no https redirect with http cookie_secure=false and authenticated=false",
-			url:                  "http://foo.sso.dev/",
+			url:                  "http://localhost/",
 			cookieSecure:         false,
 			authenticated:        false,
 			expectedCode:         http.StatusFound,
-			expectedLocationHost: "sso-auth.example.com",
+			expectedLocationHost: "localhost",
 			expectSTS:            false,
 		},
 		{
 			name:          "no https redirect with https and cookie_secure=false and authenticated=true",
-			url:           "https://foo.sso.dev/",
+			url:           "https://localhost/",
 			cookieSecure:  false,
 			authenticated: true,
 			expectedCode:  http.StatusOK,
@@ -1896,34 +1542,34 @@ func TestHTTPSRedirect(t *testing.T) {
 		},
 		{
 			name:                 "no https redirect with https and cookie_secure=false and authenticated=false",
-			url:                  "https://foo.sso.dev/",
+			url:                  "https://localhost/",
 			cookieSecure:         false,
 			authenticated:        false,
 			expectedCode:         http.StatusFound,
-			expectedLocationHost: "sso-auth.example.com",
+			expectedLocationHost: "localhost",
 			expectSTS:            false,
 		},
 		{
 			name:             "https redirect with cookie_secure=true and authenticated=false",
-			url:              "http://foo.sso.dev/",
+			url:              "http://localhost/",
 			cookieSecure:     true,
 			authenticated:    false,
 			expectedCode:     http.StatusMovedPermanently,
-			expectedLocation: "https://foo.sso.dev/",
+			expectedLocation: "https://localhost/",
 			expectSTS:        true,
 		},
 		{
 			name:             "https redirect with cookie_secure=true and authenticated=true",
-			url:              "http://foo.sso.dev/",
+			url:              "http://localhost/",
 			cookieSecure:     true,
 			authenticated:    true,
 			expectedCode:     http.StatusMovedPermanently,
-			expectedLocation: "https://foo.sso.dev/",
+			expectedLocation: "https://localhost/",
 			expectSTS:        true,
 		},
 		{
 			name:          "no https redirect with https and cookie_secure=true and authenticated=true",
-			url:           "https://foo.sso.dev/",
+			url:           "https://localhost/",
 			cookieSecure:  true,
 			authenticated: true,
 			expectedCode:  http.StatusOK,
@@ -1931,7 +1577,7 @@ func TestHTTPSRedirect(t *testing.T) {
 		},
 		{
 			name:          "no https redirect with https and cookie_secure=true and authenticated=false",
-			url:           "https://foo.sso.dev/",
+			url:           "https://localhost/",
 			cookieSecure:  true,
 			authenticated: true,
 			expectedCode:  http.StatusOK,
@@ -1939,16 +1585,16 @@ func TestHTTPSRedirect(t *testing.T) {
 		},
 		{
 			name:             "request path and query are preserved in redirect",
-			url:              "http://foo.sso.dev/foo/bar.html?a=1&b=2&c=3",
+			url:              "http://localhost/foo/bar.html?a=1&b=2&c=3",
 			cookieSecure:     true,
 			authenticated:    true,
 			expectedCode:     http.StatusMovedPermanently,
-			expectedLocation: "https://foo.sso.dev/foo/bar.html?a=1&b=2&c=3",
+			expectedLocation: "https://localhost/foo/bar.html?a=1&b=2&c=3",
 			expectSTS:        true,
 		},
 		{
 			name:           "no https redirect with http and X-Forwarded-Proto=https",
-			url:            "http://foo.sso.dev/",
+			url:            "http://localhost/",
 			cookieSecure:   true,
 			authenticated:  true,
 			requestHeaders: map[string]string{"X-Forwarded-Proto": "https"},
@@ -1958,39 +1604,30 @@ func TestHTTPSRedirect(t *testing.T) {
 		{
 			name:             "correct host name with relative URL",
 			url:              "/",
-			host:             "foo.sso.dev",
+			host:             "localhost",
 			cookieSecure:     true,
 			authenticated:    false,
-			expectedLocation: "https://foo.sso.dev/",
+			expectedLocation: "https://localhost/",
 			expectedCode:     http.StatusMovedPermanently,
 			expectSTS:        true,
-		},
-		{
-			name:          "host validation is applied before https redirect",
-			url:           "http://bar.sso.dev/",
-			cookieSecure:  true,
-			authenticated: false,
-			expectedCode:  statusInvalidHost,
-			expectSTS:     false,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			opts := NewOptions()
-			opts.ClientID = "bazquux"
-			opts.ClientSecret = "foobar"
-			opts.CookieSecret = testEncodedCookieSecret
-			opts.CookieSecure = tc.cookieSecure
-			opts.provider = provider
-			opts.upstreamConfigs = generateTestUpstreamConfigs(upstream.URL)
-			opts.Validate()
+			sessionStore := &sessions.MockSessionStore{}
+			if tc.authenticated {
+				sessionStore = &sessions.MockSessionStore{Session: testSession()}
+			}
 
-			proxy, _ := NewOAuthProxy(opts, testValidatorFunc(true), setSessionStore(&sessions.MockSessionStore{}), setCSRFStore(&sessions.MockCSRFStore{}))
-			proxy.CookieCipher = &aead.MockCipher{}
+			proxy, close := testNewOAuthProxy(t,
+				setSessionStore(sessionStore),
+				setCookieSecure(tc.cookieSecure),
+			)
+			defer close()
 
 			rw := httptest.NewRecorder()
-			req, _ := http.NewRequest("GET", tc.url, nil)
+			req := httptest.NewRequest("GET", tc.url, nil)
 
 			for key, val := range tc.requestHeaders {
 				req.Header.Set(key, val)
@@ -1998,11 +1635,6 @@ func TestHTTPSRedirect(t *testing.T) {
 
 			if tc.host != "" {
 				req.Host = tc.host
-			}
-
-			if tc.authenticated {
-				proxy, _ = NewOAuthProxy(opts, testValidatorFunc(true),
-					setSessionStore(&sessions.MockSessionStore{Session: testSession()}))
 			}
 
 			proxy.Handler().ServeHTTP(rw, req)
@@ -2130,25 +1762,6 @@ func TestTimeoutHandler(t *testing.T) {
 	}
 }
 
-func generateTestRewriteUpstreamConfigs(fromRegex, toTemplate string) []*UpstreamConfig {
-	templateVars := map[string]string{
-		"root_domain": "dev",
-		"cluster":     "sso",
-	}
-	defaultUpstreamOpts := &OptionsConfig{Timeout: time.Duration(1) * time.Second}
-	upstreamConfigs, err := loadServiceConfigs([]byte(fmt.Sprintf(`
-- service: foo
-  default:
-    from: %s
-    to: %s
-    type: rewrite
-`, fromRegex, toTemplate)), "sso", "http", templateVars, defaultUpstreamOpts)
-	if err != nil {
-		panic(err)
-	}
-	return upstreamConfigs
-}
-
 func TestRewriteRoutingHandling(t *testing.T) {
 	type response struct {
 		Host           string `json:"host"`
@@ -2181,51 +1794,37 @@ func TestRewriteRoutingHandling(t *testing.T) {
 
 	testCases := []struct {
 		Name             string
-		Session          *sessions.SessionState
 		TestHost         string
-		FromRegex        string
-		ToTemplate       string
+		RewriteRoute     *RewriteRoute
 		ExpectedCode     int
 		ExpectedResponse *response
 	}{
 		{
 			Name:     "everything should work in the normal case",
-			TestHost: "foo.sso.dev",
-			Session: &sessions.SessionState{
-				LifetimeDeadline: time.Now().Add(time.Duration(1) * time.Hour),
-				RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
-				ValidDeadline:    time.Now().Add(time.Duration(1) * time.Hour),
+			TestHost: "localhost",
+			RewriteRoute: &RewriteRoute{
+				FromRegex: regexp.MustCompile("(.*)"),
+				ToTemplate: &url.URL{
+					Scheme: parsedUpstreamURL.Scheme,
+					Opaque: parsedUpstreamURL.Host,
+				},
 			},
-			FromRegex:    "(.*)",
-			ToTemplate:   parsedUpstreamURL.Host,
 			ExpectedCode: http.StatusOK,
 			ExpectedResponse: &response{
 				Host:           parsedUpstreamURL.Host,
-				XForwardedHost: "foo.sso.dev",
+				XForwardedHost: "localhost",
 			},
-		},
-		{
-			Name:     "it should not match a non-matching regex",
-			TestHost: "foo.sso.dev",
-			Session: &sessions.SessionState{
-				LifetimeDeadline: time.Now().Add(time.Duration(1) * time.Hour),
-				RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
-				ValidDeadline:    time.Now().Add(time.Duration(1) * time.Hour),
-			},
-			FromRegex:    "bar",
-			ToTemplate:   parsedUpstreamURL.Host,
-			ExpectedCode: statusInvalidHost,
 		},
 		{
 			Name:     "it should match and replace using regex/template to find port in embeded domain",
 			TestHost: fmt.Sprintf("somedomain--%s", upstreamPort),
-			Session: &sessions.SessionState{
-				LifetimeDeadline: time.Now().Add(time.Duration(1) * time.Hour),
-				RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
-				ValidDeadline:    time.Now().Add(time.Duration(1) * time.Hour),
+			RewriteRoute: &RewriteRoute{
+				FromRegex: regexp.MustCompile("somedomain--(.*)"),
+				ToTemplate: &url.URL{
+					Scheme: "http",
+					Opaque: fmt.Sprintf("%s:$1", upstreamHost), // add port to dest
+				},
 			},
-			FromRegex:    "somedomain--(.*)",                 // capture port
-			ToTemplate:   fmt.Sprintf("%s:$1", upstreamHost), // add port to dest
 			ExpectedCode: http.StatusOK,
 			ExpectedResponse: &response{
 				Host:           parsedUpstreamURL.Host,
@@ -2237,24 +1836,24 @@ func TestRewriteRoutingHandling(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
 			opts := NewOptions()
-			opts.SkipAuthPreflight = true
-			opts.CookieSecret = testEncodedCookieSecret
-			opts.CookieExpire = time.Duration(72) * time.Hour
-			opts.ClientID = "client ID"
-			opts.ClientSecret = "client secret"
-			opts.ProviderURLString = "https://auth.sso.dev"
-			opts.upstreamConfigs = generateTestRewriteUpstreamConfigs(tc.FromRegex, tc.ToTemplate)
-			opts.Validate()
-			proxy, err := NewOAuthProxy(opts, testValidatorFunc(true), setSessionStore(&sessions.MockSessionStore{Session: tc.Session}))
-			if err != nil {
-				t.Fatalf("unexpected err provisioning oauth proxy err:%q", err)
+
+			upstreamConfig := &UpstreamConfig{
+				Route: tc.RewriteRoute,
 			}
 
-			req, err := http.NewRequest("GET", fmt.Sprintf("https://%s/", tc.TestHost), strings.NewReader(""))
-			if err != nil {
-				t.Fatalf("unexpected err creating request err:%s", err)
-			}
+			reverseProxy := NewRewriteReverseProxy(tc.RewriteRoute, upstreamConfig)
+			handler := NewReverseProxyHandler(reverseProxy, opts, upstreamConfig, nil)
 
+			proxy, close := testNewOAuthProxy(t,
+				SetUpstreamConfig(upstreamConfig),
+				SetProxyHandler(handler),
+			)
+			defer close()
+
+			requestURL := fmt.Sprintf("https://%s/", tc.TestHost)
+			t.Logf("requestURL: %v", requestURL)
+
+			req := httptest.NewRequest("GET", requestURL, nil)
 			rw := httptest.NewRecorder()
 
 			proxy.Handler().ServeHTTP(rw, req)

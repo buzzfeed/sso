@@ -9,6 +9,8 @@ import (
 	"github.com/buzzfeed/sso/internal/pkg/testutil"
 )
 
+var testEncodedCookieSecret = "tJgzIEug8M/6Asjn5mvpWxxef5d5duU7BwpuD0GCHRI="
+
 func testOptions() *Options {
 	o := NewOptions()
 	o.CookieSecret = testEncodedCookieSecret
