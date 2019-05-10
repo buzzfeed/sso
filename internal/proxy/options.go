@@ -41,6 +41,7 @@ import (
 // CookieHTTPOnly - set HttpOnly cookie flag
 // PassAccessToken - send access token in the http headers
 // Provider - OAuth provider
+// ProviderSlug - OAuth provider slug, used internally to identity a specific provider
 // Scope - OAuth scope specification
 // SessionLifetimeTTL - time to live for a session lifetime
 // SessionValidTTL - time to live for a valid session
@@ -81,9 +82,9 @@ type Options struct {
 
 	PassAccessToken bool `envconfig:"PASS_ACCESS_TOKEN" default:"false"`
 
-	// These options allow for other providers besides Google, with potential overrides.
-	Provider string `envconfig:"PROVIDER" default:"google"`
-	Scope    string `envconfig:"SCOPE"`
+	Provider     string `envconfig:"PROVIDER" default:"sso"`
+	ProviderSlug string `envconfig:"PROVIDER_SLUG" default:"google"`
+	Scope        string `envconfig:"SCOPE"`
 
 	SessionLifetimeTTL time.Duration `envconfig:"SESSION_LIFETIME_TTL" default:"720h"`
 	SessionValidTTL    time.Duration `envconfig:"SESSION_VALID_TTL" default:"1m"`
@@ -257,6 +258,7 @@ func parseProviderInfo(o *Options) error {
 		ClientSecret:        o.ClientSecret,
 		ProviderURL:         providerURL,
 		ProviderURLInternal: providerURLInternal,
+		ProviderSlug:        o.ProviderSlug,
 		Scope:               o.Scope,
 		SessionLifetimeTTL:  o.SessionLifetimeTTL,
 		SessionValidTTL:     o.SessionValidTTL,

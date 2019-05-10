@@ -87,7 +87,7 @@ type getProfileResponse struct {
 }
 
 // SetCookieStore sets the cookie store to use a miscreant cipher
-func SetCookieStore(opts *Options) func(*Authenticator) error {
+func SetCookieStore(opts *Options, providerSlug string) func(*Authenticator) error {
 	return func(a *Authenticator) error {
 		decodedAuthCodeSecret, err := base64.StdEncoding.DecodeString(opts.AuthCodeSecret)
 		if err != nil {
@@ -98,7 +98,8 @@ func SetCookieStore(opts *Options) func(*Authenticator) error {
 			return err
 		}
 
-		cookieStore, err := sessions.NewCookieStore(opts.CookieName,
+		cookieName := fmt.Sprintf("%s_%s", opts.CookieName, providerSlug)
+		cookieStore, err := sessions.NewCookieStore(cookieName,
 			sessions.CreateMiscreantCookieCipher(opts.decodedCookieSecret),
 			func(c *sessions.CookieStore) error {
 				c.CookieDomain = opts.CookieDomain
@@ -123,9 +124,6 @@ func SetCookieStore(opts *Options) func(*Authenticator) error {
 func NewAuthenticator(opts *Options, optionFuncs ...func(*Authenticator) error) (*Authenticator, error) {
 	logger := log.NewLogEntry()
 
-	redirectURL := opts.redirectURL
-	redirectURL.Path = "/oauth2/callback"
-
 	templates := templates.NewHTMLTemplate()
 
 	proxyRootDomains := []string{}
@@ -144,7 +142,6 @@ func NewAuthenticator(opts *Options, optionFuncs ...func(*Authenticator) error) 
 		Host:              opts.Host,
 		CookieSecure:      opts.CookieSecure,
 
-		redirectURL:        redirectURL,
 		SetXAuthRequest:    opts.SetXAuthRequest,
 		PassUserHeaders:    opts.PassUserHeaders,
 		SkipProviderButton: opts.SkipProviderButton,
@@ -166,39 +163,19 @@ func NewAuthenticator(opts *Options, optionFuncs ...func(*Authenticator) error) 
 }
 
 func (p *Authenticator) newMux() http.Handler {
-	logger := log.NewLogEntry()
-
-	mux := http.NewServeMux()
-
-	// we setup global endpoints that should respond to any hostname
-	mux.HandleFunc("/ping", p.withMethods(p.PingPage, "GET"))
-
 	// we setup our service mux to handle service routes that use the required host header
 	serviceMux := http.NewServeMux()
-	serviceMux.HandleFunc("/ping", p.withMethods(p.PingPage, "GET"))
 	serviceMux.HandleFunc("/robots.txt", p.withMethods(p.RobotsTxt, "GET"))
 	serviceMux.HandleFunc("/start", p.withMethods(p.OAuthStart, "GET"))
 	serviceMux.HandleFunc("/sign_in", p.withMethods(p.validateClientID(p.validateRedirectURI(p.validateSignature(p.SignIn))), "GET"))
 	serviceMux.HandleFunc("/sign_out", p.withMethods(p.validateRedirectURI(p.validateSignature(p.SignOut)), "GET", "POST"))
-	serviceMux.HandleFunc("/oauth2/callback", p.withMethods(p.OAuthCallback, "GET"))
+	serviceMux.HandleFunc("/callback", p.withMethods(p.OAuthCallback, "GET"))
 	serviceMux.HandleFunc("/profile", p.withMethods(p.validateClientID(p.validateClientSecret(p.GetProfile)), "GET"))
 	serviceMux.HandleFunc("/validate", p.withMethods(p.validateClientID(p.validateClientSecret(p.ValidateToken)), "GET"))
 	serviceMux.HandleFunc("/redeem", p.withMethods(p.validateClientID(p.validateClientSecret(p.Redeem)), "POST"))
 	serviceMux.HandleFunc("/refresh", p.withMethods(p.validateClientID(p.validateClientSecret(p.Refresh)), "POST"))
-	fsHandler, err := loadFSHandler()
-	if err != nil {
-		logger.Fatal(err)
-	}
-	serviceMux.Handle("/static/", http.StripPrefix("/static/", fsHandler))
 
-	// NOTE: we have to include trailing slash for the router to match the host header
-	host := p.Host
-	if !strings.HasSuffix(host, "/") {
-		host = fmt.Sprintf("%s/", host)
-	}
-	mux.Handle(host, serviceMux) // setup our service mux to only handle our required host header
-
-	return setHeaders(mux)
+	return setHeaders(serviceMux)
 }
 
 // GetRedirectURI returns the redirect url for a given OAuthProxy,
@@ -215,13 +192,8 @@ func (p *Authenticator) RobotsTxt(rw http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(rw, "User-agent: *\nDisallow: /")
 }
 
-// PingPage handles the /ping route
-func (p *Authenticator) PingPage(rw http.ResponseWriter, req *http.Request) {
-	rw.WriteHeader(http.StatusOK)
-	fmt.Fprintf(rw, "OK")
-}
-
 type signInResp struct {
+	ProviderSlug string
 	ProviderName string
 	EmailDomains []string
 	Redirect     string
@@ -237,13 +209,20 @@ func (p *Authenticator) SignInPage(rw http.ResponseWriter, req *http.Request, co
 	// We don't want to rely on req.Host, as that can be attacked via Host header injection
 	// This ends up looking like:
 	// https://sso-auth.example.com/sign_in?client_id=...&redirect_uri=...
-	redirectURL := p.redirectURL.ResolveReference(req.URL)
+	path := strings.TrimPrefix(req.URL.Path, "/")
+	redirectURL := p.redirectURL.ResolveReference(
+		&url.URL{
+			Path:     path,
+			RawQuery: req.URL.RawQuery,
+		},
+	)
 
 	// validateRedirectURI middleware already ensures that this is a valid URL
 	destinationURL, _ := url.Parse(redirectURL.Query().Get("redirect_uri"))
 
 	t := signInResp{
 		ProviderName: p.provider.Data().ProviderName,
+		ProviderSlug: p.provider.Data().ProviderSlug,
 		EmailDomains: p.EmailDomains,
 		Redirect:     redirectURL.String(),
 		Destination:  destinationURL.Host,
@@ -474,13 +453,14 @@ func (p *Authenticator) SignOut(rw http.ResponseWriter, req *http.Request) {
 }
 
 type signOutResp struct {
-	Version     string
-	Redirect    string
-	Signature   string
-	Timestamp   string
-	Message     string
-	Destination string
-	Email       string
+	ProviderSlug string
+	Version      string
+	Redirect     string
+	Signature    string
+	Timestamp    string
+	Message      string
+	Destination  string
+	Email        string
 }
 
 // SignOutPage renders a sign out page with a message
@@ -504,13 +484,14 @@ func (p *Authenticator) SignOutPage(rw http.ResponseWriter, req *http.Request, m
 	}
 
 	t := signOutResp{
-		Version:     VERSION,
-		Redirect:    redirectURI,
-		Signature:   signature,
-		Timestamp:   timestamp,
-		Message:     message,
-		Destination: destinationURL.Host,
-		Email:       session.Email,
+		ProviderSlug: p.provider.Data().ProviderSlug,
+		Version:      VERSION,
+		Redirect:     redirectURI,
+		Signature:    signature,
+		Timestamp:    timestamp,
+		Message:      message,
+		Destination:  destinationURL.Host,
+		Email:        session.Email,
 	}
 	p.templates.ExecuteTemplate(rw, "sign_out.html", t)
 	return

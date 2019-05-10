@@ -57,6 +57,8 @@ func init() {
 // a statsd client.
 func NewSSOProvider(p *ProviderData, sc *statsd.Client) *SSOProvider {
 	p.ProviderName = "SSO"
+	slug := p.ProviderSlug
+
 	base := p.ProviderURL
 	internalBase := base
 
@@ -64,13 +66,15 @@ func NewSSOProvider(p *ProviderData, sc *statsd.Client) *SSOProvider {
 		internalBase = p.ProviderURLInternal
 	}
 
-	p.SignInURL = base.ResolveReference(&url.URL{Path: "/sign_in"})
-	p.SignOutURL = base.ResolveReference(&url.URL{Path: "/sign_out"})
+	// These endpoints are for end clients and have end-client resolvable addresses.
+	p.SignInURL = base.ResolveReference(&url.URL{Path: fmt.Sprintf("/%s/sign_in", slug)})
+	p.SignOutURL = base.ResolveReference(&url.URL{Path: fmt.Sprintf("/%s/sign_out", slug)})
 
-	p.RedeemURL = internalBase.ResolveReference(&url.URL{Path: "/redeem"})
-	p.RefreshURL = internalBase.ResolveReference(&url.URL{Path: "/refresh"})
-	p.ValidateURL = internalBase.ResolveReference(&url.URL{Path: "/validate"})
-	p.ProfileURL = internalBase.ResolveReference(&url.URL{Path: "/profile"})
+	// These are endpoints that used for internally and may have internal-only resolvable addresses.
+	p.RedeemURL = internalBase.ResolveReference(&url.URL{Path: fmt.Sprintf("/%s/redeem", slug)})
+	p.RefreshURL = internalBase.ResolveReference(&url.URL{Path: fmt.Sprintf("/%s/refresh", slug)})
+	p.ValidateURL = internalBase.ResolveReference(&url.URL{Path: fmt.Sprintf("/%s/validate", slug)})
+	p.ProfileURL = internalBase.ResolveReference(&url.URL{Path: fmt.Sprintf("/%s/profile", slug)})
 
 	return &SSOProvider{
 		ProviderData: p,

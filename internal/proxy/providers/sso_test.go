@@ -27,6 +27,7 @@ func newTestServer(status int, body []byte) (*url.URL, *httptest.Server) {
 func newSSOProvider() *SSOProvider {
 	return NewSSOProvider(
 		&ProviderData{
+			ProviderSlug: "idp",
 			ProviderURL: &url.URL{
 				Scheme: "https",
 				Host:   "auth.example.com",
@@ -98,16 +99,18 @@ func TestSSOProviderDefaults(t *testing.T) {
 	data := p.Data()
 	testutil.Equal(t, "SSO", data.ProviderName)
 
+	slug := data.ProviderSlug
+
 	base := fmt.Sprintf("%s://%s", data.ProviderURL.Scheme, data.ProviderURL.Host)
 	internalBase := fmt.Sprintf("%s://%s", data.ProviderURLInternal.Scheme, data.ProviderURLInternal.Host)
 
-	testutil.Equal(t, fmt.Sprintf("%s/sign_in", base), data.SignInURL.String())
-	testutil.Equal(t, fmt.Sprintf("%s/sign_out", base), data.SignOutURL.String())
+	testutil.Equal(t, fmt.Sprintf("%s/%s/sign_in", base, slug), data.SignInURL.String())
+	testutil.Equal(t, fmt.Sprintf("%s/%s/sign_out", base, slug), data.SignOutURL.String())
 
-	testutil.Equal(t, fmt.Sprintf("%s/redeem", internalBase), data.RedeemURL.String())
-	testutil.Equal(t, fmt.Sprintf("%s/refresh", internalBase), data.RefreshURL.String())
-	testutil.Equal(t, fmt.Sprintf("%s/validate", internalBase), data.ValidateURL.String())
-	testutil.Equal(t, fmt.Sprintf("%s/profile", internalBase), data.ProfileURL.String())
+	testutil.Equal(t, fmt.Sprintf("%s/%s/redeem", internalBase, slug), data.RedeemURL.String())
+	testutil.Equal(t, fmt.Sprintf("%s/%s/refresh", internalBase, slug), data.RefreshURL.String())
+	testutil.Equal(t, fmt.Sprintf("%s/%s/validate", internalBase, slug), data.ValidateURL.String())
+	testutil.Equal(t, fmt.Sprintf("%s/%s/profile", internalBase, slug), data.ProfileURL.String())
 }
 
 type redeemResponse struct {

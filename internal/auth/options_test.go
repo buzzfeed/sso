@@ -68,10 +68,10 @@ func TestInitializedOptions(t *testing.T) {
 // seems to parse damn near anything.
 func TestRedirectURL(t *testing.T) {
 	o := testOptions(t)
-	o.RedirectURL = "https://myhost.com/oauth2/callback"
+	o.RedirectURL = "https://myhost.com/callback"
 	testutil.Equal(t, nil, o.Validate())
 	expected := &url.URL{
-		Scheme: "https", Host: "myhost.com", Path: "/oauth2/callback"}
+		Scheme: "https", Host: "myhost.com", Path: "/callback"}
 	testutil.Equal(t, expected, o.redirectURL)
 }
 
