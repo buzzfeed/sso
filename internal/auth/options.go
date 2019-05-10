@@ -38,6 +38,8 @@ import (
 // CookieHTTPOnly - bool - set httponly cookie flag
 // RequestTimeout - duration - overall request timeout
 // AuthCodeSecret - string - the seed string for secure auth codes (optionally base64 encoded)
+// GroupCacheProviderTTL - time.Duration - cache TTL for the group-cache provider used for on-demand group caching
+// GroupsCacheRefreshTTL - time.Duratoin - cache TTL for the groups fillcache mechanism used to preemptively fill group caches
 // PassHostHeader - bool - pass the request Host Header to upstream (default true)
 // SkipProviderButton - bool - if true, will skip sign-in-page to directly reach the next step: oauth/start
 // PassUserHeaders - bool (default true) - pass X-Forwarded-User and X-Forwarded-Email information to upstream
@@ -89,6 +91,7 @@ type Options struct {
 
 	AuthCodeSecret string `envconfig:"AUTH_CODE_SECRET"`
 
+	GroupCacheProviderTTL time.Duration `envconfig:"GROUP_CACHE_PROVIDER_TTL" default:"10m"`
 	GroupsCacheRefreshTTL time.Duration `envconfig:"GROUPS_CACHE_REFRESH_TTL" default:"10m"`
 	SessionLifetimeTTL    time.Duration `envconfig:"SESSION_LIFETIME_TTL" default:"720h"`
 
@@ -301,7 +304,10 @@ func newProvider(o *Options) (providers.Provider, error) {
 		if err != nil {
 			return nil, err
 		}
-		singleFlightProvider = providers.NewSingleFlightProvider(oktaProvider)
+		tags := []string{"provider:okta"}
+
+		groupsCache := providers.NewGroupCache(oktaProvider, o.GroupCacheProviderTTL, oktaProvider.StatsdClient, tags)
+		singleFlightProvider = providers.NewSingleFlightProvider(groupsCache)
 	default:
 		return nil, fmt.Errorf("unimplemented provider: %q", o.Provider)
 	}
@@ -334,14 +340,7 @@ func AssignStatsdClient(opts *Options) func(*Authenticator) error {
 			"statsd client is running")
 
 		proxy.StatsdClient = StatsdClient
-		switch v := proxy.provider.(type) {
-		case *providers.GoogleProvider:
-			v.SetStatsdClient(StatsdClient)
-		case *providers.SingleFlightProvider:
-			v.AssignStatsdClient(StatsdClient)
-		default:
-			logger.Info("provider does not have statsd client")
-		}
+		proxy.provider.SetStatsdClient(StatsdClient)
 		return nil
 	}
 }
