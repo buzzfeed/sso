@@ -64,7 +64,10 @@ func TestNewStatsd(t *testing.T) {
 				t.Fatalf("error %s", err.Error())
 			}
 			defer pc.Close()
-			opts := NewOptions()
+			opts, err := NewOptions()
+			if err != nil {
+				t.Fatalf("error while instantiating config options: %s", err.Error())
+			}
 			opts.Validate()
 			client, err := newStatsdClient(tc.host, tc.port)
 			if err != nil {
@@ -161,7 +164,10 @@ func TestLogRequestMetrics(t *testing.T) {
 				t.Fatalf("error %s", err.Error())
 			}
 			defer pc.Close()
-			opts := NewOptions()
+			opts, err := NewOptions()
+			if err != nil {
+				t.Fatalf("error while instantiating config options: %v", err.Error())
+			}
 			opts.Validate()
 
 			client, _, _ := newTestStatsdClient(t)

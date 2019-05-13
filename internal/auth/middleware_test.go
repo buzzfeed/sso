@@ -49,7 +49,7 @@ func TestWithMethods(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(tc.requestMethod, "/test", nil)
 			rw := httptest.NewRecorder()
-			options := testOpts("clientId", "clientSecret")
+			options := testOpts(t, "clientId", "clientSecret")
 			options.Validate()
 			p, _ := NewAuthenticator(options)
 			p.withMethods(createTestHandler(), tc.acceptedMethods...)(rw, req)
@@ -120,7 +120,7 @@ func TestValidateClientID(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			options := testOpts(tc.expectedClientID, "secret")
+			options := testOpts(t, tc.expectedClientID, "secret")
 			options.Validate()
 			p, _ := NewAuthenticator(options)
 			params := url.Values{}
@@ -203,7 +203,7 @@ func TestValidateClientSecret(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			options := testOpts("clientId", tc.expectedClientSecret)
+			options := testOpts(t, "clientId", tc.expectedClientSecret)
 			options.Validate()
 			p, _ := NewAuthenticator(options)
 			params := url.Values{}
@@ -277,7 +277,7 @@ func TestValidateRedirectURI(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			options := testOpts("clientId", "clientSecret")
+			options := testOpts(t, "clientId", "clientSecret")
 			options.ProxyRootDomains = []string{"example.com", "example.io"}
 			options.Validate()
 			p, _ := NewAuthenticator(options)
@@ -393,7 +393,7 @@ func TestValidateSignature(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			options := testOpts("clientId", tc.request.secret)
+			options := testOpts(t, "clientId", tc.request.secret)
 			options.ProxyRootDomains = []string{"example.com", "example.io"}
 			options.Validate()
 			p, _ := NewAuthenticator(options)

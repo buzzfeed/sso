@@ -8,7 +8,6 @@ import (
 	"github.com/buzzfeed/sso/internal/auth"
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
 	"github.com/buzzfeed/sso/internal/pkg/options"
-	"github.com/kelseyhightower/envconfig"
 )
 
 func init() {
@@ -18,9 +17,7 @@ func init() {
 func main() {
 	logger := log.NewLogEntry()
 
-	opts := auth.NewOptions()
-
-	err := envconfig.Process("", opts)
+	opts, err := auth.NewOptions()
 	if err != nil {
 		logger.Error(err, "error loading in env vars")
 		os.Exit(1)
