@@ -8,6 +8,7 @@ require (
 	github.com/imdario/mergo v0.3.7
 	github.com/kelseyhightower/envconfig v1.3.0
 	github.com/kr/pretty v0.1.0 // indirect
+	github.com/mccutchen/go-httpbin v1.1.1
 	github.com/miscreant/miscreant-go v0.0.0-20181010193435-325cbd69228b
 	github.com/rakyll/statik v0.1.6
 	github.com/sirupsen/logrus v1.3.0

@@ -78,5 +78,9 @@ func (tp *TestProvider) GetSignOutURL(redirectURL *url.URL) *url.URL {
 
 // GetSignInURL mocks GetSignInURL
 func (tp *TestProvider) GetSignInURL(redirectURL *url.URL, state string) *url.URL {
-	return tp.Data().SignInURL
+	a := *tp.Data().SignInURL
+	params, _ := url.ParseQuery(a.RawQuery)
+	params.Add("state", state)
+	a.RawQuery = params.Encode()
+	return &a
 }
