@@ -70,8 +70,11 @@ func setTestProvider(provider *providers.TestProvider) func(*Authenticator) erro
 var testEncodedCookieSecret = "x7xzsM1Ky4vGQPwqy6uTztfr3jtm/pIdRbJXgE0q8kU="
 var testAuthCodeSecret = "qICChm3wdjbjcWymm7PefwtPP6/PZv+udkFEubTeE38="
 
-func testOpts(proxyClientID, proxyClientSecret string) *Options {
-	opts := NewOptions()
+func testOpts(t *testing.T, proxyClientID, proxyClientSecret string) *Options {
+	opts, err := NewOptions()
+	if err != nil {
+		t.Fatalf("error while instantiating config options: %s", err.Error())
+	}
 	opts.ProxyClientID = proxyClientID
 	opts.ProxyClientSecret = proxyClientSecret
 	opts.CookieSecret = testEncodedCookieSecret
@@ -99,7 +102,7 @@ func newRevokeServer(accessToken string) (*url.URL, *httptest.Server) {
 }
 
 func TestRobotsTxt(t *testing.T) {
-	opts := testOpts("abced", "testtest")
+	opts := testOpts(t, "abced", "testtest")
 	opts.Validate()
 	proxy, _ := NewAuthenticator(opts, func(p *Authenticator) error {
 		p.Validator = func(string) bool { return true }
@@ -424,7 +427,7 @@ func TestSignIn(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			opts := testOpts("test", "secret")
+			opts := testOpts(t, "test", "secret")
 			opts.Validate()
 			auth, err := NewAuthenticator(opts, func(p *Authenticator) error {
 				p.Validator = func(string) bool { return tc.validEmail }
@@ -563,7 +566,7 @@ func TestSignOutPage(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 
 			u, _ := url.Parse("/sign_out")
-			opts := testOpts("abced", "testtest")
+			opts := testOpts(t, "abced", "testtest")
 			opts.Validate()
 
 			provider := providers.NewTestProvider(u)
@@ -651,7 +654,7 @@ func TestValidateEndpoint(t *testing.T) {
 			defer s.Close()
 			validateURL, _ := url.Parse(s.URL)
 
-			opts := testOpts(proxyClientID, proxyClientSecret)
+			opts := testOpts(t, proxyClientID, proxyClientSecret)
 			opts.Validate()
 
 			proxy, _ := NewAuthenticator(opts)
@@ -778,7 +781,7 @@ func TestProxyOAuthRedirect(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			now := time.Now()
 
-			opts := testOpts("clientId", "clientSecret")
+			opts := testOpts(t, "clientId", "clientSecret")
 			opts.Validate()
 
 			proxy, _ := NewAuthenticator(opts, setMockAuthCodeCipher(tc.mockCipher, nil))
@@ -855,7 +858,7 @@ func TestRefreshEndpoint(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			opts := testOpts("client_id", "client_secret")
+			opts := testOpts(t, "client_id", "client_secret")
 			opts.Validate()
 
 			p, _ := NewAuthenticator(opts)
@@ -926,7 +929,7 @@ func TestGetProfile(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			opts := testOpts("client_id", "client_secret")
+			opts := testOpts(t, "client_id", "client_secret")
 			opts.Validate()
 			p, _ := NewAuthenticator(opts, func(p *Authenticator) error {
 				p.Validator = func(string) bool { return true }
@@ -1029,7 +1032,7 @@ func TestRedeemCode(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			opts := testOpts("client_id", "client_secret")
+			opts := testOpts(t, "client_id", "client_secret")
 			opts.Validate()
 
 			proxy, _ := NewAuthenticator(opts, func(p *Authenticator) error {
@@ -1146,7 +1149,7 @@ func TestRedeemEndpoint(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			opts := testOpts("client_id", "client_secret")
+			opts := testOpts(t, "client_id", "client_secret")
 			opts.Validate()
 			p, _ := NewAuthenticator(opts, setMockAuthCodeCipher(tc.mockCipher, tc.sessionState),
 				setMockSessionStore(&sessions.MockSessionStore{}))
@@ -1419,7 +1422,7 @@ func TestOAuthCallback(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			opts := testOpts("client_id", "client_secret")
+			opts := testOpts(t, "client_id", "client_secret")
 			opts.Validate()
 			proxy, _ := NewAuthenticator(opts, func(p *Authenticator) error {
 				p.Validator = func(string) bool { return tc.validEmail }
@@ -1464,7 +1467,7 @@ func TestOAuthCallback(t *testing.T) {
 }
 
 func TestGlobalHeaders(t *testing.T) {
-	opts := testOpts("abced", "testtest")
+	opts := testOpts(t, "abced", "testtest")
 	opts.Validate()
 	proxy, _ := NewAuthenticator(opts, setMockCSRFStore(&sessions.MockCSRFStore{}))
 
@@ -1541,7 +1544,7 @@ func TestOAuthStart(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
 
-			opts := testOpts("abced", "testtest")
+			opts := testOpts(t, "abced", "testtest")
 			opts.RedirectURL = "https://example.com/oauth2/callback"
 			opts.Validate()
 			u, _ := url.Parse("http://example.com")
@@ -1614,7 +1617,7 @@ func TestHostHeader(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
-			opts := testOpts("abced", "testtest")
+			opts := testOpts(t, "abced", "testtest")
 			opts.Host = tc.Host
 			opts.Validate()
 
@@ -1639,7 +1642,7 @@ func TestHostHeader(t *testing.T) {
 }
 
 func TestGoogleProviderApiSettings(t *testing.T) {
-	opts := testOpts("abced", "testtest")
+	opts := testOpts(t, "abced", "testtest")
 	opts.Provider = "google"
 	opts.Validate()
 	proxy, _ := NewAuthenticator(opts, AssignProvider(opts), func(p *Authenticator) error {
@@ -1656,7 +1659,7 @@ func TestGoogleProviderApiSettings(t *testing.T) {
 }
 
 func TestGoogleGroupInvalidFile(t *testing.T) {
-	opts := testOpts("abced", "testtest")
+	opts := testOpts(t, "abced", "testtest")
 	opts.Provider = "google"
 	opts.GoogleAdminEmail = "admin@example.com"
 	opts.GoogleServiceAccountJSON = "file_doesnt_exist.json"
@@ -1670,12 +1673,13 @@ func TestGoogleGroupInvalidFile(t *testing.T) {
 }
 
 func TestUnimplementedProvider(t *testing.T) {
-	opts := testOpts("abced", "testtest")
+	opts := testOpts(t, "abced", "testtest")
+	opts.Provider = "null_provider"
 	opts.Validate()
 	_, err := NewAuthenticator(opts, AssignProvider(opts), func(p *Authenticator) error {
 		p.Validator = func(string) bool { return true }
 		return nil
 	})
 	testutil.NotEqual(t, nil, err)
-	testutil.Equal(t, "unimplemented provider: \"\"", err.Error())
+	testutil.Equal(t, "unimplemented provider: \"null_provider\"", err.Error())
 }

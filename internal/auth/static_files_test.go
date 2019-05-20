@@ -8,7 +8,7 @@ import (
 )
 
 func TestStaticFiles(t *testing.T) {
-	opts := testOpts("abced", "testtest")
+	opts := testOpts(t, "abced", "testtest")
 	opts.Validate()
 	proxy, _ := NewAuthenticator(opts)
 

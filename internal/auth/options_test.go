@@ -10,8 +10,12 @@ import (
 	"github.com/buzzfeed/sso/internal/pkg/testutil"
 )
 
-func testOptions() *Options {
-	o := NewOptions()
+func testOptions(t *testing.T) *Options {
+	o, err := NewOptions()
+	if err != nil {
+		t.Fatalf("error while instantiating config options: %s", err.Error())
+	}
+
 	o.CookieSecret = "foobar"
 	o.ClientID = "bazquux"
 	o.ClientSecret = "xyzzyplugh"
@@ -35,7 +39,7 @@ func errorMsg(msgs []string) string {
 }
 
 func TestNewOptions(t *testing.T) {
-	o := NewOptions()
+	o, _ := NewOptions()
 	o.EmailDomains = []string{"*"}
 	err := o.Validate()
 	testutil.NotEqual(t, nil, err)
@@ -56,14 +60,14 @@ func TestNewOptions(t *testing.T) {
 }
 
 func TestInitializedOptions(t *testing.T) {
-	o := testOptions()
+	o := testOptions(t)
 	testutil.Equal(t, nil, o.Validate())
 }
 
 // Note that it's not worth testing nonparseable URLs, since url.Parse()
 // seems to parse damn near anything.
 func TestRedirectURL(t *testing.T) {
-	o := testOptions()
+	o := testOptions(t)
 	o.RedirectURL = "https://myhost.com/oauth2/callback"
 	testutil.Equal(t, nil, o.Validate())
 	expected := &url.URL{
@@ -72,7 +76,7 @@ func TestRedirectURL(t *testing.T) {
 }
 
 func TestCookieRefreshMustBeLessThanCookieExpire(t *testing.T) {
-	o := testOptions()
+	o := testOptions(t)
 	testutil.Equal(t, nil, o.Validate())
 
 	o.CookieSecret = testEncodedCookieSecret
@@ -84,7 +88,7 @@ func TestCookieRefreshMustBeLessThanCookieExpire(t *testing.T) {
 }
 
 func TestBase64CookieSecret(t *testing.T) {
-	o := testOptions()
+	o := testOptions(t)
 	testutil.Equal(t, nil, o.Validate())
 
 	// 32 byte, base64 (urlsafe) encoded key
@@ -97,13 +101,13 @@ func TestBase64CookieSecret(t *testing.T) {
 }
 
 func TestValidateCookie(t *testing.T) {
-	o := testOptions()
+	o := testOptions(t)
 	o.CookieName = "_valid_cookie_name"
 	testutil.Equal(t, nil, o.Validate())
 }
 
 func TestValidateCookieBadName(t *testing.T) {
-	o := testOptions()
+	o := testOptions(t)
 	o.CookieName = "_bad_cookie_name{}"
 	err := o.Validate()
 	testutil.Equal(t, err.Error(), "Invalid configuration:\n"+

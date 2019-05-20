@@ -7,12 +7,14 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
 	"github.com/buzzfeed/sso/internal/auth/providers"
 	"github.com/buzzfeed/sso/internal/pkg/groups"
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
+	"github.com/spf13/viper"
 )
 
 // Options are config options that can be set by environment variables
@@ -57,65 +59,65 @@ import (
 // StatsdPort - port where statsd client listens
 // StatsdHost - host where statsd client listens
 type Options struct {
-	RedirectURL       string `envconfig:"REDIRECT_URL" `
-	ClientID          string `envconfig:"CLIENT_ID"`
-	ClientSecret      string `envconfig:"CLIENT_SECRET"`
-	ProxyClientID     string `envconfig:"PROXY_CLIENT_ID"`
-	ProxyClientSecret string `envconfig:"PROXY_CLIENT_SECRET"`
+	RedirectURL       string `mapstructure:"redirect_url" `
+	ClientID          string `mapstructure:"client_id"`
+	ClientSecret      string `mapstructure:"client_secret"`
+	ProxyClientID     string `mapstructure:"proxy_client_id"`
+	ProxyClientSecret string `mapstructure:"proxy_client_secret"`
 
-	Host string `envconfig:"HOST"`
-	Port int    `envconfig:"PORT" default:"4180"`
+	Host string `mapstructure:"host"`
+	Port int    `mapstructure:"port"`
 
-	EmailDomains     []string `envconfig:"SSO_EMAIL_DOMAIN"`
-	EmailAddresses   []string `envconfig:"SSO_EMAIL_ADDRESSES"`
-	ProxyRootDomains []string `envconfig:"PROXY_ROOT_DOMAIN"`
+	EmailDomains     []string `mapstructure:"sso_email_domain"`
+	EmailAddresses   []string `mapstructure:"sso_email_addresses"`
+	ProxyRootDomains []string `mapstructure:"proxy_root_domain"`
 
-	GoogleAdminEmail         string `envconfig:"GOOGLE_ADMIN_EMAIL"`
-	GoogleServiceAccountJSON string `envconfig:"GOOGLE_SERVICE_ACCOUNT_JSON"`
+	GoogleAdminEmail         string `mapstructure:"google_admin_email"`
+	GoogleServiceAccountJSON string `mapstructure:"google_service_account_json"`
 
-	OrgURL string `envconfig:"OKTA_ORG_URL"`
+	OrgURL string `mapstructure:"okta_org_url"`
 
-	Footer string `envconfig:"FOOTER"`
+	Footer string `mapstructure:"footer"`
 
-	CookieName     string
-	CookieSecret   string        `envconfig:"COOKIE_SECRET"`
-	CookieDomain   string        `envconfig:"COOKIE_DOMAIN"`
-	CookieExpire   time.Duration `envconfig:"COOKIE_EXPIRE" default:"168h"`
-	CookieRefresh  time.Duration `envconfig:"COOKIE_REFRESH" default:"1h"`
-	CookieSecure   bool          `envconfig:"COOKIE_SECURE" default:"true"`
-	CookieHTTPOnly bool          `envconfig:"COOKIE_HTTP_ONLY" default:"true"`
+	CookieName     string        `mapstructure:"cookie_name"`
+	CookieSecret   string        `mapstructure:"cookie_secret"`
+	CookieDomain   string        `mapstructure:"cookie_domain"`
+	CookieExpire   time.Duration `mapstructure:"cookie_expire"`
+	CookieRefresh  time.Duration `mapstructure:"cookie_refresh"`
+	CookieSecure   bool          `mapstructure:"cookie_secure"`
+	CookieHTTPOnly bool          `mapstructure:"cookie_http_only"`
 
-	RequestTimeout  time.Duration `envconfig:"REQUEST_TIMEOUT" default:"2s"`
-	TCPWriteTimeout time.Duration `envconfig:"TCP_WRITE_TIMEOUT" default:"30s"`
-	TCPReadTimeout  time.Duration `envconfig:"TCP_READ_TIMEOUT" default:"30s"`
+	RequestTimeout  time.Duration `mapstructure:"request_timeout"`
+	TCPWriteTimeout time.Duration `mapstructure:"tcp_write_timeout"`
+	TCPReadTimeout  time.Duration `mapstructure:"tcp_read_timeout"`
 
-	AuthCodeSecret string `envconfig:"AUTH_CODE_SECRET"`
+	AuthCodeSecret string `mapstructure:"auth_code_secret"`
 
-	GroupCacheProviderTTL time.Duration `envconfig:"GROUP_CACHE_PROVIDER_TTL" default:"10m"`
-	GroupsCacheRefreshTTL time.Duration `envconfig:"GROUPS_CACHE_REFRESH_TTL" default:"10m"`
-	SessionLifetimeTTL    time.Duration `envconfig:"SESSION_LIFETIME_TTL" default:"720h"`
+	GroupCacheProviderTTL time.Duration `mapstructure:"group_cache_provider_ttl"`
+	GroupsCacheRefreshTTL time.Duration `mapstructure:"groups_cache_refresh_ttl"`
+	SessionLifetimeTTL    time.Duration `mapstructure:"session_lifetime_ttl"`
 
-	PassHostHeader     bool `envconfig:"PASS_HOST_HEADER" default:"true"`
-	SkipProviderButton bool `envconfig:"SKIP_PROVIDER_BUTTON"`
-	PassUserHeaders    bool `envconfig:"PASS_USER_HEADERS" default:"true"`
-	SetXAuthRequest    bool `envconfig:"SET_XAUTHREQUEST" default:"false"`
+	PassHostHeader     bool `mapstructure:"pass_host_header"`
+	SkipProviderButton bool `mapstructure:"skip_provider_button"`
+	PassUserHeaders    bool `mapstructure:"pass_user_headers"`
+	SetXAuthRequest    bool `mapstructure:"set_xauthrequest"`
 
 	// These options allow for other providers besides Google, with potential overrides.
-	Provider         string `envconfig:"PROVIDER" default:"google"`
-	ProviderServerID string `envconfig:"PROVIDER_SERVER_ID" default:"default"`
+	Provider         string `mapstructure:"provider"`
+	ProviderServerID string `mapstructure:"provider_server_id"`
 
-	SignInURL      string `envconfig:"SIGNIN_URL"`
-	RedeemURL      string `envconfig:"REDEEM_URL"`
-	RevokeURL      string `envconfig:"REVOKE_URL"`
-	ProfileURL     string `envconfig:"PROFILE_URL"`
-	ValidateURL    string `envconfig:"VALIDATE_URL"`
-	Scope          string `envconfig:"SCOPE"`
-	ApprovalPrompt string `envconfig:"APPROVAL_PROMPT" default:"force"`
+	SignInURL      string `mapstructure:"signin_url"`
+	RedeemURL      string `mapstructure:"redeem_url"`
+	RevokeURL      string `mapstructure:"revoke_url"`
+	ProfileURL     string `mapstructure:"profile_url"`
+	ValidateURL    string `mapstructure:"validate_url"`
+	Scope          string `mapstructure:"scope"`
+	ApprovalPrompt string `mapstructure:"approval_prompt"`
 
-	RequestLogging bool `envconfig:"REQUEST_LOGGING" default:"true"`
+	RequestLogging bool `mapstructure:"request_logging"`
 
-	StatsdPort int    `envconfig:"STATSD_PORT"`
-	StatsdHost string `envconfig:"STATSD_HOST"`
+	StatsdPort int    `mapstructure:"statsd_port"`
+	StatsdHost string `mapstructure:"statsd_host"`
 
 	// internal values that are set after config validation
 	redirectURL         *url.URL
@@ -129,20 +131,68 @@ type SignatureData struct {
 	key  string
 }
 
-// NewOptions returns new options
-func NewOptions() *Options {
-	return &Options{
-		Port:            4180,
-		CookieName:      "_sso_auth",
-		CookieSecure:    true,
-		CookieHTTPOnly:  true,
-		CookieExpire:    time.Duration(168) * time.Hour,
-		CookieRefresh:   time.Duration(0),
-		SetXAuthRequest: false,
-		PassUserHeaders: true,
-		PassHostHeader:  true,
-		ApprovalPrompt:  "force",
-		RequestLogging:  true,
+// NewOptions returns new options with the below overrides
+func NewOptions() (*Options, error) {
+	v := viper.New()
+	options, err := loadVars(v)
+	if err != nil {
+		return nil, err
+	}
+	return options, nil
+}
+
+// loadVars loads viper variables and returns a filled Options struct
+func loadVars(v *viper.Viper) (*Options, error) {
+	var opts Options
+
+	bindAllOptVars(v, reflect.TypeOf(&opts).Elem(), "mapstructure")
+	setDefaults(v)
+
+	err := v.Unmarshal(&opts)
+	if err != nil {
+		return nil, fmt.Errorf("unable to decode env vars into options struct")
+	}
+	return &opts, nil
+}
+
+// bindAllOptVars takes in a struct with tags and uses the tag values to bind env vars
+func bindAllOptVars(v *viper.Viper, t reflect.Type, tag string) error {
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		tagValue := field.Tag.Get(tag)
+		err := v.BindEnv(tagValue)
+		if err != nil {
+			return fmt.Errorf("Unable to bind env var: %q", tagValue)
+		}
+	}
+	return nil
+}
+
+// setDefaults sets config defaults for the default viper instance
+func setDefaults(v *viper.Viper) {
+	defaultVars := map[string]interface{}{
+		"port":                     4180,
+		"cookie_expire":            "168h",
+		"cookie_name":              "_sso_auth",
+		"cookie_refresh":           "1h",
+		"cookie_secure":            true,
+		"cookie_http_only":         true,
+		"request_timeout":          "2s",
+		"tcp_write_timeout":        "30s",
+		"tcp_read_timeout":         "30s",
+		"groups_cache_refresh_ttl": "10m",
+		"group_cache_provider_ttl": "10m",
+		"session_lifetime_ttl":     "720h",
+		"pass_host_header":         true,
+		"pass_user_headers":        true,
+		"set_xauthrequest":         false,
+		"provider":                 "google",
+		"provider_server_id":       "default",
+		"approval_prompt":          "force",
+		"request_logging":          true,
+	}
+	for key, value := range defaultVars {
+		v.SetDefault(key, value)
 	}
 }
 
