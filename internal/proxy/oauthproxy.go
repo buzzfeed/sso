@@ -289,8 +289,8 @@ func (t *upstreamTransport) getTransport() *http.Transport {
 		t.transport = &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
 			DialContext: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
+				Timeout:   300 * time.Second,
+				KeepAlive: 300 * time.Second,
 				DualStack: true,
 			}).DialContext,
 			MaxIdleConns:          100,
@@ -320,6 +320,7 @@ func NewReverseProxy(to *url.URL, config *UpstreamConfig) *httputil.ReverseProxy
 			req.Host = to.Host
 		}
 	}
+	proxy.FlushInterval = 100 * time.Millisecond
 	return proxy
 }
 
