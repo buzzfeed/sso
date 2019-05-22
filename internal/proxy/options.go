@@ -26,7 +26,7 @@ import (
 // SkipAuthPreflight - will skip authentication for OPTIONS requests, default false
 // EmailDomains - csv list of emails with the specified domain to authenticate. Use * to authenticate any email
 // EmailAddresses - []string - authenticate emails with the specified email address (may be given multiple times). Use * to authenticate any email
-// DefaultAllowedGroups - csv list of default allowed groups that are applied to authorize access to upstreams. Will be overriden by groups specified in upstream configs.
+// DefaultAllowedGroups - csv list of default allowed groups that are applied to authorize access to upstreams. Will be overridden by groups specified in upstream configs.
 // ClientID - the OAuth Client ID: ie: "123456.apps.googleusercontent.com"
 // ClientSecret - The OAuth Client Secret
 // DefaultUpstreamTimeout - the default time period to wait for a response from an upstream
@@ -103,7 +103,6 @@ type Options struct {
 
 	// internal values that are set after config validation
 	upstreamConfigs     []*UpstreamConfig
-	providerURL         *url.URL
 	provider            providers.Provider
 	decodedCookieSecret []byte
 }
@@ -125,15 +124,6 @@ func NewOptions() *Options {
 		DefaultAllowedGroups: []string{},
 		PassAccessToken:      false,
 	}
-}
-
-func parseURL(toParse string, urltype string, msgs []string) (*url.URL, []string) {
-	parsed, err := url.Parse(toParse)
-	if err != nil {
-		return nil, append(msgs, fmt.Sprintf(
-			"error parsing %s-url=%q %s", urltype, toParse, err))
-	}
-	return parsed, msgs
 }
 
 // Validate validates options
@@ -191,6 +181,7 @@ func (o *Options) Validate() error {
 			AllowedGroups: o.DefaultAllowedGroups,
 			Timeout:       o.DefaultUpstreamTimeout,
 			ResetDeadline: o.DefaultUpstreamTCPResetDeadline,
+			CookieName:    o.CookieName,
 		}
 
 		o.upstreamConfigs, err = loadServiceConfigs(rawBytes, o.Cluster, o.Scheme, templateVars, defaultUpstreamOptionsConfig)
@@ -284,20 +275,6 @@ func validateCookieName(o *Options, msgs []string) []string {
 		return append(msgs, fmt.Sprintf("invalid cookie name: %q", o.CookieName))
 	}
 	return msgs
-}
-
-func addPadding(secret string) string {
-	padding := len(secret) % 4
-	switch padding {
-	case 1:
-		return secret + "==="
-	case 2:
-		return secret + "=="
-	case 3:
-		return secret + "="
-	default:
-		return secret
-	}
 }
 
 func parseEnvironment(environ []string) map[string]string {
