@@ -9,7 +9,7 @@ import (
 
 // Collector ticks periodically and emits runtime stats to datadog
 type Collector struct {
-	// interval represents the interval inbetween ticks for stats collection
+	// interval represents the interval between ticks for stats collection
 	interval time.Duration
 
 	// done, when closed, is used to signal the closure of the runtime polling goroutine

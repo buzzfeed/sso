@@ -114,7 +114,7 @@ Optional:
 
 #### Security Headers
 
-`sso_proxy` adds the following headers to every outgoing request, to ensure a baseline level of browser security for every service that it protects.  These headers _cannot_ be overridden by upstream services, but _can_ be overriden in the `HEADER_OVERRIDES` environment variable.
+`sso_proxy` adds the following headers to every outgoing request, to ensure a baseline level of browser security for every service that it protects.  These headers _cannot_ be overridden by upstream services, but _can_ be overridden in the `HEADER_OVERRIDES` environment variable.
 
 * `Strict-Transport-Security`
 * `X-Content-Type-Options`

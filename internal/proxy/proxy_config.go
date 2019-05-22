@@ -79,7 +79,7 @@ type RouteConfig struct {
 // * skip_auth_regex - skips authentication for paths matching these regular expressions.
 // * allowed_groups - optional list of authorized google groups that can access the service.
 // * tls_skip_verify - a bool to skip certification verification of upstreams
-// * perserve_host - perserve the host named based in up the client request rather than re-writing for the upstream host
+// * preserve_host - preserve the host named based in up the client request rather than re-writing for the upstream host
 // * timeout - duration before timing out request.
 // * reset_deadline - a duration to trigger resets of tcp connections to upstreams. This is useful in dynamic dns environments.
 // * flush_interval - interval at which the proxy should flush data to the browser

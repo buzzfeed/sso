@@ -707,7 +707,7 @@ func TestOAuthStart(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// setup deafults
+			// setup defaults
 			csrfStore := &sessions.MockCSRFStore{}
 
 			s := &StateParameter{

@@ -585,7 +585,7 @@ func TestRewriteRoutingHandling(t *testing.T) {
 			},
 		},
 		{
-			Name:         "it should match and replace using regex/template to find port in embeded domain",
+			Name:         "it should match and replace using regex/template to find port in embedded domain",
 			TestHost:     fmt.Sprintf("somedomain--%s", upstreamPort),
 			FromRegex:    "somedomain--(.*)",                 // capture port
 			ToTemplate:   fmt.Sprintf("%s:$1", upstreamHost), // add port to dest

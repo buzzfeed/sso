@@ -425,7 +425,7 @@ func (p *OAuthProxy) OAuthStart(rw http.ResponseWriter, req *http.Request, tags 
 	//
 	// * client_id: Defined by the OAuth2 RFC https://tools.ietf.org/html/rfc6749.
 	//              Identifies the application requesting authentication information,
-	//              from our prespective this will always be static since the client
+	//              from our perspective this will always be static since the client
 	//              will always be sso proxy
 	//
 	// * redirect_uri: Defined by the OAuth2 RFC https://tools.ietf.org/html/rfc6749.

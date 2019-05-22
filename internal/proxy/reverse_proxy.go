@@ -124,8 +124,8 @@ func NewUpstreamReverseProxy(config *UpstreamConfig, signer *RequestSigner) (htt
 	return handler, nil
 }
 
-// Director implements the Director func providerd in the httputil reverse proxy.
-// This implements a variety fo director behavior based on configuration defined
+// Director implements the Director func provided in the httputil reverse proxy.
+// This implements a variety of director behavior based on configuration defined
 // in the UpstreamConfig.
 type Director struct {
 	config *UpstreamConfig
