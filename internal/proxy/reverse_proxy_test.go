@@ -159,28 +159,28 @@ func TestNewRewriteReverseProxy(t *testing.T) {
 		expectedStatus int
 	}{
 		{
-			name:           "tls true skip verify false preserve host false",
+			name:           "tls=true, skipVerify=false, preserveHost=false",
 			useTLS:         true,
 			skipVerify:     false,
 			preserveHost:   false,
 			expectedStatus: 502,
 		},
 		{
-			name:           "tls true skip verify true preserve host false",
+			name:           "tls=true, skipVerify=true, preserveHost=false",
 			useTLS:         true,
 			skipVerify:     true,
 			preserveHost:   false,
 			expectedStatus: 200,
 		},
 		{
-			name:           "tls true skip verify false preserve host true",
+			name:           "tls=true, skipVerify=false, preserveHost=true",
 			useTLS:         true,
 			skipVerify:     false,
 			preserveHost:   true,
 			expectedStatus: 502,
 		},
 		{
-			name:           "tls true skip verify true preserve host true",
+			name:           "tls=true, skipVerify=true, preserveHost=true",
 			useTLS:         true,
 			skipVerify:     true,
 			preserveHost:   true,
@@ -188,28 +188,28 @@ func TestNewRewriteReverseProxy(t *testing.T) {
 		},
 
 		{
-			name:           "tls false skip verify false preserve host false",
+			name:           "tls=false, skipVerify=false, preserveHost=false",
 			useTLS:         false,
 			skipVerify:     false,
 			preserveHost:   false,
 			expectedStatus: 200,
 		},
 		{
-			name:           "tls false skip verify true preserve host false",
+			name:           "tls=false, skipVerif=true, preserveHost=false",
 			useTLS:         false,
 			skipVerify:     true,
 			preserveHost:   false,
 			expectedStatus: 200,
 		},
 		{
-			name:           "tls false skip verify false preserve host true",
+			name:           "tls=false, skipVerify=false, preserveHost=true",
 			useTLS:         false,
 			skipVerify:     false,
 			preserveHost:   true,
 			expectedStatus: 200,
 		},
 		{
-			name:           "tls false skip verify true preserve host true",
+			name:           "tls=false, skipVerify=true, preserveHost=true",
 			useTLS:         false,
 			skipVerify:     true,
 			preserveHost:   true,
@@ -311,31 +311,34 @@ func TestNewReverseProxy(t *testing.T) {
 		useTLS         bool
 		skipVerify     bool
 		preserveHost   bool
+		flushInterval  time.Duration
+		timeout        time.Duration
 		expectedStatus int
+		expectedBody   string
 	}{
 		{
-			name:           "tls true skip verify false preserve host false",
+			name:           "tls=true, skipVerify=false, preserveHost=false",
 			useTLS:         true,
 			skipVerify:     false,
 			preserveHost:   false,
 			expectedStatus: 502,
 		},
 		{
-			name:           "tls true skip verify true preserve host false",
+			name:           "tls=true, skipVerify=true, preserveHost=false",
 			useTLS:         true,
 			skipVerify:     true,
 			preserveHost:   false,
 			expectedStatus: 200,
 		},
 		{
-			name:           "tls true skip verify false preserve host true",
+			name:           "tls=true, skipVerify=false, preserveHost=true",
 			useTLS:         true,
 			skipVerify:     false,
 			preserveHost:   true,
 			expectedStatus: 502,
 		},
 		{
-			name:           "tls true skip verify true preserve host true",
+			name:           "tls=true, skipVerify=true, preserveHost=true",
 			useTLS:         true,
 			skipVerify:     true,
 			preserveHost:   true,
@@ -343,32 +346,53 @@ func TestNewReverseProxy(t *testing.T) {
 		},
 
 		{
-			name:           "tls false skip verify false preserve host false",
+			name:           "tls=false, skipVerify=false, preserveHost=false",
 			useTLS:         false,
 			skipVerify:     false,
 			preserveHost:   false,
 			expectedStatus: 200,
 		},
 		{
-			name:           "tls false skip verify true preserve host false",
+			name:           "tls=false, skipVerify=true, preserveHost=false",
 			useTLS:         false,
 			skipVerify:     true,
 			preserveHost:   false,
 			expectedStatus: 200,
 		},
 		{
-			name:           "tls false skip verify false preserve host true",
+			name:           "tls=false, skipVerify=false, preserveHost=true",
 			useTLS:         false,
 			skipVerify:     false,
 			preserveHost:   true,
 			expectedStatus: 200,
 		},
 		{
-			name:           "tls false skip verify true preserve host true",
+			name:           "tls=false, skipVerify=true, preserveHost=true",
 			useTLS:         false,
 			skipVerify:     true,
 			preserveHost:   true,
 			expectedStatus: 200,
+		},
+		{
+			// When request flushing is enabled the timeout should be ignored, so force a timeout
+			// that would be met.
+			name:           "tls=false, skipVerify=true, preserveHost=false, flush=enabled",
+			useTLS:         false,
+			skipVerify:     true,
+			preserveHost:   false,
+			flushInterval:  time.Duration(10) * time.Millisecond,
+			timeout:        time.Duration(25) * time.Millisecond,
+			expectedStatus: 200,
+		},
+		{
+			name:           "tls=false, skipVerify=true, preserveHost=false, flush=disabled",
+			useTLS:         false,
+			skipVerify:     true,
+			preserveHost:   false,
+			flushInterval:  0,
+			timeout:        time.Duration(25) * time.Millisecond,
+			expectedStatus: 503,
+			expectedBody:   " failed to respond within the 25ms timeout period",
 		},
 	}
 	for _, tc := range testCases {
@@ -389,6 +413,10 @@ func TestNewReverseProxy(t *testing.T) {
 				if err != nil {
 					t.Fatalf("expected to marshal json: %s", err)
 				}
+				if tc.timeout != 0 {
+					timer := time.NewTimer(tc.timeout + time.Duration(25)*time.Millisecond)
+					<-timer.C
+				}
 				rw.Write(body)
 			}))
 			defer to.Close()
@@ -404,6 +432,8 @@ func TestNewReverseProxy(t *testing.T) {
 				},
 				TLSSkipVerify: tc.skipVerify,
 				PreserveHost:  tc.preserveHost,
+				FlushInterval: tc.flushInterval,
+				Timeout:       tc.timeout,
 			}
 			reverseProxy, err := NewUpstreamReverseProxy(config, nil)
 			if err != nil {
@@ -439,7 +469,14 @@ func TestNewReverseProxy(t *testing.T) {
 				t.Logf(" got status code: %v", res.StatusCode)
 				t.Logf("want status code: %d", tc.expectedStatus)
 
-				t.Errorf("got unexpected response code for tls failure")
+				t.Errorf("got unexpected response code")
+			}
+
+			if tc.expectedBody != "" && string(body) != tc.expectedBody {
+				t.Logf(" got response body: %q", body)
+				t.Logf("want response body: %q", tc.expectedBody)
+
+				t.Errorf("got unexpected response body")
 			}
 
 			if res.StatusCode >= 200 && res.StatusCode < 300 {

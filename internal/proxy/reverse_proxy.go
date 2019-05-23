@@ -109,7 +109,8 @@ func NewUpstreamReverseProxy(config *UpstreamConfig, signer *RequestSigner) (htt
 	var handler http.Handler = reverseProxy
 
 	// Apply a timeout handler if configured
-	if config.Timeout != 0 {
+	// http.TimeoutHandler doesn't support flushing, so only create one if no flush interval is set.
+	if config.FlushInterval == 0 && config.Timeout != 0 {
 		handler = newTimeoutHandler(handler, config)
 	}
 
