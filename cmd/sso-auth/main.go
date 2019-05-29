@@ -30,7 +30,6 @@ func main() {
 	}
 
 	emailValidator := func(p *auth.Authenticator) error {
-		//if len(opts.Authenticator.EmailAddresses) != 0 {
 		if len(opts["authenticator"].EmailAddresses) != 0 {
 			p.Validator = options.NewEmailAddressValidator(opts["authenticator"].EmailAddresses)
 		} else {
