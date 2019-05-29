@@ -58,70 +58,59 @@ import (
 // RequestLogging - bool to log requests
 // StatsdPort - port where statsd client listens
 // StatsdHost - host where statsd client listens
+
 type Options struct {
-	RedirectURL       string `mapstructure:"redirect_url" `
-	ClientID          string `mapstructure:"client_id"`
-	ClientSecret      string `mapstructure:"client_secret"`
-	ProxyClientID     string `mapstructure:"proxy_client_id"`
-	ProxyClientSecret string `mapstructure:"proxy_client_secret"`
+	Port int `mapstructure:"handler_port"`
 
-	Host string `mapstructure:"host"`
-	Port int    `mapstructure:"port"`
+	EmailAddresses  []string      `mapstructure:"handler_sso_email_addresses"`
+	RequestTimeout  time.Duration `mapstructure:"handler_request_timeout"`
+	TCPWriteTimeout time.Duration `mapstructure:"handler_tcp_write_timeout"`
+	TCPReadTimeout  time.Duration `mapstructure:"handler_tcp_read_timeout"`
+	PassHostHeader  bool          `mapstructure:"handler_pass_host_header"`
+	RequestLogging  bool          `mapstructure:"handler_request_logging"`
 
-	EmailDomains     []string `mapstructure:"sso_email_domain"`
-	EmailAddresses   []string `mapstructure:"sso_email_addresses"`
-	ProxyRootDomains []string `mapstructure:"proxy_root_domain"`
+	ClientID                 string `mapstructure:"provider_client_id"`
+	ClientSecret             string `mapstructure:"provider_client_secret"`
+	GoogleAdminEmail         string `mapstructure:"provider_google_admin_email"`
+	GoogleServiceAccountJSON string `mapstructure:"provider_google_service_account_json"`
+	OrgURL                   string `mapstructure:"provider_okta_org_url"`
+	Provider                 string `mapstructure:"provider_provider"`
+	ProviderServerID         string `mapstructure:"provider_provider_server_id"`
+	SignInURL                string `mapstructure:"provider_signin_url"`
+	RedeemURL                string `mapstructure:"provider_redeem_url"`
+	RedirectURL              string `mapstructure:"provider_redirect_url"`
+	RevokeURL                string `mapstructure:"provider_revoke_url"`
+	ProfileURL               string `mapstructure:"provider_profile_url"`
+	ValidateURL              string `mapstructure:"provider_validate_url"`
+	Scope                    string `mapstructure:"provider_scope"`
+	ApprovalPrompt           string `mapstructure:"provider_approval_prompt"`
 
-	GoogleAdminEmail         string `mapstructure:"google_admin_email"`
-	GoogleServiceAccountJSON string `mapstructure:"google_service_account_json"`
+	GroupCacheProviderTTL time.Duration `mapstructure:"authenticator_group_cache_provider_ttl"`
+	SkipProviderButton    bool          `mapstructure:"authenticator_skip_provider_button"`
+	ProxyClientID         string        `mapstructure:"authenticator_proxy_client_id"`
+	ProxyClientSecret     string        `mapstructure:"authenticator_proxy_client_secret"`
+	Host                  string        `mapstructure:"authenticator_host"`
+	EmailDomains          []string      `mapstructure:"authenticator_sso_email_domain"`
+	ProxyRootDomains      []string      `mapstructure:"authenticator_proxy_root_domain"`
+	Footer                string        `mapstructure:"authenticator_footer"`
+	CookieName            string        `mapstructure:"authenticator_cookie_name"`
+	CookieSecret          string        `mapstructure:"authenticator_cookie_secret"`
+	CookieDomain          string        `mapstructure:"authenticator_cookie_domain"`
+	CookieExpire          time.Duration `mapstructure:"authenticator_cookie_expire"`
+	CookieRefresh         time.Duration `mapstructure:"authenticator_cookie_refresh"`
+	CookieSecure          bool          `mapstructure:"authenticator_cookie_secure"`
+	CookieHTTPOnly        bool          `mapstructure:"authenticator_cookie_http_only"`
+	AuthCodeSecret        string        `mapstructure:"authenticator_auth_code_secret"`
+	GroupsCacheRefreshTTL time.Duration `mapstructure:"authenticator_groups_cache_refresh_ttl"`
+	PassUserHeaders       bool          `mapstructure:"authenticator_pass_user_headers"`
+	SetXAuthRequest       bool          `mapstructure:"authenticator_set_xauthrequest"`
+	redirectURL           *url.URL      `mapstructure:"authenticator_approval_prompt"`
+	decodedCookieSecret   []byte        `mapstructure:"authenticator_set_xauthrequest"`
 
-	OrgURL string `mapstructure:"okta_org_url"`
+	SessionLifetimeTTL time.Duration `mapstructure:"global_session_lifetime_ttl"`
+	StatsdPort         int           `mapstructure:"global_statsd_port"`
+	StatsdHost         string        `mapstructure:"global_statsd_host"`
 
-	Footer string `mapstructure:"footer"`
-
-	CookieName     string        `mapstructure:"cookie_name"`
-	CookieSecret   string        `mapstructure:"cookie_secret"`
-	CookieDomain   string        `mapstructure:"cookie_domain"`
-	CookieExpire   time.Duration `mapstructure:"cookie_expire"`
-	CookieRefresh  time.Duration `mapstructure:"cookie_refresh"`
-	CookieSecure   bool          `mapstructure:"cookie_secure"`
-	CookieHTTPOnly bool          `mapstructure:"cookie_http_only"`
-
-	RequestTimeout  time.Duration `mapstructure:"request_timeout"`
-	TCPWriteTimeout time.Duration `mapstructure:"tcp_write_timeout"`
-	TCPReadTimeout  time.Duration `mapstructure:"tcp_read_timeout"`
-
-	AuthCodeSecret string `mapstructure:"auth_code_secret"`
-
-	GroupCacheProviderTTL time.Duration `mapstructure:"group_cache_provider_ttl"`
-	GroupsCacheRefreshTTL time.Duration `mapstructure:"groups_cache_refresh_ttl"`
-	SessionLifetimeTTL    time.Duration `mapstructure:"session_lifetime_ttl"`
-
-	PassHostHeader     bool `mapstructure:"pass_host_header"`
-	SkipProviderButton bool `mapstructure:"skip_provider_button"`
-	PassUserHeaders    bool `mapstructure:"pass_user_headers"`
-	SetXAuthRequest    bool `mapstructure:"set_xauthrequest"`
-
-	// These options allow for other providers besides Google, with potential overrides.
-	Provider         string `mapstructure:"provider"`
-	ProviderServerID string `mapstructure:"provider_server_id"`
-
-	SignInURL      string `mapstructure:"signin_url"`
-	RedeemURL      string `mapstructure:"redeem_url"`
-	RevokeURL      string `mapstructure:"revoke_url"`
-	ProfileURL     string `mapstructure:"profile_url"`
-	ValidateURL    string `mapstructure:"validate_url"`
-	Scope          string `mapstructure:"scope"`
-	ApprovalPrompt string `mapstructure:"approval_prompt"`
-
-	RequestLogging bool `mapstructure:"request_logging"`
-
-	StatsdPort int    `mapstructure:"statsd_port"`
-	StatsdHost string `mapstructure:"statsd_host"`
-
-	// internal values that are set after config validation
-	redirectURL         *url.URL
-	decodedCookieSecret []byte
 	GroupsCacheStopFunc func()
 }
 
@@ -132,20 +121,27 @@ type SignatureData struct {
 }
 
 // NewOptions returns new options with the below overrides
-func NewOptions() (*Options, error) {
+func NewOptions(prefix []string) (map[string]*Options, error) {
 	v := viper.New()
-	options, err := loadVars(v)
-	if err != nil {
-		return nil, err
+
+	prefixMap := make(map[string]*Options)
+	for _, prefix := range prefix {
+		options, err := loadVars(v, prefix)
+		if err != nil {
+			return nil, err
+		}
+		prefixMap[prefix] = options
+
 	}
-	return options, nil
+	return prefixMap, nil
 }
 
 // loadVars loads viper variables and returns a filled Options struct
-func loadVars(v *viper.Viper) (*Options, error) {
+func loadVars(v *viper.Viper, prefix string) (*Options, error) {
 	var opts Options
 
-	bindAllOptVars(v, reflect.TypeOf(&opts).Elem(), "mapstructure")
+	//v.SetEnvPrefix(prefix)
+	bindAllOptVars(v, reflect.TypeOf(&opts).Elem(), "mapstructure", prefix)
 	setDefaults(v)
 
 	err := v.Unmarshal(&opts)
@@ -156,11 +152,21 @@ func loadVars(v *viper.Viper) (*Options, error) {
 }
 
 // bindAllOptVars takes in a struct with tags and uses the tag values to bind env vars
-func bindAllOptVars(v *viper.Viper, t reflect.Type, tag string) error {
+func bindAllOptVars(v *viper.Viper, t reflect.Type, tag, prefix string) error {
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 		tagValue := field.Tag.Get(tag)
-		err := v.BindEnv(tagValue)
+		// REVIEW: Explicitly set the env var for the key to bind to in BindEnv
+		//         to get around needing to namespace the actual environment
+		//         variables themselves. Instead, they are namespaced during
+		//         the process of being pulled into the Viper config.
+
+		//         This means we can't just pass []string{} to NewOptions though,
+		//         as we we wouldn't know what namespace/prefix to search for.
+		//         Viper would look for namespaced env vars e.g. 'provider_scope'
+		//         and find nothing.
+		envValue := strings.ToUpper(strings.TrimPrefix(tagValue, prefix+"_"))
+		err := v.BindEnv(tagValue, envValue)
 		if err != nil {
 			return fmt.Errorf("Unable to bind env var: %q", tagValue)
 		}
@@ -171,25 +177,28 @@ func bindAllOptVars(v *viper.Viper, t reflect.Type, tag string) error {
 // setDefaults sets config defaults for the default viper instance
 func setDefaults(v *viper.Viper) {
 	defaultVars := map[string]interface{}{
-		"port":                     4180,
-		"cookie_expire":            "168h",
-		"cookie_name":              "_sso_auth",
-		"cookie_refresh":           "1h",
-		"cookie_secure":            true,
-		"cookie_http_only":         true,
-		"request_timeout":          "2s",
-		"tcp_write_timeout":        "30s",
-		"tcp_read_timeout":         "30s",
-		"groups_cache_refresh_ttl": "10m",
-		"group_cache_provider_ttl": "10m",
-		"session_lifetime_ttl":     "720h",
-		"pass_host_header":         true,
-		"pass_user_headers":        true,
-		"set_xauthrequest":         false,
-		"provider":                 "google",
-		"provider_server_id":       "default",
-		"approval_prompt":          "force",
-		"request_logging":          true,
+		"authenticator_cookie_expire":            "168h",
+		"authenticator_cookie_name":              "_sso_auth",
+		"authenticator_cookie_refresh":           "1h",
+		"authenticator_cookie_secure":            true,
+		"authenticator_cookie_http_only":         true,
+		"authenticator_groups_cache_refresh_ttl": "10m",
+		"authenticator_group_cache_provider_ttl": "10m",
+		"authenticator_pass_user_headers":        true,
+		"authenticator_set_xauthrequest":         false,
+
+		"provider_provider":           "google",
+		"provider_provider_server_id": "default",
+		"provider_approval_prompt":    "force",
+
+		"handler_pass_host_header":  true,
+		"handler_request_logging":   true,
+		"handler_port":              4180,
+		"handler_request_timeout":   "2s",
+		"handler_tcp_write_timeout": "30s",
+		"handler_tcp_read_timeout":  "30s",
+
+		"global_session_lifetime_ttl": "720h",
 	}
 	for key, value := range defaultVars {
 		v.SetDefault(key, value)
@@ -205,46 +214,50 @@ func parseURL(toParse string, urltype string, msgs []string) (*url.URL, []string
 	return parsed, msgs
 }
 
+// REVIEW: I wonder if we would like to separate out these tests into namespace specific test functions?
+//         Preferred to keep one test function for all variables, or branch into separate provider/authenticator tests?
+
 // Validate validates options
-func (o *Options) Validate() error {
+func Validate(o map[string]*Options) error {
+
 	msgs := make([]string, 0)
-	if o.CookieSecret == "" {
+	if o["authenticator"].CookieSecret == "" {
 		msgs = append(msgs, "missing setting: cookie-secret")
 	}
-	if o.ClientID == "" {
+	if o["provider"].ClientID == "" {
 		msgs = append(msgs, "missing setting: client-id")
 	}
-	if o.ClientSecret == "" {
+	if o["provider"].ClientSecret == "" {
 		msgs = append(msgs, "missing setting: client-secret")
 	}
-	if len(o.EmailDomains) == 0 && len(o.EmailAddresses) == 0 {
+	if len(o["authenticator"].EmailDomains) == 0 && len(o["authenticator"].EmailAddresses) == 0 {
 		msgs = append(msgs, "missing setting for email validation: email-domain or email-address required.\n      use email-domain=* to authorize all email addresses")
 	}
-	if len(o.ProxyRootDomains) == 0 {
+	if len(o["authenticator"].ProxyRootDomains) == 0 {
 		msgs = append(msgs, "missing setting: proxy-root-domain")
 	}
-	if o.ProxyClientID == "" {
+	if o["authenticator"].ProxyClientID == "" {
 		msgs = append(msgs, "missing setting: proxy-client-id")
 	}
-	if o.ProxyClientSecret == "" {
+	if o["authenticator"].ProxyClientSecret == "" {
 		msgs = append(msgs, "missing setting: proxy-client-secret")
 	}
-	if o.Host == "" {
+	if o["authenticator"].Host == "" {
 		msgs = append(msgs, "missing setting: required-host-header")
 	}
 
-	if len(o.OrgURL) > 0 {
-		o.OrgURL = strings.Trim(o.OrgURL, `"`)
+	if len(o["provider"].OrgURL) > 0 {
+		o["provider"].OrgURL = strings.Trim(o["provider"].OrgURL, `"`)
 	}
-	if len(o.ProviderServerID) > 0 {
-		o.ProviderServerID = strings.Trim(o.ProviderServerID, `"`)
+	if len(o["provider"].ProviderServerID) > 0 {
+		o["provider"].ProviderServerID = strings.Trim(o["provider"].ProviderServerID, `"`)
 	}
 
-	o.redirectURL, msgs = parseURL(o.RedirectURL, "redirect", msgs)
+	o["authenticator"].redirectURL, msgs = parseURL(o["provider"].RedirectURL, "redirect", msgs)
 
-	msgs = validateEndpoints(o, msgs)
+	msgs = validateEndpoints(o["provider"], msgs)
 
-	decodedCookieSecret, err := base64.StdEncoding.DecodeString(o.CookieSecret)
+	decodedCookieSecret, err := base64.StdEncoding.DecodeString(o["authenticator"].CookieSecret)
 	if err != nil {
 		msgs = append(msgs, "Invalid value for COOKIE_SECRET; expected base64-encoded bytes, as from `openssl rand 32 -base64`")
 	}
@@ -260,23 +273,23 @@ func (o *Options) Validate() error {
 		msgs = append(msgs, fmt.Sprintf("Invalid value for COOKIE_SECRET; must decode to 32 or 64 bytes, but decoded to %d bytes", len(decodedCookieSecret)))
 	}
 
-	o.decodedCookieSecret = decodedCookieSecret
+	o["authenticator"].decodedCookieSecret = decodedCookieSecret
 
-	if o.CookieRefresh >= o.CookieExpire {
+	if o["authenticator"].CookieRefresh >= o["authenticator"].CookieExpire {
 		msgs = append(msgs, fmt.Sprintf(
 			"cookie_refresh (%s) must be less than "+
 				"cookie_expire (%s)",
-			o.CookieRefresh.String(),
-			o.CookieExpire.String()))
+			o["authenticator"].CookieRefresh.String(),
+			o["authenticator"].CookieExpire.String()))
 	}
 
-	msgs = validateCookieName(o, msgs)
+	msgs = validateCookieName(o["authenticator"], msgs)
 
-	if o.StatsdHost == "" {
+	if o["global"].StatsdHost == "" {
 		msgs = append(msgs, "missing setting: no host specified for statsd metrics collections")
 	}
 
-	if o.StatsdPort == 0 {
+	if o["global"].StatsdPort == 0 {
 		msgs = append(msgs, "missing setting: no port specified for statsd metrics collections")
 	}
 

@@ -16,29 +16,30 @@ func init() {
 
 func main() {
 	logger := log.NewLogEntry()
-
-	opts, err := auth.NewOptions()
+	// TODO: if relevant struct is not referenced below an invalid memory address or nil pointer dereference will occur at runtime
+	opts, err := auth.NewOptions([]string{"global", "authenticator", "provider", "handler"})
 	if err != nil {
 		logger.Error(err, "error loading in env vars")
 		os.Exit(1)
 	}
 
-	err = opts.Validate()
+	err = auth.Validate(opts)
 	if err != nil {
 		logger.Error(err, "error validating opts")
 		os.Exit(1)
 	}
 
 	emailValidator := func(p *auth.Authenticator) error {
-		if len(opts.EmailAddresses) != 0 {
-			p.Validator = options.NewEmailAddressValidator(opts.EmailAddresses)
+		//if len(opts.Authenticator.EmailAddresses) != 0 {
+		if len(opts["authenticator"].EmailAddresses) != 0 {
+			p.Validator = options.NewEmailAddressValidator(opts["authenticator"].EmailAddresses)
 		} else {
-			p.Validator = options.NewEmailDomainValidator(opts.EmailDomains)
+			p.Validator = options.NewEmailDomainValidator(opts["authenticator"].EmailDomains)
 		}
 		return nil
 	}
 
-	authenticator, err := auth.NewAuthenticator(opts, emailValidator, auth.AssignProvider(opts), auth.SetCookieStore(opts), auth.AssignStatsdClient(opts))
+	authenticator, err := auth.NewAuthenticator(opts["authenticator"], emailValidator, auth.AssignProvider(opts["provider"]), auth.SetCookieStore(opts["authenticator"]), auth.AssignStatsdClient(opts["global"]))
 	if err != nil {
 		logger.Error(err, "error creating new Authenticator")
 		os.Exit(1)
@@ -47,13 +48,13 @@ func main() {
 
 	// we leave the message field blank, which will inherit the stdlib timeout page which is sufficient
 	// and better than other naive messages we would currently place here
-	timeoutHandler := http.TimeoutHandler(authenticator.ServeMux, opts.RequestTimeout, "")
+	timeoutHandler := http.TimeoutHandler(authenticator.ServeMux, opts["global"].RequestTimeout, "")
 
 	s := &http.Server{
-		Addr:         fmt.Sprintf(":%d", opts.Port),
-		ReadTimeout:  opts.TCPReadTimeout,
-		WriteTimeout: opts.TCPWriteTimeout,
-		Handler:      auth.NewLoggingHandler(os.Stdout, timeoutHandler, opts.RequestLogging, authenticator.StatsdClient),
+		Addr:         fmt.Sprintf(":%d", opts["handler"].Port),
+		ReadTimeout:  opts["handler"].TCPReadTimeout,
+		WriteTimeout: opts["handler"].TCPWriteTimeout,
+		Handler:      auth.NewLoggingHandler(os.Stdout, timeoutHandler, opts["handler"].RequestLogging, authenticator.StatsdClient),
 	}
 
 	logger.Fatal(s.ListenAndServe())
