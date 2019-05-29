@@ -60,11 +60,6 @@ func NewAuthenticatorMux(opts *Options, statsdClient *statsd.Client) (*Authentic
 			fmt.Sprintf("/%s/", idpSlug),
 			http.StripPrefix(fmt.Sprintf("/%s", idpSlug), authenticator.ServeMux),
 		)
-
-		// we setup default routes for the default provider, mainly helpful for transitionary services
-		if idpSlug == opts.DefaultProvider {
-			idpMux.Handle("/", authenticator.ServeMux)
-		}
 	}
 
 	// load static files

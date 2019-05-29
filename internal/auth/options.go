@@ -40,7 +40,6 @@ import (
 // CookieRefresh - duration - refresh the cookie after this duration default 0
 // CookieSecure - bool - set secure (HTTPS) cookie flag
 // CookieHTTPOnly - bool - set httponly cookie flag
-// DefaultProvider - string - specify the default provider
 // RequestTimeout - duration - overall request timeout
 // AuthCodeSecret - string - the seed string for secure auth codes (optionally base64 encoded)
 // GroupCacheProviderTTL - time.Duration - cache TTL for the group-cache provider used for on-demand group caching
@@ -50,6 +49,7 @@ import (
 // PassUserHeaders - bool (default true) - pass X-Forwarded-User and X-Forwarded-Email information to upstream
 // SetXAuthRequest - set X-Auth-Request-User and X-Auth-Request-Email response headers (useful in Nginx auth_request mode)
 // Provider - provider name
+// ProviderSlug - string - client-side string used to uniquely identify a specific instantiation of an identity provider
 // ProviderServerID - string - if using Okta as the provider, the authorisation server ID (defaults to 'default')
 // SignInURL - provider sign in endpoint
 // RedeemURL - provider token redemption endpoint
@@ -109,8 +109,6 @@ type Options struct {
 	Provider         string `mapstructure:"provider"`
 	ProviderSlug     string `mapstructure:"provider_slug"`
 	ProviderServerID string `mapstructure:"provider_server_id"`
-
-	DefaultProvider string `mapstructure:"default_provider"`
 
 	SignInURL      string `mapstructure:"signin_url"`
 	RedeemURL      string `mapstructure:"redeem_url"`
