@@ -17,6 +17,7 @@ func testOptions() *Options {
 	o.ClientID = "bazquux"
 	o.ClientSecret = "xyzzyplugh"
 	o.EmailDomains = []string{"*"}
+	o.ProviderSlug = "idp"
 	o.ProviderURLString = "https://www.example.com"
 	o.UpstreamConfigsFile = "testdata/upstream_configs.yml"
 	o.Cluster = "sso"
@@ -67,15 +68,15 @@ func TestDefaultProviderApiSettings(t *testing.T) {
 	o := testOptions()
 	testutil.Equal(t, nil, o.Validate())
 	p := o.provider.Data()
-	testutil.Equal(t, "https://www.example.com/sign_in",
+	testutil.Equal(t, "https://www.example.com/idp/sign_in",
 		p.SignInURL.String())
-	testutil.Equal(t, "https://www.example.com/sign_out",
+	testutil.Equal(t, "https://www.example.com/idp/sign_out",
 		p.SignOutURL.String())
-	testutil.Equal(t, "https://www.example.com/redeem",
+	testutil.Equal(t, "https://www.example.com/idp/redeem",
 		p.RedeemURL.String())
-	testutil.Equal(t, "https://www.example.com/validate",
+	testutil.Equal(t, "https://www.example.com/idp/validate",
 		p.ValidateURL.String())
-	testutil.Equal(t, "https://www.example.com/profile",
+	testutil.Equal(t, "https://www.example.com/idp/profile",
 		p.ProfileURL.String())
 	testutil.Equal(t, "", p.Scope)
 }
@@ -92,12 +93,12 @@ func TestProviderURLValidation(t *testing.T) {
 		{
 			name:              "http scheme preserved",
 			providerURLString: "http://provider.example.com",
-			expectedSignInURL: "http://provider.example.com/sign_in",
+			expectedSignInURL: "http://provider.example.com/idp/sign_in",
 		},
 		{
 			name:              "https scheme preserved",
 			providerURLString: "https://provider.example.com",
-			expectedSignInURL: "https://provider.example.com/sign_in",
+			expectedSignInURL: "https://provider.example.com/idp/sign_in",
 		},
 		{
 			name:                              "proxy provider url string based on providerURL",

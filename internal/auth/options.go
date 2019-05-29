@@ -7,13 +7,15 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"reflect"
 	"strings"
 	"time"
 
 	"github.com/buzzfeed/sso/internal/auth/providers"
 	"github.com/buzzfeed/sso/internal/pkg/groups"
-	log "github.com/buzzfeed/sso/internal/pkg/logging"
+
+	"github.com/datadog/datadog-go/statsd"
 	"github.com/spf13/viper"
 )
 
@@ -47,6 +49,7 @@ import (
 // PassUserHeaders - bool (default true) - pass X-Forwarded-User and X-Forwarded-Email information to upstream
 // SetXAuthRequest - set X-Auth-Request-User and X-Auth-Request-Email response headers (useful in Nginx auth_request mode)
 // Provider - provider name
+// ProviderSlug - string - client-side string used to uniquely identify a specific instantiation of an identity provider
 // ProviderServerID - string - if using Okta as the provider, the authorisation server ID (defaults to 'default')
 // SignInURL - provider sign in endpoint
 // RedeemURL - provider token redemption endpoint
@@ -104,6 +107,7 @@ type Options struct {
 
 	// These options allow for other providers besides Google, with potential overrides.
 	Provider         string `mapstructure:"provider"`
+	ProviderSlug     string `mapstructure:"provider_slug"`
 	ProviderServerID string `mapstructure:"provider_server_id"`
 
 	SignInURL      string `mapstructure:"signin_url"`
@@ -187,6 +191,7 @@ func setDefaults(v *viper.Viper) {
 		"pass_user_headers":        true,
 		"set_xauthrequest":         false,
 		"provider":                 "google",
+		"provider_slug":            "google",
 		"provider_server_id":       "default",
 		"approval_prompt":          "force",
 		"request_logging":          true,
@@ -307,6 +312,7 @@ func validateCookieName(o *Options, msgs []string) []string {
 
 func newProvider(o *Options) (providers.Provider, error) {
 	p := &providers.ProviderData{
+		ProviderSlug:       o.ProviderSlug,
 		Scope:              o.Scope,
 		ClientID:           o.ClientID,
 		ClientSecret:       o.ClientSecret,
@@ -365,32 +371,36 @@ func newProvider(o *Options) (providers.Provider, error) {
 	return singleFlightProvider, nil
 }
 
-// AssignProvider is a function that takes an Options struct and assigns the
-// appropriate provider to the proxy. Should be called prior to
-// AssignStatsdClient.
-func AssignProvider(opts *Options) func(*Authenticator) error {
-	return func(proxy *Authenticator) error {
-		var err error
-		proxy.provider, err = newProvider(opts)
-		return err
+// SetProvider is a function that takes a provider and assigns it to the authenticator.
+func SetProvider(provider providers.Provider) func(*Authenticator) error {
+	return func(a *Authenticator) error {
+		a.provider = provider
+		return nil
 	}
 }
 
-// AssignStatsdClient is function that takes in an Options struct and assigns a statsd client
-// to the proxy and provider.
-func AssignStatsdClient(opts *Options) func(*Authenticator) error {
-	return func(proxy *Authenticator) error {
-		logger := log.NewLogEntry()
+// SetStatsdClient is function that takes in a statsd client and assigns it to the
+// authenticator and provider.
+func SetStatsdClient(statsdClient *statsd.Client) func(*Authenticator) error {
+	return func(a *Authenticator) error {
+		a.StatsdClient = statsdClient
 
-		StatsdClient, err := newStatsdClient(opts.StatsdHost, opts.StatsdPort)
-		if err != nil {
-			return fmt.Errorf("error setting up statsd client error=%s", err)
+		if a.provider != nil {
+			a.provider.SetStatsdClient(statsdClient)
 		}
-		logger.WithStatsdHost(opts.StatsdHost).WithStatsdPort(opts.StatsdPort).Info(
-			"statsd client is running")
 
-		proxy.StatsdClient = StatsdClient
-		proxy.provider.SetStatsdClient(StatsdClient)
+		return nil
+	}
+}
+
+// SetRedirectURL takes an options struct and identity provider slug to construct the
+// url callback using the slug and configured redirect url.
+func SetRedirectURL(opts *Options, slug string) func(*Authenticator) error {
+	return func(a *Authenticator) error {
+		redirectURL := new(url.URL)
+		*redirectURL = *opts.redirectURL
+		redirectURL.Path = path.Join(slug, "callback")
+		a.redirectURL = redirectURL
 		return nil
 	}
 }

@@ -64,7 +64,7 @@ Secured by <b>SSO</b>{{end}}`))
 
             {{template "sign_in_message.html" .}}
 
-            <form method="GET" action="/start">
+            <form method="GET" action="start">
                 <input type="hidden" name="redirect_uri" value="{{.Redirect}}">
                 <button type="submit" class="btn">Sign in with {{.ProviderName}}</button>
             </form>
@@ -117,7 +117,7 @@ Secured by <b>SSO</b>{{end}}`))
             </header>
 
             <p>You're currently signed in as <b>{{.Email}}</b>. This will also sign you out of other internal apps.</p>
-            <form method="POST" action="/sign_out">
+            <form method="POST" action="sign_out">
               <input type="hidden" name="redirect_uri" value="{{.Redirect}}">
               <input type="hidden" name="sig" value="{{.Signature}}">
               <input type="hidden" name="ts" value="{{.Timestamp}}">

@@ -7,7 +7,6 @@ import (
 
 	"github.com/buzzfeed/sso/internal/auth"
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
-	"github.com/buzzfeed/sso/internal/pkg/options"
 )
 
 func init() {
@@ -29,31 +28,28 @@ func main() {
 		os.Exit(1)
 	}
 
-	emailValidator := func(p *auth.Authenticator) error {
-		if len(opts.EmailAddresses) != 0 {
-			p.Validator = options.NewEmailAddressValidator(opts.EmailAddresses)
-		} else {
-			p.Validator = options.NewEmailDomainValidator(opts.EmailDomains)
-		}
-		return nil
-	}
-
-	authenticator, err := auth.NewAuthenticator(opts, emailValidator, auth.AssignProvider(opts), auth.SetCookieStore(opts), auth.AssignStatsdClient(opts))
+	statsdClient, err := auth.NewStatsdClient(opts.StatsdHost, opts.StatsdPort)
 	if err != nil {
-		logger.Error(err, "error creating new Authenticator")
+		logger.Error(err, "error creating statsd client")
 		os.Exit(1)
 	}
-	defer authenticator.Stop()
+
+	authMux, err := auth.NewAuthenticatorMux(opts, statsdClient)
+	if err != nil {
+		logger.Error(err, "error creating new AuthenticatorMux")
+		os.Exit(1)
+	}
+	defer authMux.Stop()
 
 	// we leave the message field blank, which will inherit the stdlib timeout page which is sufficient
 	// and better than other naive messages we would currently place here
-	timeoutHandler := http.TimeoutHandler(authenticator.ServeMux, opts.RequestTimeout, "")
+	timeoutHandler := http.TimeoutHandler(authMux, opts.RequestTimeout, "")
 
 	s := &http.Server{
 		Addr:         fmt.Sprintf(":%d", opts.Port),
 		ReadTimeout:  opts.TCPReadTimeout,
 		WriteTimeout: opts.TCPWriteTimeout,
-		Handler:      auth.NewLoggingHandler(os.Stdout, timeoutHandler, opts.RequestLogging, authenticator.StatsdClient),
+		Handler:      auth.NewLoggingHandler(os.Stdout, timeoutHandler, opts.RequestLogging, statsdClient),
 	}
 
 	logger.Fatal(s.ListenAndServe())

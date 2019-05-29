@@ -10,7 +10,10 @@ import (
 func TestStaticFiles(t *testing.T) {
 	opts := testOpts(t, "abced", "testtest")
 	opts.Validate()
-	proxy, _ := NewAuthenticator(opts)
+	authMux, err := NewAuthenticatorMux(opts, nil)
+	if err != nil {
+		t.Fatalf("unexpected error creating auth mux: %v", err)
+	}
 
 	testCases := []struct {
 		name            string
@@ -45,11 +48,13 @@ func TestStaticFiles(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			rw := httptest.NewRecorder()
-			req, _ := http.NewRequest("GET", tc.path, nil)
-			proxy.ServeMux.ServeHTTP(rw, req)
+			req := httptest.NewRequest("GET", tc.path, nil)
+
+			authMux.ServeHTTP(rw, req)
 			if rw.Code != tc.expectedStatus {
 				t.Errorf("expected response %v, got %v\n%v", tc.expectedStatus, rw.Code, rw.HeaderMap)
 			}
+
 			if tc.expectedContent != "" && !strings.Contains(rw.Body.String(), tc.expectedContent) {
 				t.Errorf("substring %q not found in response body:\n%s", tc.expectedContent, rw.Body.String())
 			}
