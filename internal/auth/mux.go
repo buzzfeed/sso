@@ -3,9 +3,9 @@ package auth
 import (
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/buzzfeed/sso/internal/auth/providers"
+	"github.com/buzzfeed/sso/internal/pkg/hostmux"
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
 	"github.com/buzzfeed/sso/internal/pkg/options"
 
@@ -13,7 +13,7 @@ import (
 )
 
 type AuthenticatorMux struct {
-	mux            *http.ServeMux
+	handler        http.Handler
 	authenticators []*Authenticator
 }
 
@@ -69,26 +69,19 @@ func NewAuthenticatorMux(opts *Options, statsdClient *statsd.Client) (*Authentic
 	}
 	idpMux.Handle("/static/", http.StripPrefix("/static/", fsHandler))
 
-	// NOTE: we have to include trailing slash for the router to match the host header
-	host := opts.Host
-	if !strings.HasSuffix(host, "/") {
-		host = fmt.Sprintf("%s/", host)
-	}
+	hostRouter := hostmux.NewRouter()
+	hostRouter.HandleStatic(opts.Host, idpMux)
 
-	mux := http.NewServeMux()
-	// We setup our IPD Mux only on our declared host header
-	mux.Handle(host, idpMux) // setup our service mux to only handle our required host header
-	// Ping should respond to all requests
-	mux.HandleFunc("/ping", PingHandler)
+	healthcheckHandler := setHealthCheck("/ping", hostRouter)
 
 	return &AuthenticatorMux{
-		mux:            mux,
+		handler:        healthcheckHandler,
 		authenticators: authenticators,
 	}, nil
 }
 
 func (a *AuthenticatorMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	a.mux.ServeHTTP(w, r)
+	a.handler.ServeHTTP(w, r)
 }
 
 func (a *AuthenticatorMux) Stop() {
@@ -97,8 +90,12 @@ func (a *AuthenticatorMux) Stop() {
 	}
 }
 
-// PingHandler handles the /ping route
-func PingHandler(rw http.ResponseWriter, req *http.Request) {
-	rw.WriteHeader(http.StatusOK)
-	fmt.Fprintf(rw, http.StatusText(http.StatusOK))
+func setHealthCheck(healthcheckPath string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == healthcheckPath {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }

@@ -9,6 +9,7 @@ import (
 
 func TestStaticFiles(t *testing.T) {
 	opts := testOpts(t, "abced", "testtest")
+	opts.Host = "localhost"
 	opts.Validate()
 	authMux, err := NewAuthenticatorMux(opts, nil)
 	if err != nil {
@@ -17,30 +18,30 @@ func TestStaticFiles(t *testing.T) {
 
 	testCases := []struct {
 		name            string
-		path            string
+		uri             string
 		expectedStatus  int
 		expectedContent string
 	}{
 		{
 			name:            "static css ok",
-			path:            "/static/sso.css",
+			uri:             "http://localhost/static/sso.css",
 			expectedStatus:  http.StatusOK,
 			expectedContent: "body {",
 		},
 		{
 			name:           "nonexistent file not found",
-			path:           "/static/missing.css",
+			uri:            "http://localhost/static/missing.css",
 			expectedStatus: http.StatusNotFound,
 		},
 		{
 			name:           "no directory listing",
-			path:           "/static/",
+			uri:            "http://localhost/static/",
 			expectedStatus: http.StatusNotFound,
 		},
 		{
 			// this will result in a 301 -> /config.yml
 			name:           "no directory escape",
-			path:           "/static/../config.yml",
+			uri:            "http://localhost/static/../config.yml",
 			expectedStatus: http.StatusMovedPermanently,
 		},
 	}
@@ -48,7 +49,7 @@ func TestStaticFiles(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			rw := httptest.NewRecorder()
-			req := httptest.NewRequest("GET", tc.path, nil)
+			req := httptest.NewRequest("GET", tc.uri, nil)
 
 			authMux.ServeHTTP(rw, req)
 			if rw.Code != tc.expectedStatus {
