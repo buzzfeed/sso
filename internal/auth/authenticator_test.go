@@ -137,24 +137,6 @@ func newRevokeServer(accessToken string) (*url.URL, *httptest.Server) {
 	return u, s
 }
 
-func TestRobotsTxt(t *testing.T) {
-	opts := testOpts(t, "abced", "testtest")
-	opts.Validate()
-	proxy, _ := NewAuthenticator(opts, func(p *Authenticator) error {
-		p.Validator = func(string) bool { return true }
-		return nil
-	})
-	rw := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/robots.txt", nil)
-	proxy.ServeMux.ServeHTTP(rw, req)
-	if rw.Code != http.StatusOK {
-		t.Errorf("expected status code %d, but got %d", http.StatusOK, rw.Code)
-	}
-	if rw.Body.String() != "User-agent: *\nDisallow: /" {
-		t.Errorf("expected response body to be %s but was %s", "User-agent: *\nDisallow: /", rw.Body.String())
-	}
-}
-
 const redirectInputPattern = `<input type="hidden" name="redirect_uri" value="([^"]+)">`
 const revokeErrorMessagePattern = `An error occurred during sign out\. Please try again\.`
 

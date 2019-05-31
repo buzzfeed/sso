@@ -60,6 +60,25 @@ func NewAuthenticatorMux(opts *Options, statsdClient *statsd.Client) (*Authentic
 			fmt.Sprintf("/%s/", idpSlug),
 			http.StripPrefix(fmt.Sprintf("/%s", idpSlug), authenticator.ServeMux),
 		)
+
+		if idpSlug == opts.DefaultProviderSlug {
+			// setup our mux with the idpslug as the first part of the path
+			authenticator, err := NewAuthenticator(opts,
+				emailValidator,
+				SetProvider(idp),
+				SetCookieStore(opts, idpSlug),
+				SetStatsdClient(statsdClient),
+				SetDefaultRedirectURL(opts),
+			)
+			if err != nil {
+				logger.Error(err, "error creating new Authenticator")
+				return nil, err
+			}
+
+			authenticators = append(authenticators, authenticator)
+
+			idpMux.Handle("/", authenticator.ServeMux)
+		}
 	}
 
 	// load static files
@@ -68,6 +87,7 @@ func NewAuthenticatorMux(opts *Options, statsdClient *statsd.Client) (*Authentic
 		logger.Fatal(err)
 	}
 	idpMux.Handle("/static/", http.StripPrefix("/static/", fsHandler))
+	idpMux.HandleFunc("/robots.txt", RobotsTxt)
 
 	hostRouter := hostmux.NewRouter()
 	hostRouter.HandleStatic(opts.Host, idpMux)
@@ -98,4 +118,10 @@ func setHealthCheck(healthcheckPath string, next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// RobotsTxt handles the /robots.txt route
+func RobotsTxt(rw http.ResponseWriter, req *http.Request) {
+	rw.WriteHeader(http.StatusOK)
+	fmt.Fprintf(rw, "User-agent: *\nDisallow: /")
 }

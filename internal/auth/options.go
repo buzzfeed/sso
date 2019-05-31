@@ -44,6 +44,7 @@ import (
 // Provider - provider name
 // ProviderSlug - string - client-side string used to uniquely identify a specific instantiation of an identity provider
 // ProviderServerID - string - if using Okta as the provider, the authorisation server ID (defaults to 'default')
+// DefaultProviderSlug - string = default client-side string to use as the default identity provider
 // Scope - Oauth scope specification
 // ApprovalPrompt - OAuth approval prompt
 // RequestLogging - bool to log requests
@@ -89,6 +90,9 @@ type Options struct {
 	Provider         string `mapstructure:"provider"`
 	ProviderSlug     string `mapstructure:"provider_slug"`
 	ProviderServerID string `mapstructure:"provider_server_id"`
+
+	// These is the default provider
+	DefaultProviderSlug string `mapstructure:"default_provider_slug"`
 
 	Scope          string `mapstructure:"scope"`
 	ApprovalPrompt string `mapstructure:"approval_prompt"`
@@ -157,6 +161,7 @@ func setDefaults(v *viper.Viper) {
 		"provider":                 "google",
 		"provider_slug":            "google",
 		"provider_server_id":       "default",
+		"default_provider_slug":    "google",
 		"approval_prompt":          "force",
 		"request_logging":          true,
 		"request_timeout":          "2s",
@@ -332,6 +337,16 @@ func SetRedirectURL(opts *Options, slug string) func(*Authenticator) error {
 	return func(a *Authenticator) error {
 		a.redirectURL = &url.URL{
 			Path: path.Join(slug, "callback"),
+		}
+		return nil
+	}
+}
+
+// SetDefaultRedirectURL takes an options struct to construct the url callback and redirect.
+func SetDefaultRedirectURL(opts *Options) func(*Authenticator) error {
+	return func(a *Authenticator) error {
+		a.redirectURL = &url.URL{
+			Path: path.Join("callback"),
 		}
 		return nil
 	}
