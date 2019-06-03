@@ -47,11 +47,6 @@ import (
 // Provider - provider name
 // ProviderSlug - string - client-side string used to uniquely identify a specific instantiation of an identity provider
 // ProviderServerID - string - if using Okta as the provider, the authorisation server ID (defaults to 'default')
-// SignInURL - provider sign in endpoint
-// RedeemURL - provider token redemption endpoint
-// RevokeURL - provider revoke token endpoint
-// ProfileURL - provider profile access endpoint
-// ValidateURL - access token validation endpoint
 // Scope - Oauth scope specification
 // ApprovalPrompt - OAuth approval prompt
 // RequestLogging - bool to log requests
@@ -101,11 +96,6 @@ type Options struct {
 	ProviderSlug     string `mapstructure:"provider_slug"`
 	ProviderServerID string `mapstructure:"provider_server_id"`
 
-	SignInURL      string `mapstructure:"signin_url"`
-	RedeemURL      string `mapstructure:"redeem_url"`
-	RevokeURL      string `mapstructure:"revoke_url"`
-	ProfileURL     string `mapstructure:"profile_url"`
-	ValidateURL    string `mapstructure:"validate_url"`
 	Scope          string `mapstructure:"scope"`
 	ApprovalPrompt string `mapstructure:"approval_prompt"`
 
@@ -234,8 +224,6 @@ func (o *Options) Validate() error {
 
 	o.redirectURL, msgs = parseURL(o.RedirectURL, "redirect", msgs)
 
-	msgs = validateEndpoints(o, msgs)
-
 	decodedCookieSecret, err := base64.StdEncoding.DecodeString(o.CookieSecret)
 	if err != nil {
 		msgs = append(msgs, "Invalid value for COOKIE_SECRET; expected base64-encoded bytes, as from `openssl rand 32 -base64`")
@@ -279,16 +267,6 @@ func (o *Options) Validate() error {
 	return nil
 }
 
-func validateEndpoints(o *Options, msgs []string) []string {
-	_, msgs = parseURL(o.SignInURL, "signin", msgs)
-	_, msgs = parseURL(o.RedeemURL, "redeem", msgs)
-	_, msgs = parseURL(o.RevokeURL, "revoke", msgs)
-	_, msgs = parseURL(o.ProfileURL, "profile", msgs)
-	_, msgs = parseURL(o.ValidateURL, "validate", msgs)
-
-	return msgs
-}
-
 func validateCookieName(o *Options, msgs []string) []string {
 	cookie := &http.Cookie{Name: o.CookieName}
 	if cookie.String() == "" {
@@ -305,24 +283,13 @@ func newProvider(o *Options) (providers.Provider, error) {
 		ClientSecret:       o.ClientSecret,
 		ApprovalPrompt:     o.ApprovalPrompt,
 		SessionLifetimeTTL: o.SessionLifetimeTTL,
-	}
 
-	var err error
-
-	if p.SignInURL, err = url.Parse(o.SignInURL); err != nil {
-		return nil, err
-	}
-	if p.RedeemURL, err = url.Parse(o.RedeemURL); err != nil {
-		return nil, err
-	}
-	if p.RevokeURL, err = url.Parse(o.RevokeURL); err != nil {
-		return nil, err
-	}
-	if p.ProfileURL, err = url.Parse(o.ProfileURL); err != nil {
-		return nil, err
-	}
-	if p.ValidateURL, err = url.Parse(o.ValidateURL); err != nil {
-		return nil, err
+		// set defaults so those aren't nil for future configuration
+		SignInURL:   &url.URL{},
+		RedeemURL:   &url.URL{},
+		RevokeURL:   &url.URL{},
+		ProfileURL:  &url.URL{},
+		ValidateURL: &url.URL{},
 	}
 
 	var singleFlightProvider providers.Provider

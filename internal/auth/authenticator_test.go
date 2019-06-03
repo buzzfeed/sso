@@ -1620,10 +1620,15 @@ func TestGoogleProviderApiSettings(t *testing.T) {
 	opts := testOpts(t, "abced", "testtest")
 	opts.Provider = "google"
 	opts.Validate()
-	proxy, _ := NewAuthenticator(opts, assignProvider(opts), func(p *Authenticator) error {
-		p.Validator = func(string) bool { return true }
-		return nil
-	})
+
+	proxy, err := NewAuthenticator(opts,
+		assignProvider(opts),
+		setMockValidator(true),
+	)
+	if err != nil {
+		t.Fatalf("unexpected err provisioning authenticator: %v", err)
+	}
+
 	p := proxy.provider.Data()
 	testutil.Equal(t, "https://accounts.google.com/o/oauth2/auth?access_type=offline",
 		p.SignInURL.String())
