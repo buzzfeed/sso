@@ -44,10 +44,6 @@ import (
 // AuthCodeSecret - string - the seed string for secure auth codes (optionally base64 encoded)
 // GroupCacheProviderTTL - time.Duration - cache TTL for the group-cache provider used for on-demand group caching
 // GroupsCacheRefreshTTL - time.Duratoin - cache TTL for the groups fillcache mechanism used to preemptively fill group caches
-// PassHostHeader - bool - pass the request Host Header to upstream (default true)
-// SkipProviderButton - bool - if true, will skip sign-in-page to directly reach the next step: oauth/start
-// PassUserHeaders - bool (default true) - pass X-Forwarded-User and X-Forwarded-Email information to upstream
-// SetXAuthRequest - set X-Auth-Request-User and X-Auth-Request-Email response headers (useful in Nginx auth_request mode)
 // Provider - provider name
 // ProviderSlug - string - client-side string used to uniquely identify a specific instantiation of an identity provider
 // ProviderServerID - string - if using Okta as the provider, the authorisation server ID (defaults to 'default')
@@ -99,11 +95,6 @@ type Options struct {
 	GroupCacheProviderTTL time.Duration `mapstructure:"group_cache_provider_ttl"`
 	GroupsCacheRefreshTTL time.Duration `mapstructure:"groups_cache_refresh_ttl"`
 	SessionLifetimeTTL    time.Duration `mapstructure:"session_lifetime_ttl"`
-
-	PassHostHeader     bool `mapstructure:"pass_host_header"`
-	SkipProviderButton bool `mapstructure:"skip_provider_button"`
-	PassUserHeaders    bool `mapstructure:"pass_user_headers"`
-	SetXAuthRequest    bool `mapstructure:"set_xauthrequest"`
 
 	// These options allow for other providers besides Google, with potential overrides.
 	Provider         string `mapstructure:"provider"`
@@ -181,15 +172,11 @@ func setDefaults(v *viper.Viper) {
 		"cookie_refresh":           "1h",
 		"cookie_secure":            true,
 		"cookie_http_only":         true,
-		"request_timeout":          "2s",
 		"tcp_write_timeout":        "30s",
 		"tcp_read_timeout":         "30s",
 		"groups_cache_refresh_ttl": "10m",
 		"group_cache_provider_ttl": "10m",
 		"session_lifetime_ttl":     "720h",
-		"pass_host_header":         true,
-		"pass_user_headers":        true,
-		"set_xauthrequest":         false,
 		"provider":                 "google",
 		"provider_slug":            "google",
 		"provider_server_id":       "default",

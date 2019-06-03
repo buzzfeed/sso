@@ -46,13 +46,9 @@ type Authenticator struct {
 	csrfStore    sessions.CSRFStore
 	sessionStore sessions.SessionStore
 
-	redirectURL        *url.URL // the url to receive requests at
-	provider           providers.Provider
-	ProxyPrefix        string
-	ServeMux           http.Handler
-	SetXAuthRequest    bool
-	SkipProviderButton bool
-	PassUserHeaders    bool
+	redirectURL *url.URL // the url to receive requests at
+	provider    providers.Provider
+	ServeMux    http.Handler
 
 	AuthCodeCipher aead.Cipher
 
@@ -142,10 +138,7 @@ func NewAuthenticator(opts *Options, optionFuncs ...func(*Authenticator) error) 
 		Host:              opts.Host,
 		CookieSecure:      opts.CookieSecure,
 
-		SetXAuthRequest:    opts.SetXAuthRequest,
-		PassUserHeaders:    opts.PassUserHeaders,
-		SkipProviderButton: opts.SkipProviderButton,
-		templates:          templates,
+		templates: templates,
 	}
 
 	p.ServeMux = p.newMux()
