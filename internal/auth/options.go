@@ -32,7 +32,6 @@ import (
 // ProxyRootDomains - []string - only redirect to specified proxy domains (may be given multiple times)
 // GoogleAdminEmail - string - the google admin to impersonate for api calls
 // GoogleServiceAccountJSON - string - the path to the service account json credentials
-// Footer - string custom footer string. Use \"-\" to disable default footer.
 // CookieSecret - string - the seed string for secure cookies (optionally base64 encoded)
 // CookieDomain - string - an optional cookie domain to force cookies to (ie: .yourcompany.com)*
 // CookieExpire - duration - expire timeframe for cookie, defaults at 168 hours
@@ -69,8 +68,6 @@ type Options struct {
 	GoogleServiceAccountJSON string `mapstructure:"google_service_account_json"`
 
 	OrgURL string `mapstructure:"okta_org_url"`
-
-	Footer string `mapstructure:"footer"`
 
 	CookieName     string        `mapstructure:"cookie_name"`
 	CookieSecret   string        `mapstructure:"cookie_secret"`

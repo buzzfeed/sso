@@ -44,8 +44,6 @@ type Authenticator struct {
 	SessionLifetimeTTL time.Duration
 
 	templates templates.Template
-	Header    string
-	Footer    string
 }
 
 type redeemResponse struct {
