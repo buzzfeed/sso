@@ -10,24 +10,26 @@ import (
 	"github.com/buzzfeed/sso/internal/pkg/testutil"
 )
 
-func testOptions(t *testing.T) *Options {
-	o, err := NewOptions()
+func testOptions(t *testing.T) map[string]*Options {
+	o, err := NewOptions([]string{"authenticator", "provider", "global"})
 	if err != nil {
 		t.Fatalf("error while instantiating config options: %s", err.Error())
 	}
 
-	o.CookieSecret = "foobar"
-	o.ClientID = "bazquux"
-	o.ClientSecret = "xyzzyplugh"
-	o.EmailDomains = []string{"*"}
-	o.ProxyClientID = "abcdef"
-	o.ProxyClientSecret = "testtest"
-	o.ProxyRootDomains = []string{"*"}
-	o.StatsdHost = "statsdhost"
-	o.StatsdPort = 12344
-	o.Host = "/"
-	o.CookieRefresh = time.Hour
-	o.CookieSecret = testEncodedCookieSecret
+	o["authenticator"].CookieSecret = "foobar"
+	o["authenticator"].EmailDomains = []string{"*"}
+	o["authenticator"].ProxyClientID = "abcdef"
+	o["authenticator"].ProxyClientSecret = "testtest"
+	o["authenticator"].ProxyRootDomains = []string{"*"}
+	o["authenticator"].Host = "/"
+	o["authenticator"].CookieRefresh = time.Hour
+	o["authenticator"].CookieSecret = testEncodedCookieSecret
+
+	o["provider"].ClientID = "bazquux"
+	o["provider"].ClientSecret = "xyzzyplugh"
+
+	o["global"].StatsdHost = "statsdhost"
+	o["global"].StatsdPort = 12344
 	return o
 }
 
@@ -39,9 +41,9 @@ func errorMsg(msgs []string) string {
 }
 
 func TestNewOptions(t *testing.T) {
-	o, _ := NewOptions()
-	o.EmailDomains = []string{"*"}
-	err := o.Validate()
+	o, _ := NewOptions([]string{"authenticator", "provider", "global"})
+	o["authenticator"].EmailDomains = []string{"*"}
+	err := Validate(o)
 	testutil.NotEqual(t, nil, err)
 
 	expected := errorMsg([]string{
@@ -61,55 +63,55 @@ func TestNewOptions(t *testing.T) {
 
 func TestInitializedOptions(t *testing.T) {
 	o := testOptions(t)
-	testutil.Equal(t, nil, o.Validate())
+	testutil.Equal(t, nil, Validate(o))
 }
 
 // Note that it's not worth testing nonparseable URLs, since url.Parse()
 // seems to parse damn near anything.
 func TestRedirectURL(t *testing.T) {
 	o := testOptions(t)
-	o.RedirectURL = "https://myhost.com/oauth2/callback"
-	testutil.Equal(t, nil, o.Validate())
+	o["provider"].RedirectURL = "https://myhost.com/oauth2/callback"
+	testutil.Equal(t, nil, Validate(o))
 	expected := &url.URL{
 		Scheme: "https", Host: "myhost.com", Path: "/oauth2/callback"}
-	testutil.Equal(t, expected, o.redirectURL)
+	testutil.Equal(t, expected, o["authenticator"].redirectURL)
 }
 
 func TestCookieRefreshMustBeLessThanCookieExpire(t *testing.T) {
 	o := testOptions(t)
-	testutil.Equal(t, nil, o.Validate())
+	testutil.Equal(t, nil, Validate(o))
 
-	o.CookieSecret = testEncodedCookieSecret
-	o.CookieRefresh = o.CookieExpire
-	testutil.NotEqual(t, nil, o.Validate())
+	o["authenticator"].CookieSecret = testEncodedCookieSecret
+	o["authenticator"].CookieRefresh = o["authenticator"].CookieExpire
+	testutil.NotEqual(t, nil, Validate(o))
 
-	o.CookieRefresh -= time.Duration(1)
-	testutil.Equal(t, nil, o.Validate())
+	o["authenticator"].CookieRefresh -= time.Duration(1)
+	testutil.Equal(t, nil, Validate(o))
 }
 
 func TestBase64CookieSecret(t *testing.T) {
 	o := testOptions(t)
-	testutil.Equal(t, nil, o.Validate())
+	testutil.Equal(t, nil, Validate(o))
 
 	// 32 byte, base64 (urlsafe) encoded key
-	o.CookieSecret = testEncodedCookieSecret
-	testutil.Equal(t, nil, o.Validate())
+	o["authenticator"].CookieSecret = testEncodedCookieSecret
+	testutil.Equal(t, nil, Validate(o))
 
 	// 32 byte, base64 (urlsafe) encoded key, w/o padding
-	o.CookieSecret = testEncodedCookieSecret
-	testutil.Equal(t, nil, o.Validate())
+	o["authenticator"].CookieSecret = testEncodedCookieSecret
+	testutil.Equal(t, nil, Validate(o))
 }
 
 func TestValidateCookie(t *testing.T) {
 	o := testOptions(t)
-	o.CookieName = "_valid_cookie_name"
-	testutil.Equal(t, nil, o.Validate())
+	o["authenticator"].CookieName = "_valid_cookie_name"
+	testutil.Equal(t, nil, Validate(o))
 }
 
 func TestValidateCookieBadName(t *testing.T) {
 	o := testOptions(t)
-	o.CookieName = "_bad_cookie_name{}"
-	err := o.Validate()
+	o["authenticator"].CookieName = "_bad_cookie_name{}"
+	err := Validate(o)
 	testutil.Equal(t, err.Error(), "Invalid configuration:\n"+
-		fmt.Sprintf("  invalid cookie name: %q", o.CookieName))
+		fmt.Sprintf("  invalid cookie name: %q", o["authenticator"].CookieName))
 }

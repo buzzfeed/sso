@@ -50,8 +50,8 @@ func TestWithMethods(t *testing.T) {
 			req := httptest.NewRequest(tc.requestMethod, "/test", nil)
 			rw := httptest.NewRecorder()
 			options := testOpts(t, "clientId", "clientSecret")
-			options.Validate()
-			p, _ := NewAuthenticator(options)
+			Validate(options)
+			p, _ := NewAuthenticator(options["authenticator"])
 			p.withMethods(createTestHandler(), tc.acceptedMethods...)(rw, req)
 			resp := rw.Result()
 			if resp.StatusCode != tc.expectedCode {
@@ -121,8 +121,8 @@ func TestValidateClientID(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			options := testOpts(t, tc.expectedClientID, "secret")
-			options.Validate()
-			p, _ := NewAuthenticator(options)
+			Validate(options)
+			p, _ := NewAuthenticator(options["authenticator"])
 			params := url.Values{}
 			if tc.requestBodyClientID != "" {
 				params.Add("client_id", tc.requestBodyClientID)
@@ -204,8 +204,8 @@ func TestValidateClientSecret(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			options := testOpts(t, "clientId", tc.expectedClientSecret)
-			options.Validate()
-			p, _ := NewAuthenticator(options)
+			Validate(options)
+			p, _ := NewAuthenticator(options["authenticator"])
 			params := url.Values{}
 			if tc.clientSecretBody != "" {
 				params.Add("client_secret", tc.clientSecretBody)
@@ -278,9 +278,9 @@ func TestValidateRedirectURI(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			options := testOpts(t, "clientId", "clientSecret")
-			options.ProxyRootDomains = []string{"example.com", "example.io"}
-			options.Validate()
-			p, _ := NewAuthenticator(options)
+			options["authenticator"].ProxyRootDomains = []string{"example.com", "example.io"}
+			Validate(options)
+			p, _ := NewAuthenticator(options["authenticator"])
 			params := url.Values{}
 			if tc.redirectURI != "" {
 				params.Add("redirect_uri", tc.redirectURI)
@@ -394,9 +394,9 @@ func TestValidateSignature(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			options := testOpts(t, "clientId", tc.request.secret)
-			options.ProxyRootDomains = []string{"example.com", "example.io"}
-			options.Validate()
-			p, _ := NewAuthenticator(options)
+			options["authenticator"].ProxyRootDomains = []string{"example.com", "example.io"}
+			Validate(options)
+			p, _ := NewAuthenticator(options["authenticator"])
 			params := url.Values{}
 			params.Add("redirect_uri", tc.request.redirectURI)
 			params.Add("ts", fmt.Sprint(tc.request.timestamp.Unix()))

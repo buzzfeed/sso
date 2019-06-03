@@ -124,16 +124,16 @@ type SignatureData struct {
 func NewOptions(prefix []string) (map[string]*Options, error) {
 	v := viper.New()
 
-	prefixMap := make(map[string]*Options)
+	opts := make(map[string]*Options)
 	for _, prefix := range prefix {
 		options, err := loadVars(v, prefix)
 		if err != nil {
 			return nil, err
 		}
-		prefixMap[prefix] = options
-
+		opts[prefix] = options
 	}
-	return prefixMap, nil
+
+	return opts, nil
 }
 
 // loadVars loads viper variables and returns a filled Options struct

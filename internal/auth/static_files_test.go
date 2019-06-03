@@ -9,8 +9,8 @@ import (
 
 func TestStaticFiles(t *testing.T) {
 	opts := testOpts(t, "abced", "testtest")
-	opts.Validate()
-	proxy, _ := NewAuthenticator(opts)
+	Validate(opts)
+	proxy, _ := NewAuthenticator(opts["authenticator"])
 
 	testCases := []struct {
 		name            string
