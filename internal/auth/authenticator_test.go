@@ -80,6 +80,17 @@ func setRedirectURL(redirectURL *url.URL) func(*Authenticator) error {
 	}
 }
 
+func setMockRedirectURL() func(*Authenticator) error {
+	return func(a *Authenticator) error {
+		a.redirectURL = &url.URL{
+			Scheme: "http",
+			Host:   "example.com",
+			Path:   "/",
+		}
+		return nil
+	}
+}
+
 func assignProvider(opts *Options) func(*Authenticator) error {
 	return func(a *Authenticator) error {
 		var err error
@@ -108,7 +119,6 @@ func testOpts(t *testing.T, proxyClientID, proxyClientSecret string) *Options {
 	opts.EmailDomains = []string{"*"}
 	opts.StatsdPort = 8125
 	opts.StatsdHost = "localhost"
-	opts.RedirectURL = "http://example.com"
 	return opts
 }
 
@@ -459,13 +469,13 @@ func TestSignIn(t *testing.T) {
 				setMockValidator(tc.validEmail),
 				setMockSessionStore(tc.mockSessionStore),
 				setMockTempl(),
-				setRedirectURL(opts.redirectURL),
+				setMockRedirectURL(),
 				setMockAuthCodeCipher(tc.mockAuthCodeCipher, nil),
 			)
 			testutil.Ok(t, err)
 
 			// set test provider
-			u, _ := url.Parse("http://example.com")
+			u, _ := url.Parse("http://example.com/")
 			provider := providers.NewTestProvider(u)
 			provider.Refresh = tc.refreshResponse.OK
 			provider.RefreshError = tc.refreshResponse.Error
@@ -1574,14 +1584,13 @@ func TestOAuthStart(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 
 			opts := testOpts(t, "abced", "testtest")
-			opts.RedirectURL = "https://example.com/"
 			opts.Validate()
 			u, _ := url.Parse("http://example.com")
 			provider := providers.NewTestProvider(u)
 			proxy, _ := NewAuthenticator(opts,
 				setTestProvider(provider),
 				setMockValidator(true),
-				setRedirectURL(opts.redirectURL),
+				setMockRedirectURL(),
 				setMockCSRFStore(&sessions.MockCSRFStore{}),
 			)
 

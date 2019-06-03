@@ -19,7 +19,6 @@ import (
 )
 
 // Options are config options that can be set by environment variables
-// RedirectURL - string - the OAuth Redirect URL. ie: \"https://internalapp.yourcompany.com/oauth2/callback\
 // ClientID - string - the OAuth ClientID ie "123456.apps.googleusercontent.com"
 // ClientSecret string - the OAuth Client Secret
 // OrgName - string - if using Okta as the provider, the Okta domain to use
@@ -51,7 +50,6 @@ import (
 // StatsdPort - port where statsd client listens
 // StatsdHost - host where statsd client listens
 type Options struct {
-	RedirectURL       string `mapstructure:"redirect_url" `
 	ClientID          string `mapstructure:"client_id"`
 	ClientSecret      string `mapstructure:"client_secret"`
 	ProxyClientID     string `mapstructure:"proxy_client_id"`
@@ -101,7 +99,6 @@ type Options struct {
 	StatsdHost string `mapstructure:"statsd_host"`
 
 	// internal values that are set after config validation
-	redirectURL         *url.URL
 	decodedCookieSecret []byte
 	GroupsCacheStopFunc func()
 }
@@ -162,6 +159,7 @@ func setDefaults(v *viper.Viper) {
 		"provider_server_id":       "default",
 		"approval_prompt":          "force",
 		"request_logging":          true,
+		"request_timeout":          "2s",
 	}
 	for key, value := range defaultVars {
 		v.SetDefault(key, value)
@@ -211,8 +209,6 @@ func (o *Options) Validate() error {
 	if len(o.ProviderServerID) > 0 {
 		o.ProviderServerID = strings.Trim(o.ProviderServerID, `"`)
 	}
-
-	o.redirectURL, msgs = parseURL(o.RedirectURL, "redirect", msgs)
 
 	decodedCookieSecret, err := base64.StdEncoding.DecodeString(o.CookieSecret)
 	if err != nil {
@@ -341,10 +337,9 @@ func SetStatsdClient(statsdClient *statsd.Client) func(*Authenticator) error {
 // url callback using the slug and configured redirect url.
 func SetRedirectURL(opts *Options, slug string) func(*Authenticator) error {
 	return func(a *Authenticator) error {
-		redirectURL := new(url.URL)
-		*redirectURL = *opts.redirectURL
-		redirectURL.Path = path.Join(slug, "callback")
-		a.redirectURL = redirectURL
+		a.redirectURL = &url.URL{
+			Path: path.Join(slug, "callback"),
+		}
 		return nil
 	}
 }
