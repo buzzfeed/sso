@@ -18,23 +18,6 @@ import (
 	"github.com/datadog/datadog-go/statsd"
 )
 
-// SignatureHeader is the header name where the signed request header is stored.
-const SignatureHeader = "GAP-Signature"
-
-// SignatureHeaders are the headers that are valid in the request.
-var SignatureHeaders = []string{
-	"Content-Length",
-	"Content-Md5",
-	"Content-Type",
-	"Date",
-	"Authorization",
-	"X-Forwarded-User",
-	"X-Forwarded-Email",
-	"X-Forwarded-Access-Token",
-	"Cookie",
-	"Gap-Auth",
-}
-
 // Authenticator stores all the information associated with proxying the request.
 type Authenticator struct {
 	Validator        func(string) bool

@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"crypto"
 	"encoding/base64"
 	"fmt"
 	"net/http"
@@ -108,12 +107,6 @@ type Options struct {
 	redirectURL         *url.URL
 	decodedCookieSecret []byte
 	GroupsCacheStopFunc func()
-}
-
-// SignatureData represents the data associated with signatures
-type SignatureData struct {
-	hash crypto.Hash
-	key  string
 }
 
 // NewOptions returns new options with the below overrides
