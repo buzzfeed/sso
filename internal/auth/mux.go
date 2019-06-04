@@ -61,6 +61,8 @@ func NewAuthenticatorMux(opts *Options, statsdClient *statsd.Client) (*Authentic
 			http.StripPrefix(fmt.Sprintf("/%s", idpSlug), authenticator.ServeMux),
 		)
 
+		// TODO: This should be removed once we feel confident clients have been moved over to the new
+		// style /slug/ paths. This is kept around to allow graceful migrations/upgrades.
 		if idpSlug == opts.DefaultProviderSlug {
 			// setup our mux with the idpslug as the first part of the path
 			authenticator, err := NewAuthenticator(opts,
