@@ -1643,6 +1643,7 @@ func TestGoogleProviderApiSettings(t *testing.T) {
 		p.SignInURL.String())
 	testutil.Equal(t, "https://www.googleapis.com/oauth2/v3/token",
 		p.RedeemURL.String())
+
 	testutil.Equal(t, "", p.ProfileURL.String())
 	testutil.Equal(t, "profile email", p.Scope)
 }

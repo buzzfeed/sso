@@ -269,13 +269,6 @@ func newProvider(o *Options) (providers.Provider, error) {
 		ClientSecret:       o.ClientSecret,
 		ApprovalPrompt:     o.ApprovalPrompt,
 		SessionLifetimeTTL: o.SessionLifetimeTTL,
-
-		// set defaults so those aren't nil for future configuration
-		SignInURL:   &url.URL{},
-		RedeemURL:   &url.URL{},
-		RevokeURL:   &url.URL{},
-		ProfileURL:  &url.URL{},
-		ValidateURL: &url.URL{},
 	}
 
 	var singleFlightProvider providers.Provider
