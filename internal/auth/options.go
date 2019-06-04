@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"crypto"
 	"encoding/base64"
 	"fmt"
 	"net/http"
@@ -20,7 +19,6 @@ import (
 )
 
 // Options are config options that can be set by environment variables
-// RedirectURL - string - the OAuth Redirect URL. ie: \"https://internalapp.yourcompany.com/oauth2/callback\
 // ClientID - string - the OAuth ClientID ie "123456.apps.googleusercontent.com"
 // ClientSecret string - the OAuth Client Secret
 // OrgName - string - if using Okta as the provider, the Okta domain to use
@@ -33,7 +31,6 @@ import (
 // ProxyRootDomains - []string - only redirect to specified proxy domains (may be given multiple times)
 // GoogleAdminEmail - string - the google admin to impersonate for api calls
 // GoogleServiceAccountJSON - string - the path to the service account json credentials
-// Footer - string custom footer string. Use \"-\" to disable default footer.
 // CookieSecret - string - the seed string for secure cookies (optionally base64 encoded)
 // CookieDomain - string - an optional cookie domain to force cookies to (ie: .yourcompany.com)*
 // CookieExpire - duration - expire timeframe for cookie, defaults at 168 hours
@@ -44,25 +41,15 @@ import (
 // AuthCodeSecret - string - the seed string for secure auth codes (optionally base64 encoded)
 // GroupCacheProviderTTL - time.Duration - cache TTL for the group-cache provider used for on-demand group caching
 // GroupsCacheRefreshTTL - time.Duratoin - cache TTL for the groups fillcache mechanism used to preemptively fill group caches
-// PassHostHeader - bool - pass the request Host Header to upstream (default true)
-// SkipProviderButton - bool - if true, will skip sign-in-page to directly reach the next step: oauth/start
-// PassUserHeaders - bool (default true) - pass X-Forwarded-User and X-Forwarded-Email information to upstream
-// SetXAuthRequest - set X-Auth-Request-User and X-Auth-Request-Email response headers (useful in Nginx auth_request mode)
 // Provider - provider name
 // ProviderSlug - string - client-side string used to uniquely identify a specific instantiation of an identity provider
 // ProviderServerID - string - if using Okta as the provider, the authorisation server ID (defaults to 'default')
-// SignInURL - provider sign in endpoint
-// RedeemURL - provider token redemption endpoint
-// RevokeURL - provider revoke token endpoint
-// ProfileURL - provider profile access endpoint
-// ValidateURL - access token validation endpoint
 // Scope - Oauth scope specification
 // ApprovalPrompt - OAuth approval prompt
 // RequestLogging - bool to log requests
 // StatsdPort - port where statsd client listens
 // StatsdHost - host where statsd client listens
 type Options struct {
-	RedirectURL       string `mapstructure:"redirect_url" `
 	ClientID          string `mapstructure:"client_id"`
 	ClientSecret      string `mapstructure:"client_secret"`
 	ProxyClientID     string `mapstructure:"proxy_client_id"`
@@ -79,8 +66,6 @@ type Options struct {
 	GoogleServiceAccountJSON string `mapstructure:"google_service_account_json"`
 
 	OrgURL string `mapstructure:"okta_org_url"`
-
-	Footer string `mapstructure:"footer"`
 
 	CookieName     string        `mapstructure:"cookie_name"`
 	CookieSecret   string        `mapstructure:"cookie_secret"`
@@ -100,21 +85,11 @@ type Options struct {
 	GroupsCacheRefreshTTL time.Duration `mapstructure:"groups_cache_refresh_ttl"`
 	SessionLifetimeTTL    time.Duration `mapstructure:"session_lifetime_ttl"`
 
-	PassHostHeader     bool `mapstructure:"pass_host_header"`
-	SkipProviderButton bool `mapstructure:"skip_provider_button"`
-	PassUserHeaders    bool `mapstructure:"pass_user_headers"`
-	SetXAuthRequest    bool `mapstructure:"set_xauthrequest"`
-
 	// These options allow for other providers besides Google, with potential overrides.
 	Provider         string `mapstructure:"provider"`
 	ProviderSlug     string `mapstructure:"provider_slug"`
 	ProviderServerID string `mapstructure:"provider_server_id"`
 
-	SignInURL      string `mapstructure:"signin_url"`
-	RedeemURL      string `mapstructure:"redeem_url"`
-	RevokeURL      string `mapstructure:"revoke_url"`
-	ProfileURL     string `mapstructure:"profile_url"`
-	ValidateURL    string `mapstructure:"validate_url"`
 	Scope          string `mapstructure:"scope"`
 	ApprovalPrompt string `mapstructure:"approval_prompt"`
 
@@ -124,15 +99,8 @@ type Options struct {
 	StatsdHost string `mapstructure:"statsd_host"`
 
 	// internal values that are set after config validation
-	redirectURL         *url.URL
 	decodedCookieSecret []byte
 	GroupsCacheStopFunc func()
-}
-
-// SignatureData represents the data associated with signatures
-type SignatureData struct {
-	hash crypto.Hash
-	key  string
 }
 
 // NewOptions returns new options with the below overrides
@@ -181,20 +149,17 @@ func setDefaults(v *viper.Viper) {
 		"cookie_refresh":           "1h",
 		"cookie_secure":            true,
 		"cookie_http_only":         true,
-		"request_timeout":          "2s",
 		"tcp_write_timeout":        "30s",
 		"tcp_read_timeout":         "30s",
 		"groups_cache_refresh_ttl": "10m",
 		"group_cache_provider_ttl": "10m",
 		"session_lifetime_ttl":     "720h",
-		"pass_host_header":         true,
-		"pass_user_headers":        true,
-		"set_xauthrequest":         false,
 		"provider":                 "google",
 		"provider_slug":            "google",
 		"provider_server_id":       "default",
 		"approval_prompt":          "force",
 		"request_logging":          true,
+		"request_timeout":          "2s",
 	}
 	for key, value := range defaultVars {
 		v.SetDefault(key, value)
@@ -245,10 +210,6 @@ func (o *Options) Validate() error {
 		o.ProviderServerID = strings.Trim(o.ProviderServerID, `"`)
 	}
 
-	o.redirectURL, msgs = parseURL(o.RedirectURL, "redirect", msgs)
-
-	msgs = validateEndpoints(o, msgs)
-
 	decodedCookieSecret, err := base64.StdEncoding.DecodeString(o.CookieSecret)
 	if err != nil {
 		msgs = append(msgs, "Invalid value for COOKIE_SECRET; expected base64-encoded bytes, as from `openssl rand 32 -base64`")
@@ -292,16 +253,6 @@ func (o *Options) Validate() error {
 	return nil
 }
 
-func validateEndpoints(o *Options, msgs []string) []string {
-	_, msgs = parseURL(o.SignInURL, "signin", msgs)
-	_, msgs = parseURL(o.RedeemURL, "redeem", msgs)
-	_, msgs = parseURL(o.RevokeURL, "revoke", msgs)
-	_, msgs = parseURL(o.ProfileURL, "profile", msgs)
-	_, msgs = parseURL(o.ValidateURL, "validate", msgs)
-
-	return msgs
-}
-
 func validateCookieName(o *Options, msgs []string) []string {
 	cookie := &http.Cookie{Name: o.CookieName}
 	if cookie.String() == "" {
@@ -318,24 +269,6 @@ func newProvider(o *Options) (providers.Provider, error) {
 		ClientSecret:       o.ClientSecret,
 		ApprovalPrompt:     o.ApprovalPrompt,
 		SessionLifetimeTTL: o.SessionLifetimeTTL,
-	}
-
-	var err error
-
-	if p.SignInURL, err = url.Parse(o.SignInURL); err != nil {
-		return nil, err
-	}
-	if p.RedeemURL, err = url.Parse(o.RedeemURL); err != nil {
-		return nil, err
-	}
-	if p.RevokeURL, err = url.Parse(o.RevokeURL); err != nil {
-		return nil, err
-	}
-	if p.ProfileURL, err = url.Parse(o.ProfileURL); err != nil {
-		return nil, err
-	}
-	if p.ValidateURL, err = url.Parse(o.ValidateURL); err != nil {
-		return nil, err
 	}
 
 	var singleFlightProvider providers.Provider
@@ -397,10 +330,9 @@ func SetStatsdClient(statsdClient *statsd.Client) func(*Authenticator) error {
 // url callback using the slug and configured redirect url.
 func SetRedirectURL(opts *Options, slug string) func(*Authenticator) error {
 	return func(a *Authenticator) error {
-		redirectURL := new(url.URL)
-		*redirectURL = *opts.redirectURL
-		redirectURL.Path = path.Join(slug, "callback")
-		a.redirectURL = redirectURL
+		a.redirectURL = &url.URL{
+			Path: path.Join(slug, "callback"),
+		}
 		return nil
 	}
 }

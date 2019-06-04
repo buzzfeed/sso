@@ -15,10 +15,6 @@ jobs:
           name: get tools
           command: make tools
       - run:
-          name: copy source
-          command: |
-            mkdir bin
-      - run:
           name: run lint and tests for both services
           command: |
             scripts/test

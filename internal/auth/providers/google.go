@@ -42,32 +42,30 @@ func NewGoogleProvider(p *ProviderData, adminEmail, credsFilePath string) (*Goog
 	}
 
 	p.ProviderName = "Google"
-	if p.SignInURL.String() == "" {
-		p.SignInURL = &url.URL{Scheme: "https",
-			Host: "accounts.google.com",
-			Path: "/o/oauth2/auth",
-			// to get a refresh token. see https://developers.google.com/identity/protocols/OAuth2WebServer#offline
-			RawQuery: "access_type=offline",
-		}
+	p.SignInURL = &url.URL{Scheme: "https",
+		Host: "accounts.google.com",
+		Path: "/o/oauth2/auth",
+		// to get a refresh token. see https://developers.google.com/identity/protocols/OAuth2WebServer#offline
+		RawQuery: "access_type=offline",
 	}
-	if p.RedeemURL.String() == "" {
-		p.RedeemURL = &url.URL{Scheme: "https",
-			Host: "www.googleapis.com",
-			Path: "/oauth2/v3/token"}
+	p.RedeemURL = &url.URL{Scheme: "https",
+		Host: "www.googleapis.com",
+		Path: "/oauth2/v3/token",
 	}
-	if p.RevokeURL.String() == "" {
-		p.RevokeURL = &url.URL{Scheme: "https",
-			Host: "accounts.google.com",
-			Path: "/o/oauth2/revoke"}
+	p.RevokeURL = &url.URL{Scheme: "https",
+		Host: "accounts.google.com",
+		Path: "/o/oauth2/revoke",
 	}
-	if p.ValidateURL.String() == "" {
-		p.ValidateURL = &url.URL{Scheme: "https",
-			Host: "www.googleapis.com",
-			Path: "/oauth2/v3/tokeninfo"}
+	p.ValidateURL = &url.URL{Scheme: "https",
+		Host: "www.googleapis.com",
+		Path: "/oauth2/v3/tokeninfo",
 	}
 	if p.Scope == "" {
 		p.Scope = "profile email"
 	}
+
+	// not used for google
+	p.ProfileURL = &url.URL{}
 
 	googleProvider := &GoogleProvider{
 		ProviderData: p,

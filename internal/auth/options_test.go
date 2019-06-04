@@ -2,7 +2,6 @@ package auth
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -62,17 +61,6 @@ func TestNewOptions(t *testing.T) {
 func TestInitializedOptions(t *testing.T) {
 	o := testOptions(t)
 	testutil.Equal(t, nil, o.Validate())
-}
-
-// Note that it's not worth testing nonparseable URLs, since url.Parse()
-// seems to parse damn near anything.
-func TestRedirectURL(t *testing.T) {
-	o := testOptions(t)
-	o.RedirectURL = "https://myhost.com/callback"
-	testutil.Equal(t, nil, o.Validate())
-	expected := &url.URL{
-		Scheme: "https", Host: "myhost.com", Path: "/callback"}
-	testutil.Equal(t, expected, o.redirectURL)
 }
 
 func TestCookieRefreshMustBeLessThanCookieExpire(t *testing.T) {

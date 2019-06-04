@@ -60,37 +60,6 @@ func TestGoogleProviderDefaults(t *testing.T) {
 			validateURL: "https://www.googleapis.com/oauth2/v3/tokeninfo",
 			scope:       "profile email",
 		},
-		{
-			name: "with provider overrides",
-			providerData: &ProviderData{
-				SignInURL: &url.URL{
-					Scheme: "https",
-					Host:   "example.com",
-					Path:   "/oauth/auth"},
-				RedeemURL: &url.URL{
-					Scheme: "https",
-					Host:   "example.com",
-					Path:   "/oauth/token"},
-				RevokeURL: &url.URL{
-					Scheme: "https",
-					Host:   "example.com",
-					Path:   "/oauth/deauth"},
-				ProfileURL: &url.URL{
-					Scheme: "https",
-					Host:   "example.com",
-					Path:   "/oauth/profile"},
-				ValidateURL: &url.URL{
-					Scheme: "https",
-					Host:   "example.com",
-					Path:   "/oauth/tokeninfo"},
-				Scope: "profile"},
-			signInURL:   "https://example.com/oauth/auth",
-			redeemURL:   "https://example.com/oauth/token",
-			revokeURL:   "https://example.com/oauth/deauth",
-			profileURL:  "https://example.com/oauth/profile",
-			validateURL: "https://example.com/oauth/tokeninfo",
-			scope:       "profile",
-		},
 	}
 	for _, expected := range expectedResults {
 		t.Run(expected.name, func(t *testing.T) {

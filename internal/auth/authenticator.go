@@ -18,23 +18,6 @@ import (
 	"github.com/datadog/datadog-go/statsd"
 )
 
-// SignatureHeader is the header name where the signed request header is stored.
-const SignatureHeader = "GAP-Signature"
-
-// SignatureHeaders are the headers that are valid in the request.
-var SignatureHeaders = []string{
-	"Content-Length",
-	"Content-Md5",
-	"Content-Type",
-	"Date",
-	"Authorization",
-	"X-Forwarded-User",
-	"X-Forwarded-Email",
-	"X-Forwarded-Access-Token",
-	"Cookie",
-	"Gap-Auth",
-}
-
 // Authenticator stores all the information associated with proxying the request.
 type Authenticator struct {
 	Validator        func(string) bool
@@ -46,13 +29,9 @@ type Authenticator struct {
 	csrfStore    sessions.CSRFStore
 	sessionStore sessions.SessionStore
 
-	redirectURL        *url.URL // the url to receive requests at
-	provider           providers.Provider
-	ProxyPrefix        string
-	ServeMux           http.Handler
-	SetXAuthRequest    bool
-	SkipProviderButton bool
-	PassUserHeaders    bool
+	redirectURL *url.URL // the url to receive requests at
+	provider    providers.Provider
+	ServeMux    http.Handler
 
 	AuthCodeCipher aead.Cipher
 
@@ -65,8 +44,6 @@ type Authenticator struct {
 	SessionLifetimeTTL time.Duration
 
 	templates templates.Template
-	Header    string
-	Footer    string
 }
 
 type redeemResponse struct {
@@ -142,10 +119,7 @@ func NewAuthenticator(opts *Options, optionFuncs ...func(*Authenticator) error) 
 		Host:              opts.Host,
 		CookieSecure:      opts.CookieSecure,
 
-		SetXAuthRequest:    opts.SetXAuthRequest,
-		PassUserHeaders:    opts.PassUserHeaders,
-		SkipProviderButton: opts.SkipProviderButton,
-		templates:          templates,
+		templates: templates,
 	}
 
 	p.ServeMux = p.newMux()

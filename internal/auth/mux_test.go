@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"testing"
 )
 
@@ -52,12 +51,6 @@ func TestHostHeader(t *testing.T) {
 			err := opts.Validate()
 			if err != nil {
 				t.Fatalf("unexpected opts error: %v", err)
-			}
-
-			opts.redirectURL = &url.URL{
-				Host:   tc.Host,
-				Path:   "/callback",
-				Scheme: "https",
 			}
 
 			authMux, err := NewAuthenticatorMux(opts, nil)

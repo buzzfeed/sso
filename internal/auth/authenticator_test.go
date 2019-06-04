@@ -80,6 +80,17 @@ func setRedirectURL(redirectURL *url.URL) func(*Authenticator) error {
 	}
 }
 
+func setMockRedirectURL() func(*Authenticator) error {
+	return func(a *Authenticator) error {
+		a.redirectURL = &url.URL{
+			Scheme: "http",
+			Host:   "example.com",
+			Path:   "/",
+		}
+		return nil
+	}
+}
+
 func assignProvider(opts *Options) func(*Authenticator) error {
 	return func(a *Authenticator) error {
 		var err error
@@ -108,7 +119,6 @@ func testOpts(t *testing.T, proxyClientID, proxyClientSecret string) *Options {
 	opts.EmailDomains = []string{"*"}
 	opts.StatsdPort = 8125
 	opts.StatsdHost = "localhost"
-	opts.RedirectURL = "http://example.com"
 	return opts
 }
 
@@ -459,13 +469,13 @@ func TestSignIn(t *testing.T) {
 				setMockValidator(tc.validEmail),
 				setMockSessionStore(tc.mockSessionStore),
 				setMockTempl(),
-				setRedirectURL(opts.redirectURL),
+				setMockRedirectURL(),
 				setMockAuthCodeCipher(tc.mockAuthCodeCipher, nil),
 			)
 			testutil.Ok(t, err)
 
 			// set test provider
-			u, _ := url.Parse("http://example.com")
+			u, _ := url.Parse("http://example.com/")
 			provider := providers.NewTestProvider(u)
 			provider.Refresh = tc.refreshResponse.OK
 			provider.RefreshError = tc.refreshResponse.Error
@@ -1574,14 +1584,13 @@ func TestOAuthStart(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 
 			opts := testOpts(t, "abced", "testtest")
-			opts.RedirectURL = "https://example.com/"
 			opts.Validate()
 			u, _ := url.Parse("http://example.com")
 			provider := providers.NewTestProvider(u)
 			proxy, _ := NewAuthenticator(opts,
 				setTestProvider(provider),
 				setMockValidator(true),
-				setRedirectURL(opts.redirectURL),
+				setMockRedirectURL(),
 				setMockCSRFStore(&sessions.MockCSRFStore{}),
 			)
 
@@ -1620,15 +1629,21 @@ func TestGoogleProviderApiSettings(t *testing.T) {
 	opts := testOpts(t, "abced", "testtest")
 	opts.Provider = "google"
 	opts.Validate()
-	proxy, _ := NewAuthenticator(opts, assignProvider(opts), func(p *Authenticator) error {
-		p.Validator = func(string) bool { return true }
-		return nil
-	})
+
+	proxy, err := NewAuthenticator(opts,
+		assignProvider(opts),
+		setMockValidator(true),
+	)
+	if err != nil {
+		t.Fatalf("unexpected err provisioning authenticator: %v", err)
+	}
+
 	p := proxy.provider.Data()
 	testutil.Equal(t, "https://accounts.google.com/o/oauth2/auth?access_type=offline",
 		p.SignInURL.String())
 	testutil.Equal(t, "https://www.googleapis.com/oauth2/v3/token",
 		p.RedeemURL.String())
+
 	testutil.Equal(t, "", p.ProfileURL.String())
 	testutil.Equal(t, "profile email", p.Scope)
 }
