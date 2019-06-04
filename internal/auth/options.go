@@ -24,6 +24,7 @@ import (
 // OrgName - string - if using Okta as the provider, the Okta domain to use
 // ProxyClientID - string - the client id that matches the sso proxy client id
 // ProxyClientSecret - string - the client secret that matches the sso proxy client secret
+// Scheme - string - The scheme to use for internal redirects
 // Host - string - The host that is in the header that is required on incoming requests
 // Port - string - Port to listen on
 // EmailDomains - []string - authenticate emails with the specified domain (may be given multiple times). Use * to authenticate any email
@@ -56,8 +57,9 @@ type Options struct {
 	ProxyClientID     string `mapstructure:"proxy_client_id"`
 	ProxyClientSecret string `mapstructure:"proxy_client_secret"`
 
-	Host string `mapstructure:"host"`
-	Port int    `mapstructure:"port"`
+	Scheme string `mapstructure:"scheme"`
+	Host   string `mapstructure:"host"`
+	Port   int    `mapstructure:"port"`
 
 	EmailDomains     []string `mapstructure:"sso_email_domain"`
 	EmailAddresses   []string `mapstructure:"sso_email_addresses"`
@@ -148,6 +150,7 @@ func bindAllOptVars(v *viper.Viper, t reflect.Type, tag string) error {
 func setDefaults(v *viper.Viper) {
 	defaultVars := map[string]interface{}{
 		"port":                     4180,
+		"scheme":                   "https",
 		"cookie_expire":            "168h",
 		"cookie_name":              "_sso_auth",
 		"cookie_refresh":           "1h",
@@ -336,7 +339,9 @@ func SetStatsdClient(statsdClient *statsd.Client) func(*Authenticator) error {
 func SetRedirectURL(opts *Options, slug string) func(*Authenticator) error {
 	return func(a *Authenticator) error {
 		a.redirectURL = &url.URL{
-			Path: path.Join(slug, "callback"),
+			Scheme: opts.Scheme,
+			Host:   opts.Host,
+			Path:   path.Join(slug, "callback"),
 		}
 		return nil
 	}
@@ -346,7 +351,9 @@ func SetRedirectURL(opts *Options, slug string) func(*Authenticator) error {
 func SetDefaultRedirectURL(opts *Options) func(*Authenticator) error {
 	return func(a *Authenticator) error {
 		a.redirectURL = &url.URL{
-			Path: path.Join("callback"),
+			Scheme: opts.Scheme,
+			Host:   opts.Host,
+			Path:   path.Join("callback"),
 		}
 		return nil
 	}

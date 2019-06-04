@@ -24,7 +24,7 @@ type Authenticator struct {
 	EmailDomains     []string
 	ProxyRootDomains []string
 	Host             string
-	CookieSecure     bool
+	Scheme           string
 
 	csrfStore    sessions.CSRFStore
 	sessionStore sessions.SessionStore
@@ -117,7 +117,7 @@ func NewAuthenticator(opts *Options, optionFuncs ...func(*Authenticator) error) 
 		EmailDomains:      opts.EmailDomains,
 		ProxyRootDomains:  proxyRootDomains,
 		Host:              opts.Host,
-		CookieSecure:      opts.CookieSecure,
+		Scheme:            opts.Scheme,
 
 		templates: templates,
 	}
@@ -152,7 +152,6 @@ func (p *Authenticator) newMux() http.Handler {
 }
 
 // GetRedirectURI returns the redirect url for a given OAuthProxy,
-// setting the scheme to be https if CookieSecure is true.
 func (p *Authenticator) GetRedirectURI(host string) string {
 	// default to the request Host if not set
 	return p.redirectURL.String()
@@ -354,22 +353,36 @@ func (p *Authenticator) ProxyOAuthRedirect(rw http.ResponseWriter, req *http.Req
 		p.ErrorResponse(rw, req, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(rw, req, getAuthCodeRedirectURL(redirectURL, state, string(encrypted)), http.StatusFound)
+
+	authCodeRedirect, err := getAuthCodeRedirectURL(redirectURL, state, string(encrypted), p.Scheme)
+	if err != nil {
+		tags = append(tags, "error:invalid_auth_redirect")
+		p.StatsdClient.Incr("application_error", tags, 1.0)
+		p.ErrorResponse(rw, req, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(rw, req, authCodeRedirect, http.StatusFound)
 }
 
-func getAuthCodeRedirectURL(redirectURL *url.URL, state, authCode string) string {
-	u, _ := url.Parse(redirectURL.String())
-	params, _ := url.ParseQuery(u.RawQuery)
+func getAuthCodeRedirectURL(redirectURL *url.URL, state, authCode, scheme string) (string, error) {
+	u, err := url.Parse(redirectURL.String())
+	if err != nil {
+		return "", err
+	}
+
+	params, err := url.ParseQuery(u.RawQuery)
+	if err != nil {
+		return "", err
+	}
+
 	params.Set("code", authCode)
 	params.Set("state", state)
 
 	u.RawQuery = params.Encode()
+	u.Scheme = scheme
 
-	if u.Scheme == "" {
-		u.Scheme = "https"
-	}
-
-	return u.String()
+	return u.String(), nil
 }
 
 // SignOut signs the user out.

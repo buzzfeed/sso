@@ -708,25 +708,36 @@ func TestGetAuthCodeRedirectURL(t *testing.T) {
 		name        string
 		redirectURI string
 		expectedURI string
+		scheme      string
 	}{
 		{
 			name:        "url scheme included",
+			scheme:      "http",
 			redirectURI: "http://example.com",
 			expectedURI: "http://example.com?code=code&state=state",
 		},
 		{
 			name:        "url scheme not included",
+			scheme:      "https",
 			redirectURI: "example.com",
 			expectedURI: "https://example.com?code=code&state=state",
 		},
 		{
 			name:        "auth code is overwritten",
+			scheme:      "http",
 			redirectURI: "http://example.com?code=different",
 			expectedURI: "http://example.com?code=code&state=state",
 		},
 		{
 			name:        "state is overwritten",
+			scheme:      "https",
 			redirectURI: "https://example.com?state=different",
+			expectedURI: "https://example.com?code=code&state=state",
+		},
+		{
+			name:        "scheme is overwritten",
+			scheme:      "https",
+			redirectURI: "http://example.com?state=different",
 			expectedURI: "https://example.com?code=code&state=state",
 		},
 	}
@@ -738,7 +749,12 @@ func TestGetAuthCodeRedirectURL(t *testing.T) {
 			if err != nil {
 				t.Fatalf("error parsing redirect uri %s", err.Error())
 			}
-			uri := getAuthCodeRedirectURL(redirectURL, "state", "code")
+
+			uri, err := getAuthCodeRedirectURL(redirectURL, "state", "code", tc.scheme)
+			if err != nil {
+				t.Fatalf("unexpected err generating auth code redirect url: %v", err)
+			}
+
 			if uri != tc.expectedURI {
 				t.Errorf("expected redirect uri to be %s but was %s", tc.expectedURI, uri)
 			}
