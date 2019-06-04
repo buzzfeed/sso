@@ -20,13 +20,11 @@ type AuthenticatorMux struct {
 func NewAuthenticatorMux(opts *Options, statsdClient *statsd.Client) (*AuthenticatorMux, error) {
 	logger := log.NewLogEntry()
 
-	emailValidator := func(p *Authenticator) error {
-		if len(opts.EmailAddresses) != 0 {
-			p.Validator = options.NewEmailAddressValidator(opts.EmailAddresses)
-		} else {
-			p.Validator = options.NewEmailDomainValidator(opts.EmailDomains)
-		}
-		return nil
+	var validator func(string) bool
+	if len(opts.EmailAddresses) != 0 {
+		validator = options.NewEmailAddressValidator(opts.EmailAddresses)
+	} else {
+		validator = options.NewEmailDomainValidator(opts.EmailDomains)
 	}
 
 	// one day, we will contruct more providers here
@@ -42,7 +40,7 @@ func NewAuthenticatorMux(opts *Options, statsdClient *statsd.Client) (*Authentic
 	for _, idp := range identityProviders {
 		idpSlug := idp.Data().ProviderSlug
 		authenticator, err := NewAuthenticator(opts,
-			emailValidator,
+			SetValidator(validator),
 			SetProvider(idp),
 			SetCookieStore(opts, idpSlug),
 			SetStatsdClient(statsdClient),
@@ -66,7 +64,7 @@ func NewAuthenticatorMux(opts *Options, statsdClient *statsd.Client) (*Authentic
 		if idpSlug == opts.DefaultProviderSlug {
 			// setup our mux with the idpslug as the first part of the path
 			authenticator, err := NewAuthenticator(opts,
-				emailValidator,
+				SetValidator(validator),
 				SetProvider(idp),
 				SetCookieStore(opts, idpSlug),
 				SetStatsdClient(statsdClient),

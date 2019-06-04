@@ -358,3 +358,11 @@ func SetDefaultRedirectURL(opts *Options) func(*Authenticator) error {
 		return nil
 	}
 }
+
+// SetValidator sets the email validator
+func SetValidator(validator func(string) bool) func(*Authenticator) error {
+	return func(a *Authenticator) error {
+		a.Validator = validator
+		return nil
+	}
+}
