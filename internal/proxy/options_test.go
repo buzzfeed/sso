@@ -17,7 +17,7 @@ func testOptions() *Options {
 	o.ClientID = "bazquux"
 	o.ClientSecret = "xyzzyplugh"
 	o.EmailDomains = []string{"*"}
-	o.ProviderSlug = "idp"
+	o.DefaultProviderSlug = "idp"
 	o.ProviderURLString = "https://www.example.com"
 	o.UpstreamConfigsFile = "testdata/upstream_configs.yml"
 	o.Cluster = "sso"
@@ -62,23 +62,6 @@ func TestNewOptions(t *testing.T) {
 func TestInitializedOptions(t *testing.T) {
 	o := testOptions()
 	testutil.Equal(t, nil, o.Validate())
-}
-
-func TestDefaultProviderApiSettings(t *testing.T) {
-	o := testOptions()
-	testutil.Equal(t, nil, o.Validate())
-	p := o.provider.Data()
-	testutil.Equal(t, "https://www.example.com/idp/sign_in",
-		p.SignInURL.String())
-	testutil.Equal(t, "https://www.example.com/idp/sign_out",
-		p.SignOutURL.String())
-	testutil.Equal(t, "https://www.example.com/idp/redeem",
-		p.RedeemURL.String())
-	testutil.Equal(t, "https://www.example.com/idp/validate",
-		p.ValidateURL.String())
-	testutil.Equal(t, "https://www.example.com/idp/profile",
-		p.ProfileURL.String())
-	testutil.Equal(t, "", p.Scope)
 }
 
 func TestProviderURLValidation(t *testing.T) {
@@ -139,18 +122,27 @@ func TestProviderURLValidation(t *testing.T) {
 			o.ProviderURLString = tc.providerURLString
 			o.ProviderURLInternalString = tc.providerURLInternalString
 			err := o.Validate()
+
 			if tc.expectedError != "" {
 				if err == nil {
-					t.Errorf("expected error, got nil")
-				} else if err.Error() != tc.expectedError {
-					t.Errorf("expected error %q, got %q", tc.expectedError, err.Error())
+					t.Fatalf("expected error, got nil")
 				}
+				if err.Error() != tc.expectedError {
+					t.Fatalf("expected error %q, got %q", tc.expectedError, err.Error())
+				}
+				// our errors have matched, and test has passed
+				return
+			}
+
+			provider, err := newProvider(o, &UpstreamConfig{ProviderSlug: "idp"})
+			if err != nil {
+				t.Fatalf("unexpected err creating provider: %v", err)
 			}
 			if tc.expectedSignInURL != "" {
-				testutil.Equal(t, o.provider.Data().SignInURL.String(), tc.expectedSignInURL)
+				testutil.Equal(t, provider.Data().SignInURL.String(), tc.expectedSignInURL)
 			}
 			if tc.expectedProviderURLInternalString != "" {
-				testutil.Equal(t, o.provider.Data().ProviderURLInternal.String(), tc.expectedProviderURLInternalString)
+				testutil.Equal(t, provider.Data().ProviderURLInternal.String(), tc.expectedProviderURLInternalString)
 			}
 		})
 	}

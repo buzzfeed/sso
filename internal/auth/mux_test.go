@@ -46,14 +46,9 @@ func TestHostHeader(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
-			opts := testOpts(t, "abced", "testtest")
-			opts.Host = tc.Host
-			err := opts.Validate()
-			if err != nil {
-				t.Fatalf("unexpected opts error: %v", err)
-			}
-
-			authMux, err := NewAuthenticatorMux(opts, nil)
+			config := testConfiguration(t)
+			config.ServerConfig.Host = tc.Host
+			authMux, err := NewAuthenticatorMux(config, nil)
 			if err != nil {
 				t.Fatalf("unexpected err creating auth mux: %v", err)
 			}
@@ -75,62 +70,15 @@ func TestHostHeader(t *testing.T) {
 	}
 }
 
-func TestDefaultProvider(t *testing.T) {
-	testCases := []struct {
-		Name               string
-		Host               string
-		ExpectedStatusCode int
-	}{
-		{
-			Name:               "similar requests to default path should get same results as slug path",
-			Host:               "example.com",
-			ExpectedStatusCode: http.StatusBadRequest,
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.Name, func(t *testing.T) {
-			opts := testOpts(t, "abced", "testtest")
-			opts.Host = tc.Host
-			err := opts.Validate()
-			if err != nil {
-				t.Fatalf("unexpected opts error: %v", err)
-			}
-
-			authMux, err := NewAuthenticatorMux(opts, nil)
-			if err != nil {
-				t.Fatalf("unexpected err creating auth mux: %v", err)
-			}
-
-			for _, path := range []string{"/callback", "/google/callback"} {
-				uri := fmt.Sprintf("http://%s%s", tc.Host, path)
-
-				rw := httptest.NewRecorder()
-				req := httptest.NewRequest("GET", uri, nil)
-
-				authMux.ServeHTTP(rw, req)
-				if rw.Code != tc.ExpectedStatusCode {
-					t.Errorf("got unexpected status code")
-					t.Errorf("want %v", tc.ExpectedStatusCode)
-					t.Errorf(" got %v", rw.Code)
-					t.Errorf(" headers %v", rw)
-					t.Errorf(" body: %q", rw.Body)
-				}
-			}
-		})
-	}
-}
-
 func TestRobotsTxt(t *testing.T) {
-	opts := testOpts(t, "abced", "testtest")
-	opts.Host = "example.com"
-	opts.Validate()
-	authMux, err := NewAuthenticatorMux(opts, nil)
+	config := testConfiguration(t)
+	authMux, err := NewAuthenticatorMux(config, nil)
 	if err != nil {
 		t.Fatalf("unexpected err creating auth mux: %v", err)
 	}
 
 	rw := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "https://example.com/robots.txt", nil)
+	req := httptest.NewRequest("GET", fmt.Sprintf("https://%s/robots.txt", config.ServerConfig.Host), nil)
 	authMux.ServeHTTP(rw, req)
 
 	if rw.Code != http.StatusOK {

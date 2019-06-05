@@ -31,16 +31,7 @@ type GoogleProvider struct {
 }
 
 // NewGoogleProvider returns a new GoogleProvider and sets the provider url endpoints.
-func NewGoogleProvider(p *ProviderData, adminEmail, credsFilePath string) (*GoogleProvider, error) {
-	if adminEmail != "" || credsFilePath != "" {
-		if adminEmail == "" {
-			return nil, errors.New("missing setting: google-admin-email")
-		}
-		if credsFilePath == "" {
-			return nil, errors.New("missing setting: google-service-account-json")
-		}
-	}
-
+func NewGoogleProvider(p *ProviderData, impersonateUser, credsFilePath string) (*GoogleProvider, error) {
 	p.ProviderName = "Google"
 	p.SignInURL = &url.URL{Scheme: "https",
 		Host: "accounts.google.com",
@@ -86,8 +77,9 @@ func NewGoogleProvider(p *ProviderData, adminEmail, credsFilePath string) (*Goog
 		if err != nil {
 			return nil, errors.New("could not read google credentials file")
 		}
+
 		googleProvider.AdminService = &GoogleAdminService{
-			adminService: getAdminService(adminEmail, credsReader),
+			adminService: getAdminService(impersonateUser, credsReader),
 			cb:           googleProvider.cb,
 		}
 	}

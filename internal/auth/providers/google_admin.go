@@ -30,24 +30,27 @@ type GoogleAdminService struct {
 	cb           *circuit.Breaker
 }
 
-func getAdminService(adminEmail string, credentialsReader io.Reader) *admin.Service {
+func getAdminService(impersonateUser string, credentialsReader io.Reader) *admin.Service {
 	logger := log.NewLogEntry()
 
 	data, err := ioutil.ReadAll(credentialsReader)
 	if err != nil {
 		logger.WithError(err).Fatal("can't read Google credentials file")
 	}
+
 	conf, err := google.JWTConfigFromJSON(data, admin.AdminDirectoryUserReadonlyScope, admin.AdminDirectoryGroupReadonlyScope)
 	if err != nil {
 		logger.WithError(err).Fatal("can't load Google credentials file")
 	}
-	conf.Subject = adminEmail
 
+	conf.Subject = impersonateUser
 	client := conf.Client(oauth2.NoContext)
+
 	adminService, err := admin.New(client)
 	if err != nil {
 		logger.WithError(err).Fatal()
 	}
+
 	return adminService
 }
 

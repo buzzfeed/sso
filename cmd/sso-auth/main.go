@@ -16,25 +16,26 @@ func init() {
 func main() {
 	logger := log.NewLogEntry()
 
-	opts, err := auth.NewOptions()
+	config, err := auth.LoadConfig()
 	if err != nil {
-		logger.Error(err, "error loading in env vars")
+		logger.Error(err, "error loading in config from env vars")
 		os.Exit(1)
 	}
 
-	err = opts.Validate()
+	err = config.Validate()
 	if err != nil {
-		logger.Error(err, "error validating opts")
+		logger.Error(err, "error validating config")
 		os.Exit(1)
 	}
 
-	statsdClient, err := auth.NewStatsdClient(opts.StatsdHost, opts.StatsdPort)
+	sc := config.MetricsConfig.StatsdConfig
+	statsdClient, err := auth.NewStatsdClient(sc.Host, sc.Port)
 	if err != nil {
 		logger.Error(err, "error creating statsd client")
 		os.Exit(1)
 	}
 
-	authMux, err := auth.NewAuthenticatorMux(opts, statsdClient)
+	authMux, err := auth.NewAuthenticatorMux(config, statsdClient)
 	if err != nil {
 		logger.Error(err, "error creating new AuthenticatorMux")
 		os.Exit(1)
@@ -43,13 +44,13 @@ func main() {
 
 	// we leave the message field blank, which will inherit the stdlib timeout page which is sufficient
 	// and better than other naive messages we would currently place here
-	timeoutHandler := http.TimeoutHandler(authMux, opts.RequestTimeout, "")
+	timeoutHandler := http.TimeoutHandler(authMux, config.ServerConfig.TimeoutConfig.Request, "")
 
 	s := &http.Server{
-		Addr:         fmt.Sprintf(":%d", opts.Port),
-		ReadTimeout:  opts.TCPReadTimeout,
-		WriteTimeout: opts.TCPWriteTimeout,
-		Handler:      auth.NewLoggingHandler(os.Stdout, timeoutHandler, opts.RequestLogging, statsdClient),
+		Addr:         fmt.Sprintf(":%d", config.ServerConfig.Port),
+		ReadTimeout:  config.ServerConfig.TimeoutConfig.Read,
+		WriteTimeout: config.ServerConfig.TimeoutConfig.Write,
+		Handler:      auth.NewLoggingHandler(os.Stdout, timeoutHandler, config.LoggingConfig.Enable, statsdClient),
 	}
 
 	logger.Fatal(s.ListenAndServe())
