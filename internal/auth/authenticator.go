@@ -24,7 +24,7 @@ type Authenticator struct {
 	EmailDomains     []string
 	ProxyRootDomains []string
 	Host             string
-	CookieSecure     bool
+	Scheme           string
 
 	csrfStore    sessions.CSRFStore
 	sessionStore sessions.SessionStore
@@ -117,7 +117,7 @@ func NewAuthenticator(opts *Options, optionFuncs ...func(*Authenticator) error) 
 		EmailDomains:      opts.EmailDomains,
 		ProxyRootDomains:  proxyRootDomains,
 		Host:              opts.Host,
-		CookieSecure:      opts.CookieSecure,
+		Scheme:            opts.Scheme,
 
 		templates: templates,
 	}
@@ -139,7 +139,6 @@ func NewAuthenticator(opts *Options, optionFuncs ...func(*Authenticator) error) 
 func (p *Authenticator) newMux() http.Handler {
 	// we setup our service mux to handle service routes that use the required host header
 	serviceMux := http.NewServeMux()
-	serviceMux.HandleFunc("/robots.txt", p.withMethods(p.RobotsTxt, "GET"))
 	serviceMux.HandleFunc("/start", p.withMethods(p.OAuthStart, "GET"))
 	serviceMux.HandleFunc("/sign_in", p.withMethods(p.validateClientID(p.validateRedirectURI(p.validateSignature(p.SignIn))), "GET"))
 	serviceMux.HandleFunc("/sign_out", p.withMethods(p.validateRedirectURI(p.validateSignature(p.SignOut)), "GET", "POST"))
@@ -153,17 +152,10 @@ func (p *Authenticator) newMux() http.Handler {
 }
 
 // GetRedirectURI returns the redirect url for a given OAuthProxy,
-// setting the scheme to be https if CookieSecure is true.
 func (p *Authenticator) GetRedirectURI(host string) string {
 	// default to the request Host if not set
 	return p.redirectURL.String()
 
-}
-
-// RobotsTxt handles the /robots.txt route.
-func (p *Authenticator) RobotsTxt(rw http.ResponseWriter, req *http.Request) {
-	rw.WriteHeader(http.StatusOK)
-	fmt.Fprintf(rw, "User-agent: *\nDisallow: /")
 }
 
 type signInResp struct {
@@ -361,22 +353,36 @@ func (p *Authenticator) ProxyOAuthRedirect(rw http.ResponseWriter, req *http.Req
 		p.ErrorResponse(rw, req, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(rw, req, getAuthCodeRedirectURL(redirectURL, state, string(encrypted)), http.StatusFound)
+
+	authCodeRedirect, err := getAuthCodeRedirectURL(redirectURL, state, string(encrypted), p.Scheme)
+	if err != nil {
+		tags = append(tags, "error:invalid_auth_redirect")
+		p.StatsdClient.Incr("application_error", tags, 1.0)
+		p.ErrorResponse(rw, req, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(rw, req, authCodeRedirect, http.StatusFound)
 }
 
-func getAuthCodeRedirectURL(redirectURL *url.URL, state, authCode string) string {
-	u, _ := url.Parse(redirectURL.String())
-	params, _ := url.ParseQuery(u.RawQuery)
+func getAuthCodeRedirectURL(redirectURL *url.URL, state, authCode, scheme string) (string, error) {
+	u, err := url.Parse(redirectURL.String())
+	if err != nil {
+		return "", err
+	}
+
+	params, err := url.ParseQuery(u.RawQuery)
+	if err != nil {
+		return "", err
+	}
+
 	params.Set("code", authCode)
 	params.Set("state", state)
 
 	u.RawQuery = params.Encode()
+	u.Scheme = scheme
 
-	if u.Scheme == "" {
-		u.Scheme = "https"
-	}
-
-	return u.String()
+	return u.String(), nil
 }
 
 // SignOut signs the user out.

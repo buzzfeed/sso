@@ -137,24 +137,6 @@ func newRevokeServer(accessToken string) (*url.URL, *httptest.Server) {
 	return u, s
 }
 
-func TestRobotsTxt(t *testing.T) {
-	opts := testOpts(t, "abced", "testtest")
-	opts.Validate()
-	proxy, _ := NewAuthenticator(opts, func(p *Authenticator) error {
-		p.Validator = func(string) bool { return true }
-		return nil
-	})
-	rw := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/robots.txt", nil)
-	proxy.ServeMux.ServeHTTP(rw, req)
-	if rw.Code != http.StatusOK {
-		t.Errorf("expected status code %d, but got %d", http.StatusOK, rw.Code)
-	}
-	if rw.Body.String() != "User-agent: *\nDisallow: /" {
-		t.Errorf("expected response body to be %s but was %s", "User-agent: *\nDisallow: /", rw.Body.String())
-	}
-}
-
 const redirectInputPattern = `<input type="hidden" name="redirect_uri" value="([^"]+)">`
 const revokeErrorMessagePattern = `An error occurred during sign out\. Please try again\.`
 
@@ -726,25 +708,36 @@ func TestGetAuthCodeRedirectURL(t *testing.T) {
 		name        string
 		redirectURI string
 		expectedURI string
+		scheme      string
 	}{
 		{
 			name:        "url scheme included",
+			scheme:      "http",
 			redirectURI: "http://example.com",
 			expectedURI: "http://example.com?code=code&state=state",
 		},
 		{
 			name:        "url scheme not included",
+			scheme:      "https",
 			redirectURI: "example.com",
 			expectedURI: "https://example.com?code=code&state=state",
 		},
 		{
 			name:        "auth code is overwritten",
+			scheme:      "http",
 			redirectURI: "http://example.com?code=different",
 			expectedURI: "http://example.com?code=code&state=state",
 		},
 		{
 			name:        "state is overwritten",
+			scheme:      "https",
 			redirectURI: "https://example.com?state=different",
+			expectedURI: "https://example.com?code=code&state=state",
+		},
+		{
+			name:        "scheme is overwritten",
+			scheme:      "https",
+			redirectURI: "http://example.com?state=different",
 			expectedURI: "https://example.com?code=code&state=state",
 		},
 	}
@@ -756,7 +749,12 @@ func TestGetAuthCodeRedirectURL(t *testing.T) {
 			if err != nil {
 				t.Fatalf("error parsing redirect uri %s", err.Error())
 			}
-			uri := getAuthCodeRedirectURL(redirectURL, "state", "code")
+
+			uri, err := getAuthCodeRedirectURL(redirectURL, "state", "code", tc.scheme)
+			if err != nil {
+				t.Fatalf("unexpected err generating auth code redirect url: %v", err)
+			}
+
 			if uri != tc.expectedURI {
 				t.Errorf("expected redirect uri to be %s but was %s", tc.expectedURI, uri)
 			}

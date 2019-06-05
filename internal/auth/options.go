@@ -24,6 +24,7 @@ import (
 // OrgName - string - if using Okta as the provider, the Okta domain to use
 // ProxyClientID - string - the client id that matches the sso proxy client id
 // ProxyClientSecret - string - the client secret that matches the sso proxy client secret
+// Scheme - string - The scheme to use for internal redirects
 // Host - string - The host that is in the header that is required on incoming requests
 // Port - string - Port to listen on
 // EmailDomains - []string - authenticate emails with the specified domain (may be given multiple times). Use * to authenticate any email
@@ -44,6 +45,7 @@ import (
 // Provider - provider name
 // ProviderSlug - string - client-side string used to uniquely identify a specific instantiation of an identity provider
 // ProviderServerID - string - if using Okta as the provider, the authorisation server ID (defaults to 'default')
+// DefaultProviderSlug - string = default client-side string to use as the default identity provider
 // Scope - Oauth scope specification
 // ApprovalPrompt - OAuth approval prompt
 // RequestLogging - bool to log requests
@@ -55,8 +57,9 @@ type Options struct {
 	ProxyClientID     string `mapstructure:"proxy_client_id"`
 	ProxyClientSecret string `mapstructure:"proxy_client_secret"`
 
-	Host string `mapstructure:"host"`
-	Port int    `mapstructure:"port"`
+	Scheme string `mapstructure:"scheme"`
+	Host   string `mapstructure:"host"`
+	Port   int    `mapstructure:"port"`
 
 	EmailDomains     []string `mapstructure:"sso_email_domain"`
 	EmailAddresses   []string `mapstructure:"sso_email_addresses"`
@@ -89,6 +92,9 @@ type Options struct {
 	Provider         string `mapstructure:"provider"`
 	ProviderSlug     string `mapstructure:"provider_slug"`
 	ProviderServerID string `mapstructure:"provider_server_id"`
+
+	// These is the default provider
+	DefaultProviderSlug string `mapstructure:"default_provider_slug"`
 
 	Scope          string `mapstructure:"scope"`
 	ApprovalPrompt string `mapstructure:"approval_prompt"`
@@ -144,6 +150,7 @@ func bindAllOptVars(v *viper.Viper, t reflect.Type, tag string) error {
 func setDefaults(v *viper.Viper) {
 	defaultVars := map[string]interface{}{
 		"port":                     4180,
+		"scheme":                   "https",
 		"cookie_expire":            "168h",
 		"cookie_name":              "_sso_auth",
 		"cookie_refresh":           "1h",
@@ -157,6 +164,7 @@ func setDefaults(v *viper.Viper) {
 		"provider":                 "google",
 		"provider_slug":            "google",
 		"provider_server_id":       "default",
+		"default_provider_slug":    "google",
 		"approval_prompt":          "force",
 		"request_logging":          true,
 		"request_timeout":          "2s",
@@ -331,8 +339,30 @@ func SetStatsdClient(statsdClient *statsd.Client) func(*Authenticator) error {
 func SetRedirectURL(opts *Options, slug string) func(*Authenticator) error {
 	return func(a *Authenticator) error {
 		a.redirectURL = &url.URL{
-			Path: path.Join(slug, "callback"),
+			Scheme: opts.Scheme,
+			Host:   opts.Host,
+			Path:   path.Join(slug, "callback"),
 		}
+		return nil
+	}
+}
+
+// SetDefaultRedirectURL takes an options struct to construct the url callback and redirect.
+func SetDefaultRedirectURL(opts *Options) func(*Authenticator) error {
+	return func(a *Authenticator) error {
+		a.redirectURL = &url.URL{
+			Scheme: opts.Scheme,
+			Host:   opts.Host,
+			Path:   path.Join("callback"),
+		}
+		return nil
+	}
+}
+
+// SetValidator sets the email validator
+func SetValidator(validator func(string) bool) func(*Authenticator) error {
+	return func(a *Authenticator) error {
+		a.Validator = validator
 		return nil
 	}
 }

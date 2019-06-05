@@ -20,13 +20,11 @@ type AuthenticatorMux struct {
 func NewAuthenticatorMux(opts *Options, statsdClient *statsd.Client) (*AuthenticatorMux, error) {
 	logger := log.NewLogEntry()
 
-	emailValidator := func(p *Authenticator) error {
-		if len(opts.EmailAddresses) != 0 {
-			p.Validator = options.NewEmailAddressValidator(opts.EmailAddresses)
-		} else {
-			p.Validator = options.NewEmailDomainValidator(opts.EmailDomains)
-		}
-		return nil
+	var validator func(string) bool
+	if len(opts.EmailAddresses) != 0 {
+		validator = options.NewEmailAddressValidator(opts.EmailAddresses)
+	} else {
+		validator = options.NewEmailDomainValidator(opts.EmailDomains)
 	}
 
 	// one day, we will contruct more providers here
@@ -42,7 +40,7 @@ func NewAuthenticatorMux(opts *Options, statsdClient *statsd.Client) (*Authentic
 	for _, idp := range identityProviders {
 		idpSlug := idp.Data().ProviderSlug
 		authenticator, err := NewAuthenticator(opts,
-			emailValidator,
+			SetValidator(validator),
 			SetProvider(idp),
 			SetCookieStore(opts, idpSlug),
 			SetStatsdClient(statsdClient),
@@ -60,6 +58,27 @@ func NewAuthenticatorMux(opts *Options, statsdClient *statsd.Client) (*Authentic
 			fmt.Sprintf("/%s/", idpSlug),
 			http.StripPrefix(fmt.Sprintf("/%s", idpSlug), authenticator.ServeMux),
 		)
+
+		// TODO: This should be removed once we feel confident clients have been moved over to the new
+		// style /slug/ paths. This is kept around to allow graceful migrations/upgrades.
+		if idpSlug == opts.DefaultProviderSlug {
+			// setup our mux with the idpslug as the first part of the path
+			authenticator, err := NewAuthenticator(opts,
+				SetValidator(validator),
+				SetProvider(idp),
+				SetCookieStore(opts, idpSlug),
+				SetStatsdClient(statsdClient),
+				SetDefaultRedirectURL(opts),
+			)
+			if err != nil {
+				logger.Error(err, "error creating new Authenticator")
+				return nil, err
+			}
+
+			authenticators = append(authenticators, authenticator)
+
+			idpMux.Handle("/", authenticator.ServeMux)
+		}
 	}
 
 	// load static files
@@ -68,6 +87,7 @@ func NewAuthenticatorMux(opts *Options, statsdClient *statsd.Client) (*Authentic
 		logger.Fatal(err)
 	}
 	idpMux.Handle("/static/", http.StripPrefix("/static/", fsHandler))
+	idpMux.HandleFunc("/robots.txt", RobotsTxt)
 
 	hostRouter := hostmux.NewRouter()
 	hostRouter.HandleStatic(opts.Host, idpMux)
@@ -98,4 +118,10 @@ func setHealthCheck(healthcheckPath string, next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// RobotsTxt handles the /robots.txt route
+func RobotsTxt(rw http.ResponseWriter, req *http.Request) {
+	rw.WriteHeader(http.StatusOK)
+	fmt.Fprintf(rw, "User-agent: *\nDisallow: /")
 }
