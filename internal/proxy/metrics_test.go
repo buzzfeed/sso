@@ -3,7 +3,11 @@ package proxy
 import (
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewStatsd(t *testing.T) {
@@ -53,6 +57,9 @@ func TestNewStatsd(t *testing.T) {
 			opts.StatsdHost = tc.host
 			opts.StatsdPort = tc.port
 			opts.Validate()
+			if err != nil {
+				t.Fatalf("error while instantiating config options: %v", err.Error())
+			}
 
 			client, err := newStatsdClient(opts)
 			if err != nil {
@@ -85,5 +92,177 @@ func TestNewStatsd(t *testing.T) {
 			}
 		})
 
+	}
+}
+
+func TestLogRequestMetrics(t *testing.T) {
+	testCases := []struct {
+		name         string
+		requestURL   string
+		method       string
+		status       int
+		expectedTags []string
+	}{
+		{
+			name:       "request URL is /, action is set to proxy",
+			requestURL: "/",
+			method:     "GET",
+			status:     http.StatusOK,
+			expectedTags: []string{
+				"service:sso_proxy",
+				"method:GET",
+				fmt.Sprintf("status_code:%d", http.StatusOK),
+				"status_category:2xx",
+				"action:proxy",
+			},
+		},
+		{
+			name:       "sign out path adds action to tags",
+			requestURL: "/oauth2/sign_out",
+			method:     "GET",
+			status:     http.StatusOK,
+			expectedTags: []string{
+				"service:sso_proxy",
+				"method:GET",
+				fmt.Sprintf("status_code:%d", http.StatusOK),
+				"status_category:2xx",
+				"action:sign_out",
+			},
+		},
+		{
+			name:       "ping path adds action to tags, and overrides proxyHost",
+			requestURL: "/ping",
+			method:     "GET",
+			status:     http.StatusOK,
+			expectedTags: []string{
+				"service:sso_proxy",
+				"method:GET",
+				fmt.Sprintf("status_code:%d", http.StatusOK),
+				"status_category:2xx",
+				"action:ping",
+				"proxy_host:_healthcheck",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+
+			pc, err := net.ListenPacket("udp", "127.0.0.1:8125")
+			if err != nil {
+				t.Fatalf("error %s", err.Error())
+			}
+			defer pc.Close()
+
+			opts := NewOptions()
+			opts.StatsdHost = "127.0.0.1"
+			opts.StatsdPort = 8125
+			opts.Validate()
+			if err != nil {
+				t.Fatalf("error while instantiating config options: %v", err.Error())
+			}
+
+			client, err := newStatsdClient(opts)
+			if err != nil {
+				t.Fatalf("error starting new statsd client: %s", err.Error())
+			}
+
+			tagString := strings.Join(tc.expectedTags, ",")
+			expectedPacketString := fmt.Sprintf("sso_proxy.request.duration:5.000000|ms|#%s", tagString)
+
+			// create a request with a url
+			// check metrics
+			req := httptest.NewRequest(tc.method, tc.requestURL, nil)
+
+			logRequestMetrics(req, time.Millisecond*5, tc.status, client)
+			readBytes := make([]byte, len(expectedPacketString))
+			pc.ReadFrom(readBytes)
+			if expectedPacketString != string(readBytes) {
+				t.Errorf("expected packet string to be %s but was %s", expectedPacketString, string(readBytes))
+			}
+
+		})
+	}
+}
+func TestGetActionTag(t *testing.T) {
+	testCases := []struct {
+		name           string
+		url            string
+		expectedAction string
+	}{
+		{
+			name:           "request with favicon.ico in the path",
+			url:            "/favicon.ico",
+			expectedAction: "favicon",
+		},
+		{
+			name:           "request with favicon.ico in the path with query parameters",
+			url:            "/favicon.ico?query=parameter",
+			expectedAction: "favicon",
+		},
+		{
+			name:           "request with oauth2/sign_out in the path",
+			url:            "/oauth2/sign_out",
+			expectedAction: "sign_out",
+		},
+		{
+			name:           "request with oauth2/sign_out in the path with query parameters",
+			url:            "/oauth2/sign_out?query=parameter",
+			expectedAction: "sign_out",
+		},
+		{
+			name:           "request with oauth2/callback in the path",
+			url:            "/oauth2/callback",
+			expectedAction: "callback",
+		},
+		{
+			name:           "request with oauth2/callback in the path with query parameters",
+			url:            "/oauth2/callback?query=parameter",
+			expectedAction: "callback",
+		},
+		{
+			name:           "request with oauth2/auth in the path",
+			url:            "/oauth2/auth",
+			expectedAction: "auth",
+		},
+		{
+			name:           "request with oauth2/auth in the path with query parameters",
+			url:            "/oauth2/auth?query=parameter",
+			expectedAction: "auth",
+		},
+		{
+			name:           "request with ping in the path",
+			url:            "/ping",
+			expectedAction: "ping",
+		},
+		{
+			name:           "request with ping in the path with query parameters",
+			url:            "/ping?query=parameter",
+			expectedAction: "ping",
+		},
+		{
+			name:           "request for robots.txt in the path",
+			url:            "/robots.txt",
+			expectedAction: "robots",
+		},
+		{
+			name:           "request for robots.txt in the path with query parameters",
+			url:            "/robots.txt?query=parameter",
+			expectedAction: "robots",
+		},
+		{
+			name:           "unknown action",
+			url:            "/omg_what_do_i_do",
+			expectedAction: "proxy",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", tc.url, nil)
+			action := GetActionTag(req)
+			if action != tc.expectedAction {
+				t.Errorf("expected action to be %s but was %s", tc.expectedAction, action)
+			}
+		})
 	}
 }
