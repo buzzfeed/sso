@@ -32,4 +32,4 @@ go vet ./...
 
 echo "running tests ..."
 cd internal
-go test -cover -race ./... $@
+go test -coverprofile=coverage.out -race ./... $@
