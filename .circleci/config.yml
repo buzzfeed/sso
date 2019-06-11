@@ -1,6 +1,4 @@
-version: 2.1
-orbs:
-  codecov: codecov/codecov@1.0.2
+version: 2
 jobs:
   build:
     docker:
@@ -29,11 +27,13 @@ jobs:
           command: |
             make dist/sso-proxy
       - run:
-            name: push sso-dev image
-            command: |
-              if [[ -n $DOCKER_USER ]]; then
-                docker login -u $DOCKER_USER -p $DOCKER_PASS
-                make imagepush
-              fi
-      - codecov/upload:
-          file: ./scripts/coverage.out
+          name: push sso-dev image
+          command: |
+            if [[ -n $DOCKER_USER ]]; then
+              docker login -u $DOCKER_USER -p $DOCKER_PASS
+              make imagepush
+            fi
+      - run:
+          name: upload coverage file to codecov
+          command: |
+            bash <(curl -s https://codecov.io/bash)
