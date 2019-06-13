@@ -274,6 +274,12 @@ func TestValidateRedirectURI(t *testing.T) {
 			expectedStatusCode: http.StatusOK,
 			signatureSecret:    "clientSecret",
 		},
+		{
+			name:               "benign root hostname",
+			redirectURI:        "http://example.com",
+			expectedStatusCode: http.StatusOK,
+			signatureSecret:    "clientSecret",
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
