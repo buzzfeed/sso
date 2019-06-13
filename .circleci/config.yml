@@ -27,9 +27,13 @@ jobs:
           command: |
             make dist/sso-proxy
       - run:
-            name: push sso-dev image
-            command: |
-              if [[ -n $DOCKER_USER ]]; then
-                docker login -u $DOCKER_USER -p $DOCKER_PASS
-                make imagepush
-              fi
+          name: push sso-dev image
+          command: |
+            if [[ -n $DOCKER_USER ]]; then
+              docker login -u $DOCKER_USER -p $DOCKER_PASS
+              make imagepush
+            fi
+      - run:
+          name: upload coverage file to codecov
+          command: |
+            bash <(curl -s https://codecov.io/bash)
