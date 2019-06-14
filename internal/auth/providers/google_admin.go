@@ -11,7 +11,7 @@ import (
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
-	"google.golang.org/api/admin/directory/v1"
+	admin "google.golang.org/api/admin/directory/v1"
 	"google.golang.org/api/googleapi"
 
 	"github.com/datadog/datadog-go/statsd"
@@ -126,6 +126,12 @@ func (gs *GoogleAdminService) listMemberships(groupName string, maxDepth, curren
 					continue
 				}
 				groupMembers, err := gs.listMemberships(member.Email, maxDepth, currentDepth+1)
+				if err != nil {
+					return nil, err
+				}
+				members = append(members, groupMembers...)
+			case "CUSTOMER":
+				groupMembers, err := gs.ListMemberships(groupName, maxDepth)
 				if err != nil {
 					return nil, err
 				}
