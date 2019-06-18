@@ -61,6 +61,7 @@ type UpstreamConfig struct {
 	HeaderOverrides       map[string]string
 	SkipRequestSigning    bool
 	CookieName            string
+	ProviderSlug          string
 }
 
 // RouteConfig maps to the yaml config fields,
@@ -95,6 +96,7 @@ type OptionsConfig struct {
 	ResetDeadline      time.Duration     `yaml:"reset_deadline"`
 	FlushInterval      time.Duration     `yaml:"flush_interval"`
 	SkipRequestSigning bool              `yaml:"skip_request_signing"`
+	ProviderSlug       string            `yaml:"provider_slug"`
 
 	// CookieName is still set globally, so we do not provide override behavior
 	CookieName string
@@ -400,6 +402,7 @@ func parseOptionsConfig(proxy *UpstreamConfig, defaultOpts *OptionsConfig) error
 	proxy.PreserveHost = dst.PreserveHost
 	proxy.SkipRequestSigning = dst.SkipRequestSigning
 	proxy.CookieName = dst.CookieName
+	proxy.ProviderSlug = dst.ProviderSlug
 
 	proxy.RouteConfig.Options = nil
 

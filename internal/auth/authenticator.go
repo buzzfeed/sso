@@ -63,48 +63,14 @@ type getProfileResponse struct {
 	Groups []string `json:"groups"`
 }
 
-// SetCookieStore sets the cookie store to use a miscreant cipher
-func SetCookieStore(opts *Options, providerSlug string) func(*Authenticator) error {
-	return func(a *Authenticator) error {
-		decodedAuthCodeSecret, err := base64.StdEncoding.DecodeString(opts.AuthCodeSecret)
-		if err != nil {
-			return err
-		}
-		authCodeCipher, err := aead.NewMiscreantCipher([]byte(decodedAuthCodeSecret))
-		if err != nil {
-			return err
-		}
-
-		cookieName := fmt.Sprintf("%s_%s", opts.CookieName, providerSlug)
-		cookieStore, err := sessions.NewCookieStore(cookieName,
-			sessions.CreateMiscreantCookieCipher(opts.decodedCookieSecret),
-			func(c *sessions.CookieStore) error {
-				c.CookieDomain = opts.CookieDomain
-				c.CookieHTTPOnly = opts.CookieHTTPOnly
-				c.CookieExpire = opts.CookieExpire
-				c.CookieSecure = opts.CookieSecure
-				return nil
-			})
-
-		if err != nil {
-			return err
-		}
-
-		a.csrfStore = cookieStore
-		a.sessionStore = cookieStore
-		a.AuthCodeCipher = authCodeCipher
-		return nil
-	}
-}
-
 // NewAuthenticator creates a Authenticator struct and applies the optional functions slice to the struct.
-func NewAuthenticator(opts *Options, optionFuncs ...func(*Authenticator) error) (*Authenticator, error) {
+func NewAuthenticator(config Configuration, optionFuncs ...func(*Authenticator) error) (*Authenticator, error) {
 	logger := log.NewLogEntry()
 
 	templates := templates.NewHTMLTemplate()
 
 	proxyRootDomains := []string{}
-	for _, domain := range opts.ProxyRootDomains {
+	for _, domain := range config.AuthorizeConfig.ProxyConfig.Domains {
 		if !strings.HasPrefix(domain, ".") {
 			domain = fmt.Sprintf(".%s", domain)
 		}
@@ -112,14 +78,14 @@ func NewAuthenticator(opts *Options, optionFuncs ...func(*Authenticator) error) 
 	}
 
 	p := &Authenticator{
-		ProxyClientID:     opts.ProxyClientID,
-		ProxyClientSecret: opts.ProxyClientSecret,
-		EmailDomains:      opts.EmailDomains,
-		ProxyRootDomains:  proxyRootDomains,
-		Host:              opts.Host,
-		Scheme:            opts.Scheme,
+		ProxyClientID:     config.ClientConfigs["proxy"].ID,
+		ProxyClientSecret: config.ClientConfigs["proxy"].Secret,
+		EmailDomains:      config.AuthorizeConfig.EmailConfig.Domains,
+		Host:              config.ServerConfig.Host,
+		Scheme:            config.ServerConfig.Scheme,
 
-		templates: templates,
+		ProxyRootDomains: proxyRootDomains,
+		templates:        templates,
 	}
 
 	p.ServeMux = p.newMux()

@@ -27,26 +27,12 @@ type TestProvider struct {
 }
 
 // NewTestProvider creates a new mock test provider.
-func NewTestProvider(providerURL *url.URL) *TestProvider {
+func NewTestProvider(_ *url.URL) *TestProvider {
 	return &TestProvider{
 		ProviderData: &ProviderData{
 			ProviderName: "Test Provider",
-			SignInURL: &url.URL{
-				Scheme: "http",
-				Host:   providerURL.Host,
-				Path:   "/authorize",
-			},
-			RedeemURL: &url.URL{
-				Scheme: "http",
-				Host:   providerURL.Host,
-				Path:   "/token",
-			},
-			ProfileURL: &url.URL{
-				Scheme: "http",
-				Host:   providerURL.Host,
-				Path:   "/profile",
-			},
-			Scope: "profile.email",
+			ProviderSlug: "test",
+			Scope:        "profile.email",
 		},
 	}
 }

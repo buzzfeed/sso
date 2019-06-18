@@ -8,10 +8,8 @@ import (
 )
 
 func TestStaticFiles(t *testing.T) {
-	opts := testOpts(t, "abced", "testtest")
-	opts.Host = "localhost"
-	opts.Validate()
-	authMux, err := NewAuthenticatorMux(opts, nil)
+	config := testConfiguration(t)
+	authMux, err := NewAuthenticatorMux(config, nil)
 	if err != nil {
 		t.Fatalf("unexpected error creating auth mux: %v", err)
 	}

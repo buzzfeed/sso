@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/buzzfeed/sso/internal/auth/providers"
 	"github.com/buzzfeed/sso/internal/pkg/hostmux"
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
 	"github.com/buzzfeed/sso/internal/pkg/options"
@@ -17,34 +16,33 @@ type AuthenticatorMux struct {
 	authenticators []*Authenticator
 }
 
-func NewAuthenticatorMux(opts *Options, statsdClient *statsd.Client) (*AuthenticatorMux, error) {
+func NewAuthenticatorMux(config Configuration, statsdClient *statsd.Client) (*AuthenticatorMux, error) {
 	logger := log.NewLogEntry()
 
 	var validator func(string) bool
-	if len(opts.EmailAddresses) != 0 {
-		validator = options.NewEmailAddressValidator(opts.EmailAddresses)
+	if len(config.AuthorizeConfig.EmailConfig.Addresses) != 0 {
+		validator = options.NewEmailAddressValidator(config.AuthorizeConfig.EmailConfig.Addresses)
 	} else {
-		validator = options.NewEmailDomainValidator(opts.EmailDomains)
+		validator = options.NewEmailDomainValidator(config.AuthorizeConfig.EmailConfig.Domains)
 	}
 
-	// one day, we will contruct more providers here
-	idp, err := newProvider(opts)
-	if err != nil {
-		logger.Error(err, "error creating new Identity Provider")
-		return nil, err
-	}
-	identityProviders := []providers.Provider{idp}
 	authenticators := []*Authenticator{}
-
 	idpMux := http.NewServeMux()
-	for _, idp := range identityProviders {
+
+	for slug, providerConfig := range config.ProviderConfigs {
+		idp, err := newProvider(providerConfig, config.SessionConfig)
+		if err != nil {
+			logger.Error(err, fmt.Sprintf("error creating provider.%s", slug))
+			return nil, err
+		}
+
 		idpSlug := idp.Data().ProviderSlug
-		authenticator, err := NewAuthenticator(opts,
+		authenticator, err := NewAuthenticator(config,
 			SetValidator(validator),
 			SetProvider(idp),
-			SetCookieStore(opts, idpSlug),
+			SetCookieStore(config.SessionConfig, idpSlug),
 			SetStatsdClient(statsdClient),
-			SetRedirectURL(opts, idpSlug),
+			SetRedirectURL(config.ServerConfig, idpSlug),
 		)
 		if err != nil {
 			logger.Error(err, "error creating new Authenticator")
@@ -58,27 +56,6 @@ func NewAuthenticatorMux(opts *Options, statsdClient *statsd.Client) (*Authentic
 			fmt.Sprintf("/%s/", idpSlug),
 			http.StripPrefix(fmt.Sprintf("/%s", idpSlug), authenticator.ServeMux),
 		)
-
-		// TODO: This should be removed once we feel confident clients have been moved over to the new
-		// style /slug/ paths. This is kept around to allow graceful migrations/upgrades.
-		if idpSlug == opts.DefaultProviderSlug {
-			// setup our mux with the idpslug as the first part of the path
-			authenticator, err := NewAuthenticator(opts,
-				SetValidator(validator),
-				SetProvider(idp),
-				SetCookieStore(opts, idpSlug),
-				SetStatsdClient(statsdClient),
-				SetDefaultRedirectURL(opts),
-			)
-			if err != nil {
-				logger.Error(err, "error creating new Authenticator")
-				return nil, err
-			}
-
-			authenticators = append(authenticators, authenticator)
-
-			idpMux.Handle("/", authenticator.ServeMux)
-		}
 	}
 
 	// load static files
@@ -90,7 +67,7 @@ func NewAuthenticatorMux(opts *Options, statsdClient *statsd.Client) (*Authentic
 	idpMux.HandleFunc("/robots.txt", RobotsTxt)
 
 	hostRouter := hostmux.NewRouter()
-	hostRouter.HandleStatic(opts.Host, idpMux)
+	hostRouter.HandleStatic(config.ServerConfig.Host, idpMux)
 
 	healthcheckHandler := setHealthCheck("/ping", hostRouter)
 
