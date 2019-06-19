@@ -54,8 +54,8 @@ func TestGoogleProviderDefaults(t *testing.T) {
 	}{
 		{
 			name:        "defaults",
-			signInURL:   "https://accounts.google.com/o/oauth2/auth?access_type=offline",
-			redeemURL:   "https://www.googleapis.com/oauth2/v3/token",
+			signInURL:   "https://accounts.google.com/o/oauth2/v2/auth",
+			redeemURL:   "https://www.googleapis.com/oauth2/v4/token",
 			revokeURL:   "https://accounts.google.com/o/oauth2/revoke",
 			validateURL: "https://www.googleapis.com/oauth2/v3/tokeninfo",
 			scope:       "profile email",
@@ -71,38 +71,38 @@ func TestGoogleProviderDefaults(t *testing.T) {
 				t.Errorf("expected provider name Google, got %s", p.Data().ProviderName)
 			}
 			if p.Data().SignInURL.String() != expected.signInURL {
-				log.Printf("expected %s", expected.signInURL)
-				log.Printf("got %s", p.Data().SignInURL.String())
+				t.Errorf("want: %v", expected.signInURL)
+				t.Errorf("have: %v", p.Data().SignInURL.String())
 				t.Errorf("unexpected signin url")
 			}
 
 			if p.Data().RedeemURL.String() != expected.redeemURL {
-				log.Printf("expected %s", expected.redeemURL)
-				log.Printf("got %s", p.Data().RedeemURL.String())
+				t.Errorf("want: %v", expected.redeemURL)
+				t.Errorf("have: %v", p.Data().RedeemURL.String())
 				t.Errorf("unexpected redeem url")
 			}
 
 			if p.Data().RevokeURL.String() != expected.revokeURL {
-				log.Printf("expected %s", expected.revokeURL)
-				log.Printf("got %s", p.Data().RevokeURL.String())
+				t.Errorf("want: %v", expected.revokeURL)
+				t.Errorf("have: %v", p.Data().RevokeURL.String())
 				t.Errorf("unexpected revoke url")
 			}
 
 			if p.Data().ValidateURL.String() != expected.validateURL {
-				log.Printf("expected %s", expected.validateURL)
-				log.Printf("got %s", p.Data().ValidateURL.String())
+				t.Errorf("want: %v", expected.validateURL)
+				t.Errorf("have: %v", p.Data().ValidateURL.String())
 				t.Errorf("unexpected validate url")
 			}
 
 			if p.Data().ProfileURL.String() != expected.profileURL {
-				log.Printf("expected %s", expected.profileURL)
-				log.Printf("got %s", p.Data().ProfileURL.String())
+				t.Errorf("want: %v", expected.profileURL)
+				t.Errorf("have: %v", p.Data().ProfileURL.String())
 				t.Errorf("unexpected profile url")
 			}
 
 			if p.Data().Scope != expected.scope {
-				log.Printf("expected %s", expected.scope)
-				log.Printf("got %s", p.Data().Scope)
+				t.Errorf("want: %v", expected.scope)
+				t.Errorf("have: %v", p.Data().Scope)
 				t.Errorf("unexpected scope")
 			}
 		})
