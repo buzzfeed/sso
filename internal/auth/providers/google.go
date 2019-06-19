@@ -28,10 +28,13 @@ type GoogleProvider struct {
 	AdminService AdminService
 	cb           *circuit.Breaker
 	GroupsCache  groups.MemberSetCache
+
+	Prompt       string
+	HostedDomain string
 }
 
 // NewGoogleProvider returns a new GoogleProvider and sets the provider url endpoints.
-func NewGoogleProvider(p *ProviderData, impersonateUser, credsFilePath string) (*GoogleProvider, error) {
+func NewGoogleProvider(p *ProviderData, prompt, hd, impersonate, credentials string) (*GoogleProvider, error) {
 	p.ProviderName = "Google"
 	p.SignInURL = &url.URL{Scheme: "https",
 		Host: "accounts.google.com",
@@ -49,19 +52,20 @@ func NewGoogleProvider(p *ProviderData, impersonateUser, credsFilePath string) (
 		Host: "www.googleapis.com",
 		Path: "/oauth2/v3/tokeninfo",
 	}
+	p.ProfileURL = &url.URL{}
 
 	if p.Scope == "" {
 		p.Scope = "profile email"
 	}
-	if p.ApprovalPrompt == "" {
-		p.ApprovalPrompt = "consent"
-	}
 
-	// not used for google
-	p.ProfileURL = &url.URL{}
+	if prompt == "" {
+		prompt = "consent"
+	}
 
 	googleProvider := &GoogleProvider{
 		ProviderData: p,
+		Prompt:       prompt,
+		HostedDomain: hd,
 	}
 
 	googleProvider.cb = circuit.NewBreaker(&circuit.Options{
@@ -74,17 +78,19 @@ func NewGoogleProvider(p *ProviderData, impersonateUser, credsFilePath string) (
 			time.Duration(200)*time.Second, time.Duration(500)*time.Millisecond,
 		),
 	})
-	if credsFilePath != "" {
-		credsReader, err := os.Open(credsFilePath)
+
+	if credentials != "" {
+		credsReader, err := os.Open(credentials)
 		if err != nil {
 			return nil, errors.New("could not read google credentials file")
 		}
 
 		googleProvider.AdminService = &GoogleAdminService{
-			adminService: getAdminService(impersonateUser, credsReader),
+			adminService: getAdminService(impersonate, credsReader),
 			cb:           googleProvider.cb,
 		}
 	}
+
 	return googleProvider, nil
 }
 
@@ -136,9 +142,13 @@ func (p *GoogleProvider) GetSignInURL(redirectURI, state string) string {
 	params.Set("response_type", "code")
 	params.Set("redirect_uri", redirectURI)
 	params.Set("scope", p.Scope)
-	params.Set("access_token", "offline")
-	params.Add("state", state)
-	params.Set("prompt", p.ApprovalPrompt)
+	params.Set("access_type", "offline")
+	params.Set("state", state)
+	params.Set("prompt", p.Prompt)
+
+	if p.HostedDomain != "" {
+		params.Set("hd", p.HostedDomain)
+	}
 
 	a.RawQuery = params.Encode()
 	return a.String()

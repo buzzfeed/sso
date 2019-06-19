@@ -1630,5 +1630,5 @@ func TestGoogleGroupInvalidFile(t *testing.T) {
 		},
 	)
 	testutil.NotEqual(t, nil, err)
-	testutil.Equal(t, "invalid Google credentials file: file_doesnt_exist.json", err.Error())
+	testutil.Equal(t, "could not read google credentials file", err.Error())
 }
