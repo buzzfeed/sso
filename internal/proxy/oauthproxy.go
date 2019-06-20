@@ -103,6 +103,33 @@ func SetCookieStore(opts *Options) func(*OAuthProxy) error {
 	}
 }
 
+// SetRedisStore sets the session and csrf stores as a functional option
+func SetRedisStore(opts *Options) func(*OAuthProxy) error {
+	return func(op *OAuthProxy) error {
+		redisStore, err := sessions.NewRedisStore(opts.CookieName,
+			func(c *sessions.RedisStore) error {
+				c.RedisConnectionURL = opts.RedisConnectionURL
+				c.UseSentinel = opts.RedisUseSentinel
+				c.SentinelMasterName = opts.RedisSentinelMasterName
+				c.SentinelConnectionURLs = opts.RedisSentinelConnectionURLs
+
+				c.CookieDomain = opts.CookieDomain
+				c.CookieHTTPOnly = opts.CookieHTTPOnly
+				c.CookieExpire = opts.CookieExpire
+				c.CookieSecure = opts.CookieSecure
+				return nil
+			})
+
+		if err != nil {
+			return err
+		}
+
+		op.csrfStore = redisStore
+		op.sessionStore = redisStore
+		return nil
+	}
+}
+
 // SetRequestSigner sets the request signer  as a functional option
 // SetRequestSigner sets a request signer
 func SetRequestSigner(signer *RequestSigner) func(*OAuthProxy) error {
