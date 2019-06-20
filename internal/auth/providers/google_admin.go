@@ -284,7 +284,5 @@ func (gs *GoogleAdminService) ListAllUsers(customerName string) ([]string, error
 		}
 		pageToken = r.NextPageToken
 	}
-	logger.Info("test")
-	logger.Info(users)
 	return users, nil
 }
