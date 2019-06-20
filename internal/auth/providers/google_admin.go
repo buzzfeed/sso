@@ -131,7 +131,7 @@ func (gs *GoogleAdminService) listMemberships(groupName string, maxDepth, curren
 				}
 				members = append(members, groupMembers...)
 			case "CUSTOMER":
-				groupMembers, err := gs.ListMemberships(groupName, maxDepth)
+				groupMembers, err := gs.ListAllUsers(member.Id)
 				if err != nil {
 					return nil, err
 				}
@@ -213,4 +213,78 @@ func (gs *GoogleAdminService) CheckMemberships(groups []string, email string) ([
 	}
 
 	return inGroups, nil
+}
+
+// ListAllUsers returns a slice of the members of a google customer domain
+func (gs *GoogleAdminService) ListAllUsers(customerName string) ([]string, error) {
+	logger := log.NewLogEntry()
+
+	var users []string
+	tags := []string{
+		"provider:google",
+		"action:list_users_resource",
+		fmt.Sprintf("customer:%s", customerName),
+	}
+
+	pageToken := ""
+	for {
+		startTS := time.Now()
+
+		// get pages of 200 members in a group
+		req := gs.adminService.Users.List().Customer(customerName).MaxResults(200)
+		if pageToken != "" {
+			req.PageToken(pageToken)
+		}
+		gs.StatsdClient.Incr("provider.request", tags, 1.0)
+
+		resp, err := gs.cb.Call(func() (interface{}, error) {
+			return req.Do()
+		})
+		if err != nil {
+			switch e := err.(type) {
+			case *googleapi.Error:
+				tags = append(tags, fmt.Sprintf("status_code:%d", e.Code))
+				gs.StatsdClient.Incr("provider.response", tags, 1.0)
+				gs.StatsdClient.Incr("provider.error", tags, 1.0)
+				switch e.Code {
+				case 400:
+					if e.Error() == "Token expired or revoked" {
+						err = ErrTokenRevoked
+					}
+					err = ErrBadRequest
+				case 404:
+					logger.WithUserGroup(customerName).Warn("could not list users, customer not found")
+					err = ErrGroupNotFound
+				case 429:
+					err = ErrRateLimitExceeded
+				case 503:
+					err = ErrServiceUnavailable
+				}
+			case *circuit.ErrOpenState:
+				tags = append(tags, "circuit:open")
+				gs.StatsdClient.Incr("provider.error", tags, 1.0)
+			default:
+				tags = append(tags, "error:invalid_response")
+				gs.StatsdClient.Incr("provider.internal_error", tags, 1.0)
+			}
+			return nil, err
+		}
+
+		r := resp.(*admin.Users)
+
+		tags = append(tags, fmt.Sprintf("status_code:%d", r.HTTPStatusCode))
+		gs.StatsdClient.Timing("provider.latency", time.Now().Sub(startTS), tags, 1.0)
+		gs.StatsdClient.Incr("provider.response", tags, 1.0)
+
+		for _, user := range r.Users {
+			users = append(users, user.PrimaryEmail)
+		}
+		if r.NextPageToken == "" {
+			break
+		}
+		pageToken = r.NextPageToken
+	}
+	logger.Info("test")
+	logger.Info(users)
+	return users, nil
 }
