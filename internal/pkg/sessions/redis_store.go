@@ -4,7 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/go-redis/redis"
 )
+
+// TicketData is a structure representing the ticket used in server session storage
+type TicketData struct {
+	TicketID string
+	Secret   []byte
+}
 
 // RedisStore represents all the cookie related configurations
 type RedisStore struct {
@@ -13,6 +21,7 @@ type RedisStore struct {
 	UseSentinel            bool
 	SentinelMasterName     string
 	SentinelConnectionURLs []string
+	client                 *redis.Client
 }
 
 // NewRedisStore returns a new session
@@ -44,5 +53,29 @@ func NewRedisStore(cookieName string, optFuncs ...func(*RedisStore) error) (*Red
 		}
 	}
 
+	err := r.initRedisClient()
+	if err != nil {
+		return nil, err
+	}
+
 	return r, nil
+}
+
+func (r *RedisStore) initRedisClient() error {
+	if r.UseSentinel {
+		client := redis.NewFailoverClient(&redis.FailoverOptions{
+			MasterName:    r.SentinelMasterName,
+			SentinelAddrs: r.SentinelConnectionURLs,
+		})
+		r.client = client
+		return nil
+	}
+
+	opt, err := redis.ParseURL(r.RedisConnectionURL)
+	if err != nil {
+		return fmt.Errorf("unable to parse redis url: %s", err)
+	}
+
+	r.client = redis.NewClient(opt)
+	return nil
 }

@@ -13,16 +13,19 @@ func TestNewRedisSession(t *testing.T) {
 		name            string
 		optFuncs        []func(*RedisStore) error
 		expectedError   bool
+		expectedClient  bool
 		expectedSession *RedisStore
 	}{
 		{
-			name:          "default with no opt funcs set",
-			expectedError: true,
+			name:           "default with no opt funcs set",
+			expectedClient: false,
+			expectedError:  true,
 		},
 		{
-			name:          "opt func with an error returns an error",
-			optFuncs:      []func(*RedisStore) error{func(*RedisStore) error { return fmt.Errorf("error") }},
-			expectedError: true,
+			name:           "opt func with an error returns an error",
+			optFuncs:       []func(*RedisStore) error{func(*RedisStore) error { return fmt.Errorf("error") }},
+			expectedClient: false,
+			expectedError:  true,
 		},
 		{
 			name: "opt func overrides default values",
@@ -31,6 +34,7 @@ func TestNewRedisSession(t *testing.T) {
 				s.CookieExpire = time.Hour
 				return nil
 			}},
+			expectedClient: true,
 			expectedSession: &RedisStore{
 				RedisConnectionURL: "redis://localhost:6379/",
 				CookieStore: CookieStore{
@@ -51,6 +55,13 @@ func TestNewRedisSession(t *testing.T) {
 				testutil.NotEqual(t, err, nil)
 			} else {
 				testutil.Ok(t, err)
+			}
+			if tc.expectedClient {
+				testutil.Assert(t, session.client != nil, "test")
+			}
+			if session != nil {
+				// don't include redis client in the equality comparison
+				session.client = nil
 			}
 			testutil.Equal(t, tc.expectedSession, session)
 		})
