@@ -37,6 +37,8 @@ import (
 //
 // PROVIDER_*_GOOGLE_CREDENTIALS
 // PROVIDER_*_GOOGLE_IMPERSONATE
+// PROVIDER_*_GOOGLE_PROMPT
+// PROVIDER_*_GOOGLE_DOMAIN
 //
 // PROVIDER_*_OKTA_URL
 // PROVIDER_*_OKTA_SERVER
@@ -227,6 +229,7 @@ type GoogleProviderConfig struct {
 	Credentials    string `mapstructure:"credentials"`
 	Impersonate    string `mapstructure:"impersonate"`
 	ApprovalPrompt string `mapstructure:"prompt"`
+	HostedDomain   string `mapstructure:"domain"`
 }
 
 func (gpc GoogleProviderConfig) Validate() error {

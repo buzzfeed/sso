@@ -28,20 +28,21 @@ type GoogleProvider struct {
 	AdminService AdminService
 	cb           *circuit.Breaker
 	GroupsCache  groups.MemberSetCache
+
+	Prompt       string
+	HostedDomain string
 }
 
 // NewGoogleProvider returns a new GoogleProvider and sets the provider url endpoints.
-func NewGoogleProvider(p *ProviderData, impersonateUser, credsFilePath string) (*GoogleProvider, error) {
+func NewGoogleProvider(p *ProviderData, prompt, hd, impersonate, credentials string) (*GoogleProvider, error) {
 	p.ProviderName = "Google"
 	p.SignInURL = &url.URL{Scheme: "https",
 		Host: "accounts.google.com",
-		Path: "/o/oauth2/auth",
-		// to get a refresh token. see https://developers.google.com/identity/protocols/OAuth2WebServer#offline
-		RawQuery: "access_type=offline",
+		Path: "/o/oauth2/v2/auth",
 	}
 	p.RedeemURL = &url.URL{Scheme: "https",
 		Host: "www.googleapis.com",
-		Path: "/oauth2/v3/token",
+		Path: "/oauth2/v4/token",
 	}
 	p.RevokeURL = &url.URL{Scheme: "https",
 		Host: "accounts.google.com",
@@ -51,15 +52,20 @@ func NewGoogleProvider(p *ProviderData, impersonateUser, credsFilePath string) (
 		Host: "www.googleapis.com",
 		Path: "/oauth2/v3/tokeninfo",
 	}
+	p.ProfileURL = &url.URL{}
+
 	if p.Scope == "" {
 		p.Scope = "profile email"
 	}
 
-	// not used for google
-	p.ProfileURL = &url.URL{}
+	if prompt == "" {
+		prompt = "consent"
+	}
 
 	googleProvider := &GoogleProvider{
 		ProviderData: p,
+		Prompt:       prompt,
+		HostedDomain: hd,
 	}
 
 	googleProvider.cb = circuit.NewBreaker(&circuit.Options{
@@ -72,17 +78,19 @@ func NewGoogleProvider(p *ProviderData, impersonateUser, credsFilePath string) (
 			time.Duration(200)*time.Second, time.Duration(500)*time.Millisecond,
 		),
 	})
-	if credsFilePath != "" {
-		credsReader, err := os.Open(credsFilePath)
+
+	if credentials != "" {
+		credsReader, err := os.Open(credentials)
 		if err != nil {
 			return nil, errors.New("could not read google credentials file")
 		}
 
 		googleProvider.AdminService = &GoogleAdminService{
-			adminService: getAdminService(impersonateUser, credsReader),
+			adminService: getAdminService(impersonate, credsReader),
 			cb:           googleProvider.cb,
 		}
 	}
+
 	return googleProvider, nil
 }
 
@@ -113,16 +121,14 @@ func (p *GoogleProvider) ValidateSessionState(s *sessions.SessionState) bool {
 		return false
 	}
 
-	var endpoint url.URL
-	endpoint = *p.ValidateURL
-	q := endpoint.Query()
-	q.Add("access_token", s.AccessToken)
-	endpoint.RawQuery = q.Encode()
+	params := url.Values{}
+	params.Set("access_token", s.AccessToken)
 
-	err := p.googleRequest("POST", endpoint.String(), nil, []string{"action:validate"}, nil)
+	err := p.googleRequest("POST", p.ValidateURL.String(), params, []string{"action:validate"}, nil)
 	if err != nil {
 		return false
 	}
+
 	return true
 }
 
@@ -130,13 +136,20 @@ func (p *GoogleProvider) ValidateSessionState(s *sessions.SessionState) bool {
 func (p *GoogleProvider) GetSignInURL(redirectURI, state string) string {
 	var a url.URL
 	a = *p.SignInURL
-	params, _ := url.ParseQuery(a.RawQuery)
-	params.Set("redirect_uri", redirectURI)
-	params.Set("approval_prompt", p.ApprovalPrompt)
-	params.Add("scope", p.Scope)
+
+	params := url.Values{}
 	params.Set("client_id", p.ClientID)
 	params.Set("response_type", "code")
-	params.Add("state", state)
+	params.Set("redirect_uri", redirectURI)
+	params.Set("scope", p.Scope)
+	params.Set("access_type", "offline")
+	params.Set("state", state)
+	params.Set("prompt", p.Prompt)
+
+	if p.HostedDomain != "" {
+		params.Set("hd", p.HostedDomain)
+	}
+
 	a.RawQuery = params.Encode()
 	return a.String()
 }
@@ -287,11 +300,12 @@ func (p *GoogleProvider) Redeem(redirectURL, code string) (*sessions.SessionStat
 	if code == "" {
 		return nil, ErrBadRequest
 	}
+
 	params := url.Values{}
-	params.Add("redirect_uri", redirectURL)
+	params.Add("code", code)
 	params.Add("client_id", p.ClientID)
 	params.Add("client_secret", p.ClientSecret)
-	params.Add("code", code)
+	params.Add("redirect_uri", redirectURL)
 	params.Add("grant_type", "authorization_code")
 
 	var response struct {
@@ -311,6 +325,7 @@ func (p *GoogleProvider) Redeem(redirectURL, code string) (*sessions.SessionStat
 	if err != nil {
 		return nil, err
 	}
+
 	return &sessions.SessionState{
 		AccessToken:  response.AccessToken,
 		RefreshToken: response.RefreshToken,
@@ -398,10 +413,10 @@ func (p *GoogleProvider) RefreshAccessToken(refreshToken string) (token string, 
 	// https://developers.google.com/identity/protocols/OAuth2WebServer#refresh
 
 	params := url.Values{}
-	params.Add("client_id", p.ClientID)
-	params.Add("client_secret", p.ClientSecret)
-	params.Add("refresh_token", refreshToken)
-	params.Add("grant_type", "refresh_token")
+	params.Set("client_id", p.ClientID)
+	params.Set("client_secret", p.ClientSecret)
+	params.Set("refresh_token", refreshToken)
+	params.Set("grant_type", "refresh_token")
 
 	var response struct {
 		AccessToken string `json:"access_token"`
@@ -421,7 +436,7 @@ func (p *GoogleProvider) RefreshAccessToken(refreshToken string) (token string, 
 // Revoke revokes the access token a given session state.
 func (p *GoogleProvider) Revoke(s *sessions.SessionState) error {
 	params := url.Values{}
-	params.Add("token", s.AccessToken)
+	params.Set("token", s.AccessToken)
 
 	err := p.googleRequest("GET", p.RevokeURL.String(), params, []string{"action:revoke"}, nil)
 

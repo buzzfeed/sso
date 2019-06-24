@@ -1608,9 +1608,9 @@ func TestGoogleProviderApiSettings(t *testing.T) {
 		t.Fatalf("unexpected err generating google provider: %v", err)
 	}
 	p := provider.Data()
-	testutil.Equal(t, "https://accounts.google.com/o/oauth2/auth?access_type=offline",
+	testutil.Equal(t, "https://accounts.google.com/o/oauth2/v2/auth",
 		p.SignInURL.String())
-	testutil.Equal(t, "https://www.googleapis.com/oauth2/v3/token",
+	testutil.Equal(t, "https://www.googleapis.com/oauth2/v4/token",
 		p.RedeemURL.String())
 
 	testutil.Equal(t, "", p.ProfileURL.String())
@@ -1630,5 +1630,5 @@ func TestGoogleGroupInvalidFile(t *testing.T) {
 		},
 	)
 	testutil.NotEqual(t, nil, err)
-	testutil.Equal(t, "invalid Google credentials file: file_doesnt_exist.json", err.Error())
+	testutil.Equal(t, "could not read google credentials file", err.Error())
 }

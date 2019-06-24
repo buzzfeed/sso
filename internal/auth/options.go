@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/url"
-	"os"
 	"path"
 
 	"github.com/buzzfeed/sso/internal/auth/providers"
@@ -28,16 +27,12 @@ func newProvider(pc ProviderConfig, sc SessionConfig) (providers.Provider, error
 	switch pc.ProviderType {
 	case providers.GoogleProviderName: // Google
 		gpc := pc.GoogleProviderConfig
-		p.ApprovalPrompt = gpc.ApprovalPrompt
-
-		if gpc.Credentials != "" {
-			_, err := os.Open(gpc.Credentials)
-			if err != nil {
-				return nil, fmt.Errorf("invalid Google credentials file: %s", gpc.Credentials)
-			}
-		}
-
-		googleProvider, err := providers.NewGoogleProvider(p, gpc.Impersonate, gpc.Credentials)
+		googleProvider, err := providers.NewGoogleProvider(p,
+			gpc.ApprovalPrompt,
+			gpc.HostedDomain,
+			gpc.Impersonate,
+			gpc.Credentials,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -48,7 +43,6 @@ func newProvider(pc ProviderConfig, sc SessionConfig) (providers.Provider, error
 		singleFlightProvider = providers.NewSingleFlightProvider(googleProvider)
 	case providers.OktaProviderName:
 		opc := pc.OktaProviderConfig
-
 		oktaProvider, err := providers.NewOktaProvider(p, opc.OrgURL, opc.ServerID)
 		if err != nil {
 			return nil, err
