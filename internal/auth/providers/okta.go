@@ -413,20 +413,25 @@ func (p *OktaProvider) RefreshAccessToken(refreshToken string) (token string, ex
 	return
 }
 
-// Revoke revokes the access token a given session state.
+// Revoke revokes the refresh token from a given session state.
+// Revoking the refresh token implicitly revokes the access token, forcing re-authentication.
+// https://developer.okta.com/docs/guides/revoke-tokens/overview/
 func (p *OktaProvider) Revoke(s *sessions.SessionState) error {
 	// https://developer.okta.com/docs/api/resources/oidc/#revoke
-	params := url.Values{}
-	params.Add("client_id", p.ClientID)
-	params.Add("token", s.AccessToken)
 
-	err := p.oktaRequest("POST", p.RevokeURL.String(), params, []string{"action:revoke"}, nil, nil)
+	form := url.Values{}
+	form.Add("token", s.RefreshToken)
+	form.Add("token_type_hint", "refresh_token")
+	form.Add("client_id", p.ClientID)
+	form.Add("client_secret", p.ClientSecret)
+
+	err := p.oktaRequest("POST", p.RevokeURL.String(), form, []string{"action:revoke"}, nil, nil)
 
 	if err != nil && err != ErrTokenRevoked {
 		return err
 	}
 	logger := log.NewLogEntry()
 
-	logger.WithUser(s.Email).Info("revoked access token")
+	logger.WithUser(s.Email).Info("revoked refresh and access token")
 	return nil
 }
