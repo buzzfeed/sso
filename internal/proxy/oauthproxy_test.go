@@ -263,13 +263,15 @@ func TestAuthOnlyEndpoint(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			providerURL, _ := url.Parse("http://localhost/")
+			tp := providers.NewTestProvider(providerURL, "")
+			tp.RefreshSessionFunc = func(*sessions.SessionState, []string) (bool, error) { return true, nil }
+			tp.ValidateSessionFunc = func(*sessions.SessionState, []string) bool { return true }
+
 			proxy, close := testNewOAuthProxy(t,
 				setSessionStore(tc.sessionStore),
 				setValidator(func(_ string) bool { return tc.validEmail }),
-				SetProvider(&providers.TestProvider{
-					RefreshSessionFunc:  func(*sessions.SessionState, []string) (bool, error) { return true, nil },
-					ValidateSessionFunc: func(*sessions.SessionState, []string) bool { return true },
-				}),
+				SetProvider(tp),
 			)
 			defer close()
 
@@ -571,16 +573,31 @@ func TestAuthenticate(t *testing.T) {
 			CookieExpectation:   NewCookie,
 			ValidateSessionFunc: func(s *sessions.SessionState, g []string) bool { return true },
 		},
+		{
+			Name: "wrong identity provider, user OK, do not authenticate",
+			SessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					ProviderSlug:     "example",
+					Email:            "email1@example.com",
+					AccessToken:      "my_access_token",
+					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
+					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+				},
+			},
+			ExpectedErr:       ErrWrongIdentityProvider,
+			CookieExpectation: ClearCookie,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
-			provider := &providers.TestProvider{
-				RefreshSessionFunc:  tc.RefreshSessionFunc,
-				ValidateSessionFunc: tc.ValidateSessionFunc,
-			}
+			providerURL, _ := url.Parse("http://localhost/")
+			tp := providers.NewTestProvider(providerURL, "")
+			tp.RefreshSessionFunc = tc.RefreshSessionFunc
+			tp.ValidateSessionFunc = tc.ValidateSessionFunc
 
 			proxy, close := testNewOAuthProxy(t,
-				SetProvider(provider),
+				SetProvider(tp),
 				setSessionStore(tc.SessionStore),
 			)
 			defer close()

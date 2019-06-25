@@ -16,6 +16,9 @@ func TestSessionStateSerialization(t *testing.T) {
 	}
 
 	want := &SessionState{
+		ProviderSlug: "slug",
+		ProviderType: "sso",
+
 		AccessToken:  "token1234",
 		RefreshToken: "refresh4321",
 
