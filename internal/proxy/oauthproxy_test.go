@@ -625,6 +625,194 @@ func TestAuthenticate(t *testing.T) {
 	}
 }
 
+func TestAuthenticationUXFlows(t *testing.T) {
+	var (
+		ErrRefreshFailed = errors.New("refresh failed")
+		LoadCookieFailed = errors.New("load cookie fail")
+		SaveCookieFailed = errors.New("save cookie fail")
+	)
+	testCases := []struct {
+		Name string
+
+		SessionStore        *sessions.MockSessionStore
+		RefreshSessionFunc  func(*sessions.SessionState, []string) (bool, error)
+		ValidateSessionFunc func(*sessions.SessionState, []string) bool
+
+		ExpectStatusCode int
+	}{
+		{
+			Name: "missing deadlines, redirect to sign-in",
+			SessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					Email:       "email1@example.com",
+					AccessToken: "my_access_token",
+				},
+			},
+			ExpectStatusCode: http.StatusFound,
+		},
+		{
+			Name: "session unmarshaling fails, show error",
+			SessionStore: &sessions.MockSessionStore{
+				Session:   &sessions.SessionState{},
+				LoadError: LoadCookieFailed,
+			},
+			ExpectStatusCode: http.StatusInternalServerError,
+		},
+		{
+			Name: "authenticate successfully, expect ok",
+			SessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					Email:            "email1@example.com",
+					AccessToken:      "my_access_token",
+					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
+					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+				},
+			},
+			ExpectStatusCode: http.StatusOK,
+		},
+		{
+			Name: "lifetime expired, redirect to sign-in",
+			SessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					Email:            "email1@example.com",
+					AccessToken:      "my_access_token",
+					LifetimeDeadline: time.Now().Add(time.Duration(-24) * time.Hour),
+					RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
+					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+				},
+			},
+			ExpectStatusCode: http.StatusFound,
+		},
+		{
+			Name: "refresh expired, refresh fails, show error",
+			SessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					Email:            "email1@example.com",
+					AccessToken:      "my_access_token",
+					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:  time.Now().Add(time.Duration(-1) * time.Hour),
+					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+				},
+			},
+			RefreshSessionFunc: func(s *sessions.SessionState, g []string) (bool, error) { return false, ErrRefreshFailed },
+			ExpectStatusCode:   http.StatusInternalServerError,
+		},
+		{
+			Name: "refresh expired, user not OK, deny",
+			SessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					Email:            "email1@example.com",
+					AccessToken:      "my_access_token",
+					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:  time.Now().Add(time.Duration(-1) * time.Hour),
+					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+				},
+			},
+			RefreshSessionFunc: func(s *sessions.SessionState, g []string) (bool, error) { return false, nil },
+			ExpectStatusCode:   http.StatusForbidden,
+		},
+		{
+			Name: "refresh expired, user OK, expect ok",
+			SessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					Email:            "email1@example.com",
+					AccessToken:      "my_access_token",
+					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:  time.Now().Add(time.Duration(-1) * time.Hour),
+					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+				},
+			},
+			RefreshSessionFunc: func(s *sessions.SessionState, g []string) (bool, error) { return true, nil },
+			ExpectStatusCode:   http.StatusOK,
+		},
+		{
+			Name: "refresh expired, refresh and user OK, error saving session, show error",
+			SessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					Email:            "email1@example.com",
+					AccessToken:      "my_access_token",
+					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:  time.Now().Add(time.Duration(-1) * time.Hour),
+					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+				},
+				SaveError: SaveCookieFailed,
+			},
+			RefreshSessionFunc: func(s *sessions.SessionState, g []string) (bool, error) { return true, nil },
+			ExpectStatusCode:   http.StatusInternalServerError,
+		},
+		{
+			Name: "validation expired, user not OK, deny",
+			SessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					Email:            "email1@example.com",
+					AccessToken:      "my_access_token",
+					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
+					ValidDeadline:    time.Now().Add(time.Duration(-1) * time.Minute),
+				},
+			},
+			ValidateSessionFunc: func(s *sessions.SessionState, g []string) bool { return false },
+			ExpectStatusCode:    http.StatusForbidden,
+		},
+		{
+			Name: "validation expired, user OK, expect ok",
+			SessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					Email:            "email1@example.com",
+					AccessToken:      "my_access_token",
+					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
+					ValidDeadline:    time.Now().Add(time.Duration(-1) * time.Minute),
+				},
+			},
+			ValidateSessionFunc: func(s *sessions.SessionState, g []string) bool { return true },
+			ExpectStatusCode:    http.StatusOK,
+		},
+		{
+			Name: "wrong identity provider, redirect to sign-in",
+			SessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					ProviderSlug:     "example",
+					Email:            "email1@example.com",
+					AccessToken:      "my_access_token",
+					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
+					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+				},
+			},
+			ExpectStatusCode: http.StatusFound,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			providerURL, _ := url.Parse("http://localhost/")
+			tp := providers.NewTestProvider(providerURL, "")
+			tp.RefreshSessionFunc = tc.RefreshSessionFunc
+			tp.ValidateSessionFunc = tc.ValidateSessionFunc
+
+			proxy, close := testNewOAuthProxy(t,
+				SetProvider(tp),
+				setSessionStore(tc.SessionStore),
+			)
+			defer close()
+
+			req := httptest.NewRequest("GET", "https://localhost", nil)
+			rw := httptest.NewRecorder()
+
+			proxy.Proxy(rw, req)
+
+			res := rw.Result()
+
+			if tc.ExpectStatusCode != res.StatusCode {
+				t.Errorf("have: %v", res.StatusCode)
+				t.Errorf("want: %v", tc.ExpectStatusCode)
+				t.Fatalf("expected status codes to be equal")
+			}
+		})
+	}
+}
+
 func TestProxyXHRErrorHandling(t *testing.T) {
 	testCases := []struct {
 		Name         string
