@@ -25,12 +25,17 @@ test:
 clean:
 	rm -r dist
 
-imagepush:
+imagepush-commit:
 	docker build -t buzzfeed/sso-dev:$(commit) .
 	docker push buzzfeed/sso-dev:$(commit)
 
+imagepush-latest:
+	docker build -t buzzfeed/sso-dev:latest .
+	docker push buzzfeed/sso-dev:latest
+
 releasepush:
-	docker build -t buzzfeed/sso:$(version) .
+	docker build -t buzzfeed/sso:$(version) -t buzzfeed/sso-dev:latest .
 	docker push buzzfeed/sso:$(version)
+	docker push buzzfeed/sso:latest
 
 .PHONY: dist/sso-auth dist/sso-proxy tools

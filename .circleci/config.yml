@@ -1,16 +1,27 @@
+defaults: &defaults
+  docker:
+    - image: circleci/golang:1.11
+  working_directory: /go/src/github.com/buzzfeed/sso
+
+attach_workspace: &attach_workspace
+  attach_workspace:
+    at: /go/src/github.com/buzzfeed/sso
+
 version: 2
 jobs:
   build:
-    docker:
-      - image: circleci/golang:1.11
-    working_directory: /go/src/github.com/buzzfeed/sso
+    <<: *defaults
     steps:
+      - setup_remote_docker
+      - checkout
+      - persist_to_workspace:
+          root: /go/src/github.com/buzzfeed/sso
+          paths:
+            - .
       - run:
           name: Enable go modules
           command: |
             echo 'export GO111MODULE=on' >> $BASH_ENV
-      - checkout
-      - setup_remote_docker
       - run:
           name: get tools
           command: make tools
@@ -26,14 +37,59 @@ jobs:
           name: build sso-proxy
           command: |
             make dist/sso-proxy
+
+  push-sso-dev-commit:
+    <<: *defaults
+    steps:
+      - *attach_workspace
+      - setup_remote_docker
       - run:
-          name: push sso-dev image
+          name: push sso-dev commit tag
           command: |
             if [[ -n $DOCKER_USER ]]; then
               docker login -u $DOCKER_USER -p $DOCKER_PASS
-              make imagepush
+              make imagepush-commit
             fi
+
+  push-sso-dev-latest:
+    <<: *defaults
+    steps:
+      - *attach_workspace
+      - setup_remote_docker
+      - run:
+          name: push sso-dev latest tag
+          command: |
+            if [[ -n $DOCKER_USER ]]; then
+              docker login -u $DOCKER_USER -p $DOCKER_PASS
+              make imagepush-latest
+            fi
+
+  upload-codecov:
+    <<: *defaults
+    steps:
+      - *attach_workspace
       - run:
           name: upload coverage file to codecov
           command: |
             bash <(curl -s https://codecov.io/bash)
+
+
+workflows:
+  version: 2
+  build-and-push:
+    jobs:
+      - build
+      - push-sso-dev-commit:
+          requires:
+            - build
+      - push-sso-dev-latest:
+          requires:
+            - build
+          filters:
+            branches:
+              only: master
+      - upload-codecov:
+          requires:
+            - build
+
+
