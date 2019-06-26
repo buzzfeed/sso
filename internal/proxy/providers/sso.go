@@ -158,6 +158,9 @@ func (p *SSOProvider) Redeem(redirectURL, code string) (*sessions.SessionState, 
 
 	user := strings.Split(jsonResponse.Email, "@")[0]
 	return &sessions.SessionState{
+		ProviderSlug: p.ProviderData.ProviderSlug,
+		ProviderType: "sso",
+
 		AccessToken:  jsonResponse.AccessToken,
 		RefreshToken: jsonResponse.RefreshToken,
 

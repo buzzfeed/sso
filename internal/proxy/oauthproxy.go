@@ -38,8 +38,9 @@ var SignatureHeaders = []string{
 
 // Errors
 var (
-	ErrLifetimeExpired   = errors.New("user lifetime expired")
-	ErrUserNotAuthorized = errors.New("user not authorized")
+	ErrLifetimeExpired       = errors.New("user lifetime expired")
+	ErrUserNotAuthorized     = errors.New("user not authorized")
+	ErrWrongIdentityProvider = errors.New("user authenticated with wrong identity provider")
 )
 
 type ErrOAuthProxyMisconfigured struct {
@@ -655,14 +656,14 @@ func (p *OAuthProxy) Proxy(rw http.ResponseWriter, req *http.Request) {
 			// No cookie is set, start the oauth flow
 			p.OAuthStart(rw, req, tags)
 			return
-		case ErrUserNotAuthorized:
-			tags = append(tags, "error:user_unauthorized")
-			p.StatsdClient.Incr("application_error", tags, 1.0)
-			// We know the user is not authorized for the request, we show them a forbidden page
-			p.ErrorPage(rw, req, http.StatusForbidden, "Forbidden", "You're not authorized to view this page")
-			return
 		case ErrLifetimeExpired:
 			// User's lifetime expired, we trigger the start of the oauth flow
+			p.OAuthStart(rw, req, tags)
+			return
+		case ErrWrongIdentityProvider:
+			// User is authenticated with the incorrect provider. This most common non-malicious
+			// case occurs when an upstream has been transitioned to a different provider but
+			// the user has a stale sesssion.
 			p.OAuthStart(rw, req, tags)
 			return
 		case sessions.ErrInvalidSession:
@@ -671,6 +672,12 @@ func (p *OAuthProxy) Proxy(rw http.ResponseWriter, req *http.Request) {
 			// case occurs when the session encoding schema changes. We manage this ux
 			// by triggering the start of the oauth flow.
 			p.OAuthStart(rw, req, tags)
+			return
+		case ErrUserNotAuthorized:
+			tags = append(tags, "error:user_unauthorized")
+			p.StatsdClient.Incr("application_error", tags, 1.0)
+			// We know the user is not authorized for the request, we show them a forbidden page
+			p.ErrorPage(rw, req, http.StatusForbidden, "Forbidden", "You're not authorized to view this page")
 			return
 		default:
 			logger.Error(err, "unknown error authenticating user")
@@ -707,6 +714,15 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 		// We loaded a cookie but it wasn't valid, clear it, and reject the request
 		logger.Error(err, "error authenticating user")
 		return err
+	}
+
+	// check if this session belongs to the correct identity provider application.
+	// this case exists primarly to allow us to gracefully manage a clean ux during
+	// transitions from one provider to another by gracefully restarting the authentication process.
+	if session.ProviderSlug != p.provider.Data().ProviderSlug {
+		logger.WithUser(session.Email).Info(
+			"authenticated with incorrect identity provider; restarting authentication")
+		return ErrWrongIdentityProvider
 	}
 
 	// Lifetime period is the entire duration in which the session is valid.
