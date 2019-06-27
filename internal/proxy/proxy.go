@@ -43,9 +43,13 @@ func New(opts *Options) (*SSOProxy, error) {
 			return nil, err
 		}
 
+		setSessionStore := SetCookieStore
+		if opts.RedisConnectionURL != "" || opts.RedisUseSentinel {
+			setSessionStore = SetRedisStore
+		}
 		optFuncs = append(optFuncs,
 			SetProvider(provider),
-			SetCookieStore(opts),
+			setSessionStore(opts),
 			SetUpstreamConfig(upstreamConfig),
 			SetProxyHandler(handler),
 		)
