@@ -118,6 +118,7 @@ type redeemResponse struct {
 	RefreshToken string `json:"refresh_token"`
 	ExpiresIn    int64  `json:"expires_in"`
 	Email        string `json:"email"`
+	User         string `json:"user"`
 }
 
 type refreshResponse struct {
@@ -237,10 +238,26 @@ func TestSSOProviderRedeem(t *testing.T) {
 				ExpiresIn:    10,
 				RefreshToken: "refresh12345",
 				Email:        "michael.bland@gsa.gov",
+				User:         "michael.bland",
 			},
 			ProfileResponse: &profileResponse{
 				Email:  "michael.bland@gsa.gov",
 				Groups: []string{"core@gsa.gov"},
+			},
+		},
+		{
+			Name: "redeem successful, username is lowercased",
+			Code: "code1234",
+			RedeemResponse: &redeemResponse{
+				AccessToken:  "a1234",
+				ExpiresIn:    10,
+				RefreshToken: "refresh12345",
+				Email:        "Example.User@example.com",
+				User:         "example.user",
+			},
+			ProfileResponse: &profileResponse{
+				Email:  "Example.User@example.com",
+				Groups: []string{"users@example.com"},
 			},
 		},
 	}
@@ -276,6 +293,7 @@ func TestSSOProviderRedeem(t *testing.T) {
 				testutil.Equal(t, tc.RedeemResponse.Email, session.Email)
 				testutil.Equal(t, tc.RedeemResponse.AccessToken, session.AccessToken)
 				testutil.Equal(t, tc.RedeemResponse.RefreshToken, session.RefreshToken)
+				testutil.Equal(t, tc.RedeemResponse.User, session.User)
 			}
 			if tc.ExpectedError != "" && !strings.Contains(err.Error(), tc.ExpectedError) {
 				t.Errorf("got unexpected result.\nwant=%v\ngot=%v\n", tc.ExpectedError, err.Error())
