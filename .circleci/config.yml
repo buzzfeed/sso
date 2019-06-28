@@ -14,10 +14,6 @@ jobs:
     steps:
       - setup_remote_docker
       - checkout
-      - persist_to_workspace:
-          root: /go/src/github.com/buzzfeed/sso
-          paths:
-            - .
       - run:
           name: Enable go modules
           command: |
@@ -37,6 +33,10 @@ jobs:
           name: build sso-proxy
           command: |
             make dist/sso-proxy
+      - persist_to_workspace:
+          root: /go/src/github.com/buzzfeed/sso
+          paths:
+            - .
 
   push-sso-dev-commit:
     <<: *defaults
