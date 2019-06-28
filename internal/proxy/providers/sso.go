@@ -156,7 +156,7 @@ func (p *SSOProvider) Redeem(redirectURL, code string) (*sessions.SessionState, 
 		return nil, err
 	}
 
-	user := strings.Split(jsonResponse.Email, "@")[0]
+	user := strings.ToLower(strings.Split(jsonResponse.Email, "@")[0])
 	return &sessions.SessionState{
 		ProviderSlug: p.ProviderData.ProviderSlug,
 		ProviderType: "sso",
