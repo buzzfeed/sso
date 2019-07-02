@@ -25,7 +25,7 @@ var (
 )
 
 // SingleFlightProvider middleware provider that multiple requests for the same object
-// to be processed as a single request. This is often called request collpasing or coalesce.
+// to be processed as a single request. This is often called request collapsing or coalesce.
 // This middleware leverages the golang singlelflight provider, with modifications for metrics.
 //
 // It's common among HTTP reverse proxy cache servers such as nginx, Squid or Varnish - they all call it something else but works similarly.
@@ -71,16 +71,16 @@ func (p *SingleFlightProvider) Redeem(redirectURL, code string) (*sessions.Sessi
 }
 
 // ValidateGroup takes an email, allowedGroups, and userGroups and passes it to the provider's ValidateGroup function and returns the response
-func (p *SingleFlightProvider) ValidateGroup(email string, allowedGroups []string) ([]string, bool, error) {
-	return p.provider.ValidateGroup(email, allowedGroups)
+func (p *SingleFlightProvider) ValidateGroup(email string, allowedGroups []string, accessToken string) ([]string, bool, error) {
+	return p.provider.ValidateGroup(email, allowedGroups, accessToken)
 }
 
 // UserGroups takes an email and passes it to the provider's UserGroups function and returns the response
-func (p *SingleFlightProvider) UserGroups(email string, groups []string) ([]string, error) {
+func (p *SingleFlightProvider) UserGroups(email string, groups []string, accessToken string) ([]string, error) {
 	// sort the groups so that other requests may be able to use the cached request
 	sort.Strings(groups)
 	response, err := p.do("UserGroups", fmt.Sprintf("%s:%s", email, strings.Join(groups, ",")), func() (interface{}, error) {
-		return p.provider.UserGroups(email, groups)
+		return p.provider.UserGroups(email, groups, accessToken)
 	})
 	if err != nil {
 		return nil, err

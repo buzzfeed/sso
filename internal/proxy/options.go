@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	"github.com/buzzfeed/sso/internal/proxy/providers"
 
 	"github.com/datadog/datadog-go/statsd"
@@ -26,11 +25,13 @@ import (
 // Scheme - the default scheme, used for upstream configs
 // SkipAuthPreflight - will skip authentication for OPTIONS requests, default false
 // EmailDomains - csv list of emails with the specified domain to authenticate. Use * to authenticate any email
-// DefaultAllowedGroups - csv list of default allowed groups that are applied to authorize access to upstreams. Will be overriden by groups specified in upstream configs.
+// EmailAddresses - []string - authenticate emails with the specified email address (may be given multiple times). Use * to authenticate any email
+// DefaultAllowedGroups - csv list of default allowed groups that are applied to authorize access to upstreams. Will be overridden by groups specified in upstream configs.
 // ClientID - the OAuth Client ID: ie: "123456.apps.googleusercontent.com"
 // ClientSecret - The OAuth Client Secret
 // DefaultUpstreamTimeout - the default time period to wait for a response from an upstream
-// TCPWriteTimeout - http server tcp write timeout
+// DefaultUpstreamTCPResetDeadline - the default time period to wait for a response from an upstream
+// TCPWriteTimeout - http server tcp write timeout - set to: max(default value specified, max(upstream timeouts))
 // TCPReadTimeout - http server tcp read timeout
 // CookieName - name of the cookie
 // CookieSecret - the seed string for secure cookies (optionally base64 encoded)
@@ -40,6 +41,7 @@ import (
 // CookieHTTPOnly - set HttpOnly cookie flag
 // PassAccessToken - send access token in the http headers
 // Provider - OAuth provider
+// DefaultProviderSlug - OAuth provider slug, used internally to identity a specific provider
 // Scope - OAuth scope specification
 // SessionLifetimeTTL - time to live for a session lifetime
 // SessionValidTTL - time to live for a valid session
@@ -59,17 +61,19 @@ type Options struct {
 	SkipAuthPreflight bool `envconfig:"SKIP_AUTH_PREFLIGHT"`
 
 	EmailDomains         []string `envconfig:"EMAIL_DOMAIN"`
+	EmailAddresses       []string `envconfig:"EMAIL_ADDRESSES"`
 	DefaultAllowedGroups []string `envconfig:"DEFAULT_ALLOWED_GROUPS"`
 
 	ClientID     string `envconfig:"CLIENT_ID"`
 	ClientSecret string `envconfig:"CLIENT_SECRET"`
 
-	DefaultUpstreamTimeout time.Duration `envconfig:"DEFAULT_UPSTREAM_TIMEOUT" default:"10s"`
+	DefaultUpstreamTimeout          time.Duration `envconfig:"DEFAULT_UPSTREAM_TIMEOUT" default:"10s"`
+	DefaultUpstreamTCPResetDeadline time.Duration `envconfig:"DEFAULT_UPSTREAM_TCP_RESET_DEADLINE" default:"60s"`
 
 	TCPWriteTimeout time.Duration `envconfig:"TCP_WRITE_TIMEOUT" default:"30s"`
 	TCPReadTimeout  time.Duration `envconfig:"TCP_READ_TIMEOUT" default:"30s"`
 
-	CookieName     string
+	CookieName     string        `envconfig:"COOKIE_NAME" default:"_sso_proxy"`
 	CookieSecret   string        `envconfig:"COOKIE_SECRET"`
 	CookieDomain   string        `envconfig:"COOKIE_DOMAIN"`
 	CookieExpire   time.Duration `envconfig:"COOKIE_EXPIRE" default:"168h"`
@@ -78,9 +82,9 @@ type Options struct {
 
 	PassAccessToken bool `envconfig:"PASS_ACCESS_TOKEN" default:"false"`
 
-	// These options allow for other providers besides Google, with potential overrides.
-	Provider string `envconfig:"PROVIDER" default:"google"`
-	Scope    string `envconfig:"SCOPE"`
+	Provider            string `envconfig:"PROVIDER" default:"sso"`
+	DefaultProviderSlug string `envconfig:"DEFAULT_PROVIDER_SLUG" default:"google"`
+	Scope               string `envconfig:"SCOPE"`
 
 	SessionLifetimeTTL time.Duration `envconfig:"SESSION_LIFETIME_TTL" default:"720h"`
 	SessionValidTTL    time.Duration `envconfig:"SESSION_VALID_TTL" default:"1m"`
@@ -100,33 +104,26 @@ type Options struct {
 
 	// internal values that are set after config validation
 	upstreamConfigs     []*UpstreamConfig
-	providerURL         *url.URL
-	provider            providers.Provider
 	decodedCookieSecret []byte
 }
 
 // NewOptions returns a new options struct
 func NewOptions() *Options {
 	return &Options{
-		CookieName:             "_sso_proxy",
-		CookieSecure:           true,
-		CookieHTTPOnly:         true,
-		CookieExpire:           time.Duration(168) * time.Hour,
-		SkipAuthPreflight:      false,
-		RequestLogging:         true,
-		DefaultUpstreamTimeout: time.Duration(1) * time.Second,
-		DefaultAllowedGroups:   []string{},
-		PassAccessToken:        false,
-	}
-}
+		CookieName:     "_sso_proxy",
+		CookieSecure:   true,
+		CookieHTTPOnly: true,
+		CookieExpire:   time.Duration(168) * time.Hour,
 
-func parseURL(toParse string, urltype string, msgs []string) (*url.URL, []string) {
-	parsed, err := url.Parse(toParse)
-	if err != nil {
-		return nil, append(msgs, fmt.Sprintf(
-			"error parsing %s-url=%q %s", urltype, toParse, err))
+		SkipAuthPreflight: false,
+		RequestLogging:    true,
+
+		DefaultUpstreamTimeout:          time.Duration(1) * time.Second,
+		DefaultUpstreamTCPResetDeadline: time.Duration(1) * time.Minute,
+
+		DefaultAllowedGroups: []string{},
+		PassAccessToken:      false,
 	}
-	return parsed, msgs
 }
 
 // Validate validates options
@@ -150,8 +147,8 @@ func (o *Options) Validate() error {
 	if o.ClientSecret == "" {
 		msgs = append(msgs, "missing setting: client-secret")
 	}
-	if len(o.EmailDomains) == 0 {
-		msgs = append(msgs, "missing setting: email-domain")
+	if len(o.EmailDomains) == 0 && len(o.EmailAddresses) == 0 {
+		msgs = append(msgs, "missing setting: email-domain or email-address")
 	}
 
 	if o.StatsdHost == "" {
@@ -183,11 +180,22 @@ func (o *Options) Validate() error {
 		defaultUpstreamOptionsConfig := &OptionsConfig{
 			AllowedGroups: o.DefaultAllowedGroups,
 			Timeout:       o.DefaultUpstreamTimeout,
+			ResetDeadline: o.DefaultUpstreamTCPResetDeadline,
+			ProviderSlug:  o.DefaultProviderSlug,
+			CookieName:    o.CookieName,
 		}
 
 		o.upstreamConfigs, err = loadServiceConfigs(rawBytes, o.Cluster, o.Scheme, templateVars, defaultUpstreamOptionsConfig)
 		if err != nil {
 			msgs = append(msgs, fmt.Sprintf("error parsing upstream configs file %s", err))
+		}
+	}
+
+	if o.upstreamConfigs != nil {
+		for _, uc := range o.upstreamConfigs {
+			if uc.Timeout > o.TCPWriteTimeout {
+				o.TCPWriteTimeout = uc.Timeout
+			}
 		}
 	}
 
@@ -229,12 +237,12 @@ func parseProviderInfo(o *Options) error {
 	if err != nil {
 		return err
 	}
+
 	if providerURL.Scheme == "" || providerURL.Host == "" {
 		return errors.New("provider-url must include scheme and host")
 	}
 
 	var providerURLInternal *url.URL
-
 	if o.ProviderURLInternalString != "" {
 		providerURLInternal, err = url.Parse(o.ProviderURLInternalString)
 		if err != nil {
@@ -245,21 +253,37 @@ func parseProviderInfo(o *Options) error {
 		}
 	}
 
-	providerData := &providers.ProviderData{
-		ClientID:            o.ClientID,
-		ClientSecret:        o.ClientSecret,
-		ProviderURL:         providerURL,
-		ProviderURLInternal: providerURLInternal,
-		Scope:               o.Scope,
-		SessionLifetimeTTL:  o.SessionLifetimeTTL,
-		SessionValidTTL:     o.SessionValidTTL,
-		GracePeriodTTL:      o.GracePeriodTTL,
+	return nil
+}
+
+func newProvider(opts *Options, upstreamConfig *UpstreamConfig) (providers.Provider, error) {
+	providerURL, err := url.Parse(opts.ProviderURLString)
+	if err != nil {
+		return nil, err
 	}
 
-	p := providers.New(o.Provider, providerData, o.StatsdClient)
-	o.provider = providers.NewSingleFlightProvider(p, o.StatsdClient)
+	var providerURLInternal *url.URL
+	if opts.ProviderURLInternalString != "" {
+		providerURLInternal, err = url.Parse(opts.ProviderURLInternalString)
+		if err != nil {
+			return nil, err
+		}
+	}
 
-	return nil
+	providerData := &providers.ProviderData{
+		ClientID:            opts.ClientID,
+		ClientSecret:        opts.ClientSecret,
+		ProviderURL:         providerURL,
+		ProviderURLInternal: providerURLInternal,
+		ProviderSlug:        upstreamConfig.ProviderSlug,
+		Scope:               opts.Scope,
+		SessionLifetimeTTL:  opts.SessionLifetimeTTL,
+		SessionValidTTL:     opts.SessionValidTTL,
+		GracePeriodTTL:      opts.GracePeriodTTL,
+	}
+
+	p := providers.New(opts.Provider, providerData, opts.StatsdClient)
+	return providers.NewSingleFlightProvider(p, opts.StatsdClient), nil
 }
 
 func validateCookieName(o *Options, msgs []string) []string {
@@ -268,20 +292,6 @@ func validateCookieName(o *Options, msgs []string) []string {
 		return append(msgs, fmt.Sprintf("invalid cookie name: %q", o.CookieName))
 	}
 	return msgs
-}
-
-func addPadding(secret string) string {
-	padding := len(secret) % 4
-	switch padding {
-	case 1:
-		return secret + "==="
-	case 2:
-		return secret + "=="
-	case 3:
-		return secret + "="
-	default:
-		return secret
-	}
 }
 
 func parseEnvironment(environ []string) map[string]string {
@@ -301,28 +311,4 @@ func parseEnvironment(environ []string) map[string]string {
 		env[key] = split[1]
 	}
 	return env
-}
-
-// SetCookieStore sets the session and csrf stores as a functional option
-func SetCookieStore(opts *Options) func(*OAuthProxy) error {
-	return func(a *OAuthProxy) error {
-		cookieStore, err := sessions.NewCookieStore(opts.CookieName,
-			sessions.CreateMiscreantCookieCipher(opts.decodedCookieSecret),
-			func(c *sessions.CookieStore) error {
-				c.CookieDomain = opts.CookieDomain
-				c.CookieHTTPOnly = opts.CookieHTTPOnly
-				c.CookieExpire = opts.CookieExpire
-				c.CookieSecure = opts.CookieSecure
-				return nil
-			})
-
-		if err != nil {
-			return err
-		}
-
-		a.csrfStore = cookieStore
-		a.sessionStore = cookieStore
-		a.CookieCipher = cookieStore.CookieCipher
-		return nil
-	}
 }

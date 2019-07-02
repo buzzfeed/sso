@@ -19,36 +19,21 @@ var securityHeaders = map[string]string{
 // Note: the Strict-Transport-Security header is set by the requireHTTPS
 // middleware below, to avoid issues with development environments that must
 // allow plain HTTP.
-func setSecurityHeaders(h http.Handler) http.Handler {
+func setHeaders(h http.Handler, headers map[string]string) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		for key, val := range securityHeaders {
+		for key, val := range headers {
 			rw.Header().Set(key, val)
 		}
 		h.ServeHTTP(rw, req)
 	})
 }
 
-func (p *OAuthProxy) setResponseHeaderOverrides(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		route, ok := p.router(req)
-		if ok && route.upstreamConfig.HeaderOverrides != nil {
-			for key, val := range route.upstreamConfig.HeaderOverrides {
-				rw.Header().Set(key, val)
-			}
-		}
-		h.ServeHTTP(rw, req)
-	})
+func setSecurityHeaders(h http.Handler) http.Handler {
+	return setHeaders(h, securityHeaders)
 }
 
-// validateHost ensures that each request's host is valid
-func (p *OAuthProxy) validateHost(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		if _, ok := p.router(req); !ok {
-			p.UnknownHost(rw, req)
-			return
-		}
-		h.ServeHTTP(rw, req)
-	})
+func (p *OAuthProxy) setResponseHeaderOverrides(upstreamConfig *UpstreamConfig, h http.Handler) http.Handler {
+	return setHeaders(h, upstreamConfig.HeaderOverrides)
 }
 
 func requireHTTPS(h http.Handler) http.Handler {
@@ -65,5 +50,15 @@ func requireHTTPS(h http.Handler) http.Handler {
 			return
 		}
 		h.ServeHTTP(rw, req)
+	})
+}
+
+func setHealthCheck(healthcheckPath string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == healthcheckPath {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		next.ServeHTTP(w, r)
 	})
 }

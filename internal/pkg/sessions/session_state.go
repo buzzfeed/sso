@@ -2,9 +2,6 @@ package sessions
 
 import (
 	"errors"
-	"fmt"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/buzzfeed/sso/internal/pkg/aead"
@@ -17,6 +14,9 @@ var (
 
 // SessionState is our object that keeps track of a user's session state
 type SessionState struct {
+	ProviderSlug string `json:"slug"`
+	ProviderType string `json:"type"`
+
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 
@@ -59,7 +59,7 @@ func MarshalSession(s *SessionState, c aead.Cipher) (string, error) {
 }
 
 // UnmarshalSession takes the marshaled string, base64-decodes into a byte slice, decrypts the
-// byte slice using the pased cipher, and unmarshals the resulting JSON into a session state struct
+// byte slice using the passed cipher, and unmarshals the resulting JSON into a session state struct
 func UnmarshalSession(value string, c aead.Cipher) (*SessionState, error) {
 	s := &SessionState{}
 	err := c.Unmarshal(value, s)
@@ -72,27 +72,4 @@ func UnmarshalSession(value string, c aead.Cipher) (*SessionState, error) {
 // ExtendDeadline returns the time extended by a given duration
 func ExtendDeadline(ttl time.Duration) time.Time {
 	return time.Now().Add(ttl).Truncate(time.Second)
-}
-
-// NewSessionState creates a new session state
-// TODO: remove this file when we transition out of backup using the payloads encryption
-func NewSessionState(value string, lifetimeTTL time.Duration) (*SessionState, error) {
-	parts := strings.Split(value, "|")
-	if len(parts) != 4 {
-		err := fmt.Errorf("invalid number of fields (got %d expected 4)", len(parts))
-		return nil, err
-	}
-
-	ts, err := strconv.Atoi(parts[2])
-	if err != nil {
-		return nil, err
-	}
-
-	return &SessionState{
-		Email:            parts[0],
-		AccessToken:      parts[1],
-		RefreshDeadline:  time.Unix(int64(ts), 0),
-		RefreshToken:     parts[3],
-		LifetimeDeadline: ExtendDeadline(lifetimeTTL),
-	}, nil
 }

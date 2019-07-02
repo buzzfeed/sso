@@ -11,8 +11,8 @@ import (
 type Provider interface {
 	Data() *ProviderData
 	Redeem(string, string) (*sessions.SessionState, error)
-	ValidateGroup(string, []string) ([]string, bool, error)
-	UserGroups(string, []string) ([]string, error)
+	ValidateGroup(string, []string, string) ([]string, bool, error)
+	UserGroups(string, []string, string) ([]string, error)
 	ValidateSessionState(*sessions.SessionState, []string) bool
 	GetSignInURL(redirectURL *url.URL, finalRedirect string) *url.URL
 	GetSignOutURL(redirectURL *url.URL) *url.URL

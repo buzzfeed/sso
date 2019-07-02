@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
+	"github.com/datadog/datadog-go/statsd"
 )
 
 var (
@@ -34,16 +35,19 @@ const (
 	GoogleProviderName = "google"
 	// OIDCProviderName identifies the OpenID Connect provider
 	OIDCProviderName = "oidc"
+	// OktaProviderName identities the Okta provider
+	OktaProviderName = "okta"
 )
 
 // Provider is an interface exposing functions necessary to authenticate with a given provider.
 type Provider interface {
+	SetStatsdClient(*statsd.Client)
 	Data() *ProviderData
 	Redeem(string, string) (*sessions.SessionState, error)
 	ValidateSessionState(*sessions.SessionState) bool
 	GetSignInURL(redirectURI, finalRedirect string) string
 	RefreshSessionIfNeeded(*sessions.SessionState) (bool, error)
-	ValidateGroupMembership(string, []string) ([]string, error)
+	ValidateGroupMembership(string, []string, string) ([]string, error)
 	Revoke(*sessions.SessionState) error
 	RefreshAccessToken(string) (string, time.Duration, error)
 	Stop()

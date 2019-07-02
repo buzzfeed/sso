@@ -1,0 +1,59 @@
+# cloud.google.com/go v0.34.0
+cloud.google.com/go/compute/metadata
+# github.com/18F/hmacauth v0.0.0-20151013130326-9232a6386b73
+github.com/18F/hmacauth
+# github.com/benbjohnson/clock v0.0.0-20161215174838-7dc76406b6d3
+github.com/benbjohnson/clock
+# github.com/datadog/datadog-go v0.0.0-20180822151419-281ae9f2d895
+github.com/datadog/datadog-go/statsd
+# github.com/golang/protobuf v1.2.0
+github.com/golang/protobuf/proto
+# github.com/imdario/mergo v0.3.7
+github.com/imdario/mergo
+# github.com/kelseyhightower/envconfig v1.3.0
+github.com/kelseyhightower/envconfig
+# github.com/konsorten/go-windows-terminal-sequences v1.0.1
+github.com/konsorten/go-windows-terminal-sequences
+# github.com/miscreant/miscreant-go v0.0.0-20181010193435-325cbd69228b
+github.com/miscreant/miscreant-go
+github.com/miscreant/miscreant-go/block
+github.com/miscreant/miscreant-go/cmac
+github.com/miscreant/miscreant-go/pmac
+# github.com/rakyll/statik v0.1.5
+github.com/rakyll/statik/fs
+# github.com/sirupsen/logrus v1.3.0
+github.com/sirupsen/logrus
+# golang.org/x/crypto v0.0.0-20180904163835-0709b304e793
+golang.org/x/crypto/ssh/terminal
+# golang.org/x/net v0.0.0-20190213061140-3a22650c66bd
+golang.org/x/net/context/ctxhttp
+golang.org/x/net/context
+# golang.org/x/oauth2 v0.0.0-20190130055435-99b60b757ec1
+golang.org/x/oauth2
+golang.org/x/oauth2/google
+golang.org/x/oauth2/internal
+golang.org/x/oauth2/jws
+golang.org/x/oauth2/jwt
+# golang.org/x/sync v0.0.0-20181221193216-37e7f081c4d4
+golang.org/x/sync/syncmap
+# golang.org/x/sys v0.0.0-20180909124046-d0be0721c37e
+golang.org/x/sys/unix
+golang.org/x/sys/windows
+# google.golang.org/api v0.1.0
+google.golang.org/api/admin/directory/v1
+google.golang.org/api/googleapi
+google.golang.org/api/gensupport
+google.golang.org/api/googleapi/internal/uritemplates
+# google.golang.org/appengine v1.4.0
+google.golang.org/appengine
+google.golang.org/appengine/urlfetch
+google.golang.org/appengine/internal
+google.golang.org/appengine/internal/app_identity
+google.golang.org/appengine/internal/modules
+google.golang.org/appengine/internal/urlfetch
+google.golang.org/appengine/internal/base
+google.golang.org/appengine/internal/datastore
+google.golang.org/appengine/internal/log
+google.golang.org/appengine/internal/remote_api
+# gopkg.in/yaml.v2 v2.2.2
+gopkg.in/yaml.v2

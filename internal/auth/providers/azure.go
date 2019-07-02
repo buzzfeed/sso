@@ -242,7 +242,7 @@ func (p *AzureV2Provider) GetSignInURL(redirectURI, state string) string {
 	params.Set("response_mode", "form_post")
 	params.Add("scope", p.Scope)
 	params.Add("state", state)
-	params.Set("prompt", p.ApprovalPrompt)
+	params.Set("prompt", "FIXME")
 	params.Set("nonce", p.calculateNonce(state)) // required parameter
 	a.RawQuery = params.Encode()
 
@@ -281,7 +281,7 @@ func (p *AzureV2Provider) validateNonce(nonce string) bool {
 
 // ValidateGroupMembership takes in an email and the allowed groups and returns the groups that the email is part of in that list.
 // If `allGroups` is an empty list it returns all the groups that the user belongs to.
-func (p *AzureV2Provider) ValidateGroupMembership(email string, allGroups []string) ([]string, error) {
+func (p *AzureV2Provider) ValidateGroupMembership(email string, allGroups []string, _ string) ([]string, error) {
 	if p.GraphService == nil {
 		panic("provider has not been configured")
 	}

@@ -135,6 +135,9 @@ func (c *MiscreantCipher) Unmarshal(value string, s interface{}) error {
 	// gunzip the bytes
 	var jsonBuffer bytes.Buffer
 	r, err := gzip.NewReader(bytes.NewBuffer(plaintext))
+	if err != nil {
+		return err
+	}
 	io.Copy(&jsonBuffer, r)
 
 	// unmarshal bytes

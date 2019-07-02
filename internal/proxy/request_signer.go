@@ -27,6 +27,7 @@ var signedHeaders = []string{
 	"X-Forwarded-User",
 	"X-Forwarded-Email",
 	"X-Forwarded-Groups",
+	"X-Forwarded-Access-Token",
 	"Cookie",
 }
 
@@ -99,7 +100,7 @@ func NewRequestSigner(signingKeyPemStr string) (*RequestSigner, error) {
 //    <HEADER.k> is the ','-joined concatenation of all header values of `signedHeaders[k]`; empty
 //      values such as '' and all other headers in the request are ignored,
 //    <URL> is the string "<PATH>(?<QUERY>)(#FRAGMENT)", where "?<QUERY>" and "#<FRAGMENT>" are
-//      ommitted if the associated components are absent from the request URL,
+//      omitted if the associated components are absent from the request URL,
 //    <BODY> is the body of the Request (may be `nil`; e.g. for GET requests).
 //
 //  Receiving endpoints authenticating the integrity of a request should reconstruct this document

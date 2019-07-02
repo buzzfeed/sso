@@ -25,7 +25,7 @@ var (
 )
 
 // SingleFlightProvider middleware provider that multiple requests for the same object
-// to be processed as a single request. This is often called request collpasing or coalesce.
+// to be processed as a single request. This is often called request collapsing or coalesce.
 // This middleware leverages the golang singlelflight provider, with modifications for metrics.
 //
 // It's common among HTTP reverse proxy cache servers such as nginx, Squid or Varnish - they all call it something else but works similarly.
@@ -59,15 +59,10 @@ func (p *SingleFlightProvider) do(endpoint, key string, fn func() (interface{}, 
 	return resp, err
 }
 
-// AssignStatsdClient adds a statsd client to the provider if possible.
-func (p *SingleFlightProvider) AssignStatsdClient(StatsdClient *statsd.Client) {
+// SetStatsdClient calls the provider's SetStatsdClient function.
+func (p *SingleFlightProvider) SetStatsdClient(StatsdClient *statsd.Client) {
 	p.StatsdClient = StatsdClient
-	switch v := p.provider.(type) {
-	case *AzureV2Provider:
-		v.SetStatsdClient(StatsdClient)
-	case *GoogleProvider:
-		v.SetStatsdClient(StatsdClient)
-	}
+	p.provider.SetStatsdClient(StatsdClient)
 }
 
 // Data returns the provider data
@@ -122,11 +117,11 @@ func (p *SingleFlightProvider) RefreshSessionIfNeeded(s *sessions.SessionState) 
 }
 
 // ValidateGroupMembership wraps the provider's GroupsResource function in a single flight call.
-func (p *SingleFlightProvider) ValidateGroupMembership(email string, allowedGroups []string) ([]string, error) {
+func (p *SingleFlightProvider) ValidateGroupMembership(email string, allowedGroups []string, accessToken string) ([]string, error) {
 	sort.Strings(allowedGroups)
 	response, err := p.do("ValidateGroupMembership", fmt.Sprintf("%s:%s", email, strings.Join(allowedGroups, ",")),
 		func() (interface{}, error) {
-			return p.provider.ValidateGroupMembership(email, allowedGroups)
+			return p.provider.ValidateGroupMembership(email, allowedGroups, accessToken)
 		})
 	if err != nil {
 		return nil, err

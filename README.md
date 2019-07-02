@@ -5,6 +5,7 @@
 [![CircleCI](https://circleci.com/gh/buzzfeed/sso.svg?style=svg)](https://circleci.com/gh/buzzfeed/sso)
 [![MIT license](http://img.shields.io/badge/license-MIT-brightgreen.svg)](http://opensource.org/licenses/MIT)
 [![Docker Automated build](https://img.shields.io/docker/automated/buzzfeed/sso.svg)](https://hub.docker.com/r/buzzfeed/sso/)
+[![codecov.io](https://codecov.io/github/buzzfeed/sso/coverage.svg?branch=master)](https://codecov.io/github/buzzfeed/sso?branch=master)
 
 
 <img src="https://user-images.githubusercontent.com/10510566/44476420-a64e5980-a605-11e8-8ad9-2820109deb75.png" width="128px">
@@ -24,6 +25,8 @@ Group membership can be required on a per-upstream basis.
 
 The main idea behind **sso** is a "double OAuth2" flow, where `sso-auth` is the
 OAuth2 provider for `sso-proxy` and Google is the OAuth2 provider for `sso-auth`.
+
+[sso](https://github.com/buzzfeed/sso) is built on top of Bitly’s open source [oauth2_proxy](https://github.com/bitly/oauth2_proxy)
 
 In a nutshell:
 
@@ -68,6 +71,10 @@ If you come across any security vulnerabilities with the **sso** repo or softwar
 ## Maintainers
 
 **sso** is actively maintained by the BuzzFeed Infrastructure teams.
+
+## Notable forks
+
+ - [pomerium](https://github.com/pomerium/pomerium) an identity-access proxy, inspired by BeyondCorp.
 
 [docker_hub]: https://hub.docker.com/r/buzzfeed/sso/
 [sso_survey]: https://docs.google.com/forms/d/e/1FAIpQLSeRjf66ZSpMkSASMbYebx6QvECYRj9nUevOhUF2huw53sE6_g/viewform

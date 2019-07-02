@@ -3,20 +3,33 @@ set -e
 
 cd $(dirname "$BASH_SOURCE[0]")/..
 
-echo "running gofmt ..."
-res=$(gofmt -d -s -e .)
+echo "running go fmt ..."
+res=$(go fmt ./...)
 if [ -n "$res" ]; then
   echo "$res"
   echo "gofmt failed..."
   exit 1
 fi
 
+# where necessary attempts to add/remove modules from go.mod and go.sum.
+echo "running go mod tidy ..."
+go mod tidy
+git diff --exit-code
+if [ "$?" -gt "0" ]; then
+  exit 1
+fi
+
+# outputs any local suspect modules and, if found will exit
+# with a non-zero status.
+echo "running go mod verify ..."
+go mod verify
+
 echo "running golint ..."
-golint -set_exit_status ./...
+golint -set_exit_status cmd internal
 
 echo "running go vet ..."
 go vet ./...
 
 echo "running tests ..."
 cd internal
-go test -cover -race ./... $@
+go test -coverprofile=coverage.out -race ./... $@

@@ -57,9 +57,12 @@ type UpstreamConfig struct {
 	PreserveHost          bool
 	HMACAuth              hmacauth.HmacAuth
 	Timeout               time.Duration
+	ResetDeadline         time.Duration
 	FlushInterval         time.Duration
 	HeaderOverrides       map[string]string
 	SkipRequestSigning    bool
+	CookieName            string
+	ProviderSlug          string
 }
 
 // RouteConfig maps to the yaml config fields,
@@ -77,8 +80,13 @@ type RouteConfig struct {
 //   This can be useful for modifying browser security headers.
 // * skip_auth_regex - skips authentication for paths matching these regular expressions.
 // * allowed_groups - optional list of authorized google groups that can access the service.
+// * tls_skip_verify - a bool to skip certification verification of upstreams
+// * preserve_host - preserve the host named based in up the client request rather than re-writing for the upstream host
 // * timeout - duration before timing out request.
+// * reset_deadline - a duration to trigger resets of tcp connections to upstreams. This is useful in dynamic dns environments.
 // * flush_interval - interval at which the proxy should flush data to the browser
+// * skip_request_signing - skip request signing if this behavior is problematic or undesired. For requests with large http bodies
+//   this maybe useful to unset as http bodies are read into memory in order to sign.
 type OptionsConfig struct {
 	HeaderOverrides    map[string]string `yaml:"header_overrides"`
 	SkipAuthRegex      []string          `yaml:"skip_auth_regex"`
@@ -86,8 +94,13 @@ type OptionsConfig struct {
 	TLSSkipVerify      bool              `yaml:"tls_skip_verify"`
 	PreserveHost       bool              `yaml:"preserve_host"`
 	Timeout            time.Duration     `yaml:"timeout"`
+	ResetDeadline      time.Duration     `yaml:"reset_deadline"`
 	FlushInterval      time.Duration     `yaml:"flush_interval"`
 	SkipRequestSigning bool              `yaml:"skip_request_signing"`
+	ProviderSlug       string            `yaml:"provider_slug"`
+
+	// CookieName is still set globally, so we do not provide override behavior
+	CookieName string
 }
 
 // ErrParsingConfig is an error specific to config parsing.
@@ -386,11 +399,14 @@ func parseOptionsConfig(proxy *UpstreamConfig, defaultOpts *OptionsConfig) error
 
 	proxy.AllowedGroups = dst.AllowedGroups
 	proxy.Timeout = dst.Timeout
+	proxy.ResetDeadline = dst.ResetDeadline
 	proxy.FlushInterval = dst.FlushInterval
 	proxy.HeaderOverrides = dst.HeaderOverrides
 	proxy.TLSSkipVerify = dst.TLSSkipVerify
 	proxy.PreserveHost = dst.PreserveHost
 	proxy.SkipRequestSigning = dst.SkipRequestSigning
+	proxy.CookieName = dst.CookieName
+	proxy.ProviderSlug = dst.ProviderSlug
 
 	proxy.RouteConfig.Options = nil
 
@@ -400,4 +416,19 @@ func parseOptionsConfig(proxy *UpstreamConfig, defaultOpts *OptionsConfig) error
 func cleanWhiteSpace(s string) string {
 	// This trims all white space from a service name and collapses all remaining space to `_`
 	return space.ReplaceAllString(strings.TrimSpace(s), "_") //
+}
+
+func generateHmacAuth(signatureKey string) (hmacauth.HmacAuth, error) {
+	components := strings.Split(signatureKey, ":")
+	if len(components) != 2 {
+		return nil, fmt.Errorf("invalid signature hash:key spec")
+	}
+
+	algorithm, secret := components[0], components[1]
+	hash, err := hmacauth.DigestNameToCryptoHash(algorithm)
+	if err != nil {
+		return nil, fmt.Errorf("unsupported signature hash algorithm: %s", algorithm)
+	}
+	auth := hmacauth.NewHmacAuth(hash, []byte(secret), HMACSignatureHeader, SignatureHeaders)
+	return auth, nil
 }

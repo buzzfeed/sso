@@ -191,13 +191,13 @@ func TestAzureV2ProviderDefaults(t *testing.T) {
 
 // claims represents public claim values (as specified in RFC 7519).
 type claims struct {
-	Issuer   string          `json:"iss,omitempty"`
-	Audience string          `json:"aud,omitempty"`
-	Expiry   jwt.NumericDate `json:"exp,omitempty"`
-	Name     string          `json:"name,omitempty"`
-	Email    string          `json:"email,omitempty"`
-	Nonce    string          `json:"nonce,omitempty"`
-	NotEmail string          `json:"not_email,omitempty"`
+	Issuer   string           `json:"iss,omitempty"`
+	Audience string           `json:"aud,omitempty"`
+	Expiry   *jwt.NumericDate `json:"exp,omitempty"`
+	Name     string           `json:"name,omitempty"`
+	Email    string           `json:"email,omitempty"`
+	Nonce    string           `json:"nonce,omitempty"`
+	NotEmail string           `json:"not_email,omitempty"`
 }
 
 func TestAzureV2ProviderRedeem(t *testing.T) {
@@ -473,7 +473,6 @@ func TestAzureV2GetSignInURL(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			p := newAzureV2Provider(nil)
 			p.Scope = "openid email profile offline_access"
-			p.ApprovalPrompt = "consent"
 
 			signInURL := p.GetSignInURL(tc.redirectURI, tc.state)
 			parsedURL, err := url.Parse(signInURL)
@@ -545,7 +544,7 @@ func TestAzureV2ValidateGroupMembers(t *testing.T) {
 				GroupsError: tc.mockedError,
 			}
 
-			groups, err := p.ValidateGroupMembership("test@example.com", tc.allowedGroups)
+			groups, err := p.ValidateGroupMembership("test@example.com", tc.allowedGroups, "")
 
 			if err != nil {
 				if tc.expectedErrorString != err.Error() {

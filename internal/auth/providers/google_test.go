@@ -39,7 +39,7 @@ func newGoogleProvider(providerData *ProviderData) *GoogleProvider {
 			ValidateURL:  &url.URL{},
 			Scope:        ""}
 	}
-	provider, _ := NewGoogleProvider(providerData, "", "")
+	provider, _ := NewGoogleProvider(providerData, "", "", "", "")
 	return provider
 }
 
@@ -56,42 +56,11 @@ func TestGoogleProviderDefaults(t *testing.T) {
 	}{
 		{
 			name:        "defaults",
-			signInURL:   "https://accounts.google.com/o/oauth2/auth?access_type=offline",
-			redeemURL:   "https://www.googleapis.com/oauth2/v3/token",
+			signInURL:   "https://accounts.google.com/o/oauth2/v2/auth",
+			redeemURL:   "https://www.googleapis.com/oauth2/v4/token",
 			revokeURL:   "https://accounts.google.com/o/oauth2/revoke",
 			validateURL: "https://www.googleapis.com/oauth2/v3/tokeninfo",
 			scope:       "profile email",
-		},
-		{
-			name: "with provider overrides",
-			providerData: &ProviderData{
-				SignInURL: &url.URL{
-					Scheme: "https",
-					Host:   "example.com",
-					Path:   "/oauth/auth"},
-				RedeemURL: &url.URL{
-					Scheme: "https",
-					Host:   "example.com",
-					Path:   "/oauth/token"},
-				RevokeURL: &url.URL{
-					Scheme: "https",
-					Host:   "example.com",
-					Path:   "/oauth/deauth"},
-				ProfileURL: &url.URL{
-					Scheme: "https",
-					Host:   "example.com",
-					Path:   "/oauth/profile"},
-				ValidateURL: &url.URL{
-					Scheme: "https",
-					Host:   "example.com",
-					Path:   "/oauth/tokeninfo"},
-				Scope: "profile"},
-			signInURL:   "https://example.com/oauth/auth",
-			redeemURL:   "https://example.com/oauth/token",
-			revokeURL:   "https://example.com/oauth/deauth",
-			profileURL:  "https://example.com/oauth/profile",
-			validateURL: "https://example.com/oauth/tokeninfo",
-			scope:       "profile",
 		},
 	}
 	for _, expected := range expectedResults {
@@ -104,38 +73,38 @@ func TestGoogleProviderDefaults(t *testing.T) {
 				t.Errorf("expected provider name Google, got %s", p.Data().ProviderName)
 			}
 			if p.Data().SignInURL.String() != expected.signInURL {
-				log.Printf("expected %s", expected.signInURL)
-				log.Printf("got %s", p.Data().SignInURL.String())
+				t.Errorf("want: %v", expected.signInURL)
+				t.Errorf("have: %v", p.Data().SignInURL.String())
 				t.Errorf("unexpected signin url")
 			}
 
 			if p.Data().RedeemURL.String() != expected.redeemURL {
-				log.Printf("expected %s", expected.redeemURL)
-				log.Printf("got %s", p.Data().RedeemURL.String())
+				t.Errorf("want: %v", expected.redeemURL)
+				t.Errorf("have: %v", p.Data().RedeemURL.String())
 				t.Errorf("unexpected redeem url")
 			}
 
 			if p.Data().RevokeURL.String() != expected.revokeURL {
-				log.Printf("expected %s", expected.revokeURL)
-				log.Printf("got %s", p.Data().RevokeURL.String())
+				t.Errorf("want: %v", expected.revokeURL)
+				t.Errorf("have: %v", p.Data().RevokeURL.String())
 				t.Errorf("unexpected revoke url")
 			}
 
 			if p.Data().ValidateURL.String() != expected.validateURL {
-				log.Printf("expected %s", expected.validateURL)
-				log.Printf("got %s", p.Data().ValidateURL.String())
+				t.Errorf("want: %v", expected.validateURL)
+				t.Errorf("have: %v", p.Data().ValidateURL.String())
 				t.Errorf("unexpected validate url")
 			}
 
 			if p.Data().ProfileURL.String() != expected.profileURL {
-				log.Printf("expected %s", expected.profileURL)
-				log.Printf("got %s", p.Data().ProfileURL.String())
+				t.Errorf("want: %v", expected.profileURL)
+				t.Errorf("have: %v", p.Data().ProfileURL.String())
 				t.Errorf("unexpected profile url")
 			}
 
 			if p.Data().Scope != expected.scope {
-				log.Printf("expected %s", expected.scope)
-				log.Printf("got %s", p.Data().Scope)
+				t.Errorf("want: %v", expected.scope)
+				t.Errorf("have: %v", p.Data().Scope)
 				t.Errorf("unexpected scope")
 			}
 		})
@@ -394,7 +363,7 @@ func TestGoogleValidateGroupMembers(t *testing.T) {
 				GroupsCache:  &groups.MockCache{ListMembershipsFunc: tc.listMembershipsFunc, Refreshed: true},
 			}
 
-			groups, err := p.ValidateGroupMembership("email", tc.inputAllowedGroups)
+			groups, err := p.ValidateGroupMembership("email", tc.inputAllowedGroups, "accessToken")
 
 			if err != nil {
 				if tc.expectedErrorString != err.Error() {
@@ -407,6 +376,57 @@ func TestGoogleValidateGroupMembers(t *testing.T) {
 				t.Errorf("unexpected groups returned")
 			}
 
+		})
+	}
+}
+
+func TestGoogleProviderValidateSession(t *testing.T) {
+	testCases := []struct {
+		name          string
+		resp          oktaProviderValidateSessionResponse
+		httpStatus    int
+		expectedError bool
+		sessionState  *sessions.SessionState
+	}{
+		{
+			name: "valid session state",
+			sessionState: &sessions.SessionState{
+				AccessToken: "a1234",
+			},
+			httpStatus:    http.StatusOK,
+			expectedError: false,
+		},
+		{
+			name: "invalid session state",
+			sessionState: &sessions.SessionState{
+				AccessToken: "a1234",
+			},
+			httpStatus:    http.StatusBadRequest,
+			expectedError: true,
+		},
+		{
+			name:          "missing access token",
+			sessionState:  &sessions.SessionState{},
+			expectedError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := newGoogleProvider(nil)
+			body, err := json.Marshal(tc.resp)
+			testutil.Equal(t, nil, err)
+			var server *httptest.Server
+			p.ValidateURL, server = newProviderServer(body, tc.httpStatus)
+			defer server.Close()
+
+			resp := p.ValidateSessionState(tc.sessionState)
+			if tc.expectedError && resp {
+				t.Errorf("expected false but returned as true")
+			}
+			if !tc.expectedError && !resp {
+				t.Errorf("expected true but returned as false")
+			}
 		})
 	}
 }

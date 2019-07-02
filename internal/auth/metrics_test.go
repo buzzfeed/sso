@@ -14,7 +14,7 @@ import (
 
 func newTestStatsdClient(t *testing.T) (*statsd.Client, string, int) {
 
-	client, err := newStatsdClient("127.0.0.1", 8125)
+	client, err := NewStatsdClient("127.0.0.1", 8125)
 	if err != nil {
 		t.Fatalf("error starting new statsd client %s", err.Error())
 	}
@@ -64,9 +64,8 @@ func TestNewStatsd(t *testing.T) {
 				t.Fatalf("error %s", err.Error())
 			}
 			defer pc.Close()
-			opts := NewOptions()
-			opts.Validate()
-			client, err := newStatsdClient(tc.host, tc.port)
+
+			client, err := NewStatsdClient(tc.host, tc.port)
 			if err != nil {
 				t.Fatalf("error starting new statsd client: %s", err.Error())
 			}
@@ -161,8 +160,6 @@ func TestLogRequestMetrics(t *testing.T) {
 				t.Fatalf("error %s", err.Error())
 			}
 			defer pc.Close()
-			opts := NewOptions()
-			opts.Validate()
 
 			client, _, _ := newTestStatsdClient(t)
 			tagString := strings.Join(tc.expectedTags, ",")
@@ -220,12 +217,12 @@ func TestGetActionTag(t *testing.T) {
 		},
 		{
 			name:           "request with callback in the path",
-			url:            "/oauth2/callback",
+			url:            "/callback",
 			expectedAction: "callback",
 		},
 		{
 			name:           "request with sign_out in the path with query parameters",
-			url:            "/oauth2/callback?query=parameter",
+			url:            "/callback?query=parameter",
 			expectedAction: "callback",
 		},
 		{

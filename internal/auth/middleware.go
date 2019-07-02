@@ -129,7 +129,7 @@ func validRedirectURI(uri string, rootDomains []string) bool {
 		return false
 	}
 	for _, domain := range rootDomains {
-		if strings.HasSuffix(redirectURL.Hostname(), domain) {
+		if strings.HasSuffix(redirectURL.Hostname(), domain) || redirectURL.Hostname() == strings.TrimLeft(domain, ".") {
 			return true
 		}
 	}

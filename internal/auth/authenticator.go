@@ -18,41 +18,20 @@ import (
 	"github.com/datadog/datadog-go/statsd"
 )
 
-// SignatureHeader is the header name where the signed request header is stored.
-const SignatureHeader = "GAP-Signature"
-
-// SignatureHeaders are the headers that are valid in the request.
-var SignatureHeaders = []string{
-	"Content-Length",
-	"Content-Md5",
-	"Content-Type",
-	"Date",
-	"Authorization",
-	"X-Forwarded-User",
-	"X-Forwarded-Email",
-	"X-Forwarded-Access-Token",
-	"Cookie",
-	"Gap-Auth",
-}
-
 // Authenticator stores all the information associated with proxying the request.
 type Authenticator struct {
 	Validator        func(string) bool
 	EmailDomains     []string
 	ProxyRootDomains []string
 	Host             string
-	CookieSecure     bool
+	Scheme           string
 
 	csrfStore    sessions.CSRFStore
 	sessionStore sessions.SessionStore
 
-	redirectURL        *url.URL // the url to receive requests at
-	provider           providers.Provider
-	ProxyPrefix        string
-	ServeMux           http.Handler
-	SetXAuthRequest    bool
-	SkipProviderButton bool
-	PassUserHeaders    bool
+	redirectURL *url.URL // the url to receive requests at
+	provider    providers.Provider
+	ServeMux    http.Handler
 
 	AuthCodeCipher aead.Cipher
 
@@ -65,8 +44,6 @@ type Authenticator struct {
 	SessionLifetimeTTL time.Duration
 
 	templates templates.Template
-	Header    string
-	Footer    string
 }
 
 type redeemResponse struct {
@@ -86,50 +63,14 @@ type getProfileResponse struct {
 	Groups []string `json:"groups"`
 }
 
-// SetCookieStore sets the cookie store to use a miscreant cipher
-func SetCookieStore(opts *Options) func(*Authenticator) error {
-	return func(a *Authenticator) error {
-		decodedAuthCodeSecret, err := base64.StdEncoding.DecodeString(opts.AuthCodeSecret)
-		if err != nil {
-			return err
-		}
-		authCodeCipher, err := aead.NewMiscreantCipher([]byte(decodedAuthCodeSecret))
-		if err != nil {
-			return err
-		}
-
-		cookieStore, err := sessions.NewCookieStore(opts.CookieName,
-			sessions.CreateMiscreantCookieCipher(opts.decodedCookieSecret),
-			func(c *sessions.CookieStore) error {
-				c.CookieDomain = opts.CookieDomain
-				c.CookieHTTPOnly = opts.CookieHTTPOnly
-				c.CookieExpire = opts.CookieExpire
-				c.CookieSecure = opts.CookieSecure
-				return nil
-			})
-
-		if err != nil {
-			return err
-		}
-
-		a.csrfStore = cookieStore
-		a.sessionStore = cookieStore
-		a.AuthCodeCipher = authCodeCipher
-		return nil
-	}
-}
-
 // NewAuthenticator creates a Authenticator struct and applies the optional functions slice to the struct.
-func NewAuthenticator(opts *Options, optionFuncs ...func(*Authenticator) error) (*Authenticator, error) {
+func NewAuthenticator(config Configuration, optionFuncs ...func(*Authenticator) error) (*Authenticator, error) {
 	logger := log.NewLogEntry()
-
-	redirectURL := opts.redirectURL
-	redirectURL.Path = "/oauth2/callback"
 
 	templates := templates.NewHTMLTemplate()
 
 	proxyRootDomains := []string{}
-	for _, domain := range opts.ProxyRootDomains {
+	for _, domain := range config.AuthorizeConfig.ProxyConfig.Domains {
 		if !strings.HasPrefix(domain, ".") {
 			domain = fmt.Sprintf(".%s", domain)
 		}
@@ -137,18 +78,14 @@ func NewAuthenticator(opts *Options, optionFuncs ...func(*Authenticator) error) 
 	}
 
 	p := &Authenticator{
-		ProxyClientID:     opts.ProxyClientID,
-		ProxyClientSecret: opts.ProxyClientSecret,
-		EmailDomains:      opts.EmailDomains,
-		ProxyRootDomains:  proxyRootDomains,
-		Host:              opts.Host,
-		CookieSecure:      opts.CookieSecure,
+		ProxyClientID:     config.ClientConfigs["proxy"].ID,
+		ProxyClientSecret: config.ClientConfigs["proxy"].Secret,
+		EmailDomains:      config.AuthorizeConfig.EmailConfig.Domains,
+		Host:              config.ServerConfig.Host,
+		Scheme:            config.ServerConfig.Scheme,
 
-		redirectURL:        redirectURL,
-		SetXAuthRequest:    opts.SetXAuthRequest,
-		PassUserHeaders:    opts.PassUserHeaders,
-		SkipProviderButton: opts.SkipProviderButton,
-		templates:          templates,
+		ProxyRootDomains: proxyRootDomains,
+		templates:        templates,
 	}
 
 	p.ServeMux = p.newMux()
@@ -166,62 +103,29 @@ func NewAuthenticator(opts *Options, optionFuncs ...func(*Authenticator) error) 
 }
 
 func (p *Authenticator) newMux() http.Handler {
-	logger := log.NewLogEntry()
-
-	mux := http.NewServeMux()
-
-	// we setup global endpoints that should respond to any hostname
-	mux.HandleFunc("/ping", p.withMethods(p.PingPage, "GET"))
-
 	// we setup our service mux to handle service routes that use the required host header
 	serviceMux := http.NewServeMux()
-	serviceMux.HandleFunc("/ping", p.withMethods(p.PingPage, "GET"))
-	serviceMux.HandleFunc("/robots.txt", p.withMethods(p.RobotsTxt, "GET"))
 	serviceMux.HandleFunc("/start", p.withMethods(p.OAuthStart, "GET"))
 	serviceMux.HandleFunc("/sign_in", p.withMethods(p.validateClientID(p.validateRedirectURI(p.validateSignature(p.SignIn))), "GET"))
 	serviceMux.HandleFunc("/sign_out", p.withMethods(p.validateRedirectURI(p.validateSignature(p.SignOut)), "GET", "POST"))
-	serviceMux.HandleFunc("/oauth2/callback", p.withMethods(p.OAuthCallback, "GET", "POST"))
+	serviceMux.HandleFunc("/callback", p.withMethods(p.OAuthCallback, "GET", "POST"))
 	serviceMux.HandleFunc("/profile", p.withMethods(p.validateClientID(p.validateClientSecret(p.GetProfile)), "GET"))
 	serviceMux.HandleFunc("/validate", p.withMethods(p.validateClientID(p.validateClientSecret(p.ValidateToken)), "GET"))
 	serviceMux.HandleFunc("/redeem", p.withMethods(p.validateClientID(p.validateClientSecret(p.Redeem)), "POST"))
 	serviceMux.HandleFunc("/refresh", p.withMethods(p.validateClientID(p.validateClientSecret(p.Refresh)), "POST"))
-	fsHandler, err := loadFSHandler()
-	if err != nil {
-		logger.Fatal(err)
-	}
-	serviceMux.Handle("/static/", http.StripPrefix("/static/", fsHandler))
 
-	// NOTE: we have to include trailing slash for the router to match the host header
-	host := p.Host
-	if !strings.HasSuffix(host, "/") {
-		host = fmt.Sprintf("%s/", host)
-	}
-	mux.Handle(host, serviceMux) // setup our service mux to only handle our required host header
-
-	return setHeaders(mux)
+	return setHeaders(serviceMux)
 }
 
 // GetRedirectURI returns the redirect url for a given OAuthProxy,
-// setting the scheme to be https if CookieSecure is true.
 func (p *Authenticator) GetRedirectURI(host string) string {
 	// default to the request Host if not set
 	return p.redirectURL.String()
 
 }
 
-// RobotsTxt handles the /robots.txt route.
-func (p *Authenticator) RobotsTxt(rw http.ResponseWriter, req *http.Request) {
-	rw.WriteHeader(http.StatusOK)
-	fmt.Fprintf(rw, "User-agent: *\nDisallow: /")
-}
-
-// PingPage handles the /ping route
-func (p *Authenticator) PingPage(rw http.ResponseWriter, req *http.Request) {
-	rw.WriteHeader(http.StatusOK)
-	fmt.Fprintf(rw, "OK")
-}
-
 type signInResp struct {
+	ProviderSlug string
 	ProviderName string
 	EmailDomains []string
 	Redirect     string
@@ -237,13 +141,20 @@ func (p *Authenticator) SignInPage(rw http.ResponseWriter, req *http.Request, co
 	// We don't want to rely on req.Host, as that can be attacked via Host header injection
 	// This ends up looking like:
 	// https://sso-auth.example.com/sign_in?client_id=...&redirect_uri=...
-	redirectURL := p.redirectURL.ResolveReference(req.URL)
+	path := strings.TrimPrefix(req.URL.Path, "/")
+	redirectURL := p.redirectURL.ResolveReference(
+		&url.URL{
+			Path:     path,
+			RawQuery: req.URL.RawQuery,
+		},
+	)
 
 	// validateRedirectURI middleware already ensures that this is a valid URL
 	destinationURL, _ := url.Parse(redirectURL.Query().Get("redirect_uri"))
 
 	t := signInResp{
 		ProviderName: p.provider.Data().ProviderName,
+		ProviderSlug: p.provider.Data().ProviderSlug,
 		EmailDomains: p.EmailDomains,
 		Redirect:     redirectURL.String(),
 		Destination:  destinationURL.Host,
@@ -408,22 +319,36 @@ func (p *Authenticator) ProxyOAuthRedirect(rw http.ResponseWriter, req *http.Req
 		p.ErrorResponse(rw, req, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(rw, req, getAuthCodeRedirectURL(redirectURL, state, string(encrypted)), http.StatusFound)
+
+	authCodeRedirect, err := getAuthCodeRedirectURL(redirectURL, state, string(encrypted), p.Scheme)
+	if err != nil {
+		tags = append(tags, "error:invalid_auth_redirect")
+		p.StatsdClient.Incr("application_error", tags, 1.0)
+		p.ErrorResponse(rw, req, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(rw, req, authCodeRedirect, http.StatusFound)
 }
 
-func getAuthCodeRedirectURL(redirectURL *url.URL, state, authCode string) string {
-	u, _ := url.Parse(redirectURL.String())
-	params, _ := url.ParseQuery(u.RawQuery)
+func getAuthCodeRedirectURL(redirectURL *url.URL, state, authCode, scheme string) (string, error) {
+	u, err := url.Parse(redirectURL.String())
+	if err != nil {
+		return "", err
+	}
+
+	params, err := url.ParseQuery(u.RawQuery)
+	if err != nil {
+		return "", err
+	}
+
 	params.Set("code", authCode)
 	params.Set("state", state)
 
 	u.RawQuery = params.Encode()
+	u.Scheme = scheme
 
-	if u.Scheme == "" {
-		u.Scheme = "https"
-	}
-
-	return u.String()
+	return u.String(), nil
 }
 
 // SignOut signs the user out.
@@ -474,13 +399,14 @@ func (p *Authenticator) SignOut(rw http.ResponseWriter, req *http.Request) {
 }
 
 type signOutResp struct {
-	Version     string
-	Redirect    string
-	Signature   string
-	Timestamp   string
-	Message     string
-	Destination string
-	Email       string
+	ProviderSlug string
+	Version      string
+	Redirect     string
+	Signature    string
+	Timestamp    string
+	Message      string
+	Destination  string
+	Email        string
 }
 
 // SignOutPage renders a sign out page with a message
@@ -504,13 +430,14 @@ func (p *Authenticator) SignOutPage(rw http.ResponseWriter, req *http.Request, m
 	}
 
 	t := signOutResp{
-		Version:     VERSION,
-		Redirect:    redirectURI,
-		Signature:   signature,
-		Timestamp:   timestamp,
-		Message:     message,
-		Destination: destinationURL.Host,
-		Email:       session.Email,
+		ProviderSlug: p.provider.Data().ProviderSlug,
+		Version:      VERSION,
+		Redirect:     redirectURI,
+		Signature:    signature,
+		Timestamp:    timestamp,
+		Message:      message,
+		Destination:  destinationURL.Host,
+		Email:        session.Email,
 	}
 	p.templates.ExecuteTemplate(rw, "sign_out.html", t)
 	return
@@ -796,13 +723,20 @@ func (p *Authenticator) GetProfile(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	accessToken := req.Header.Get("X-Access-Token")
+	if accessToken == "" {
+		// TODO: This should be an error in the future, but is OK to be missing for now
+		// we track an error to see observe how often this occurs
+		p.StatsdClient.Incr("application_error", append(tags, "error:missing_access_token"), 1.0)
+	}
+
 	groupsFormValue := req.FormValue("groups")
 	allowedGroups := []string{}
 	if groupsFormValue != "" {
 		allowedGroups = strings.Split(groupsFormValue, ",")
 	}
 
-	groups, err := p.provider.ValidateGroupMembership(email, allowedGroups)
+	groups, err := p.provider.ValidateGroupMembership(email, allowedGroups, accessToken)
 	if err != nil {
 		tags = append(tags, "error:groups_resource")
 		p.StatsdClient.Incr("provider_error", tags, 1.0)

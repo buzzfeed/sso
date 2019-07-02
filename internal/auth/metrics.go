@@ -11,7 +11,7 @@ import (
 	"github.com/datadog/datadog-go/statsd"
 )
 
-func newStatsdClient(host string, port int) (*statsd.Client, error) {
+func NewStatsdClient(host string, port int) (*statsd.Client, error) {
 	client, err := statsd.New(net.JoinHostPort(host, strconv.Itoa(port)))
 	if err != nil {
 		return nil, err
@@ -27,16 +27,16 @@ func newStatsdClient(host string, port int) (*statsd.Client, error) {
 func GetActionTag(req *http.Request) string {
 	// only log metrics for these paths and actions
 	pathToAction := map[string]string{
-		"/robots.txt":      "robots",
-		"/start":           "start",
-		"/sign_in":         "sign_in",
-		"/sign_out":        "sign_out",
-		"/oauth2/callback": "callback",
-		"/profile":         "profile",
-		"/validate":        "validate",
-		"/redeem":          "redeem",
-		"/refresh":         "refresh",
-		"/ping":            "ping",
+		"/robots.txt": "robots",
+		"/start":      "start",
+		"/sign_in":    "sign_in",
+		"/sign_out":   "sign_out",
+		"/callback":   "callback",
+		"/profile":    "profile",
+		"/validate":   "validate",
+		"/redeem":     "redeem",
+		"/refresh":    "refresh",
+		"/ping":       "ping",
 	}
 	// get the action from the url path
 	path := req.URL.Path

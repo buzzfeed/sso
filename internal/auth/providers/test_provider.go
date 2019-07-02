@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
+	"github.com/datadog/datadog-go/statsd"
 )
 
 // TestProvider is a test implementation of the Provider interface.
@@ -26,28 +27,19 @@ type TestProvider struct {
 }
 
 // NewTestProvider creates a new mock test provider.
-func NewTestProvider(providerURL *url.URL) *TestProvider {
+func NewTestProvider(_ *url.URL) *TestProvider {
 	return &TestProvider{
 		ProviderData: &ProviderData{
 			ProviderName: "Test Provider",
-			SignInURL: &url.URL{
-				Scheme: "http",
-				Host:   providerURL.Host,
-				Path:   "/authorize",
-			},
-			RedeemURL: &url.URL{
-				Scheme: "http",
-				Host:   providerURL.Host,
-				Path:   "/token",
-			},
-			ProfileURL: &url.URL{
-				Scheme: "http",
-				Host:   providerURL.Host,
-				Path:   "/profile",
-			},
-			Scope: "profile.email",
+			ProviderSlug: "test",
+			Scope:        "profile.email",
 		},
 	}
+}
+
+// SetStatsdClient fulfills the Provider interface
+func (tp *TestProvider) SetStatsdClient(*statsd.Client) {
+	return
 }
 
 // ValidateSessionState returns the mock provider's ValidToken field value.
@@ -76,7 +68,7 @@ func (tp *TestProvider) Revoke(*sessions.SessionState) error {
 }
 
 // ValidateGroupMembership returns the mock provider's GroupsError if not nil, or the Groups field value.
-func (tp *TestProvider) ValidateGroupMembership(string, []string) ([]string, error) {
+func (tp *TestProvider) ValidateGroupMembership(string, []string, string) ([]string, error) {
 	return tp.Groups, tp.GroupsError
 }
 

@@ -9,12 +9,15 @@ import (
 	"github.com/buzzfeed/sso/internal/pkg/testutil"
 )
 
+var testEncodedCookieSecret = "tJgzIEug8M/6Asjn5mvpWxxef5d5duU7BwpuD0GCHRI="
+
 func testOptions() *Options {
 	o := NewOptions()
 	o.CookieSecret = testEncodedCookieSecret
 	o.ClientID = "bazquux"
 	o.ClientSecret = "xyzzyplugh"
 	o.EmailDomains = []string{"*"}
+	o.DefaultProviderSlug = "idp"
 	o.ProviderURLString = "https://www.example.com"
 	o.UpstreamConfigsFile = "testdata/upstream_configs.yml"
 	o.Cluster = "sso"
@@ -61,23 +64,6 @@ func TestInitializedOptions(t *testing.T) {
 	testutil.Equal(t, nil, o.Validate())
 }
 
-func TestDefaultProviderApiSettings(t *testing.T) {
-	o := testOptions()
-	testutil.Equal(t, nil, o.Validate())
-	p := o.provider.Data()
-	testutil.Equal(t, "https://www.example.com/sign_in",
-		p.SignInURL.String())
-	testutil.Equal(t, "https://www.example.com/sign_out",
-		p.SignOutURL.String())
-	testutil.Equal(t, "https://www.example.com/redeem",
-		p.RedeemURL.String())
-	testutil.Equal(t, "https://www.example.com/validate",
-		p.ValidateURL.String())
-	testutil.Equal(t, "https://www.example.com/profile",
-		p.ProfileURL.String())
-	testutil.Equal(t, "", p.Scope)
-}
-
 func TestProviderURLValidation(t *testing.T) {
 	testCases := []struct {
 		name                              string
@@ -90,12 +76,12 @@ func TestProviderURLValidation(t *testing.T) {
 		{
 			name:              "http scheme preserved",
 			providerURLString: "http://provider.example.com",
-			expectedSignInURL: "http://provider.example.com/sign_in",
+			expectedSignInURL: "http://provider.example.com/idp/sign_in",
 		},
 		{
 			name:              "https scheme preserved",
 			providerURLString: "https://provider.example.com",
-			expectedSignInURL: "https://provider.example.com/sign_in",
+			expectedSignInURL: "https://provider.example.com/idp/sign_in",
 		},
 		{
 			name:                              "proxy provider url string based on providerURL",
@@ -136,18 +122,27 @@ func TestProviderURLValidation(t *testing.T) {
 			o.ProviderURLString = tc.providerURLString
 			o.ProviderURLInternalString = tc.providerURLInternalString
 			err := o.Validate()
+
 			if tc.expectedError != "" {
 				if err == nil {
-					t.Errorf("expected error, got nil")
-				} else if err.Error() != tc.expectedError {
-					t.Errorf("expected error %q, got %q", tc.expectedError, err.Error())
+					t.Fatalf("expected error, got nil")
 				}
+				if err.Error() != tc.expectedError {
+					t.Fatalf("expected error %q, got %q", tc.expectedError, err.Error())
+				}
+				// our errors have matched, and test has passed
+				return
+			}
+
+			provider, err := newProvider(o, &UpstreamConfig{ProviderSlug: "idp"})
+			if err != nil {
+				t.Fatalf("unexpected err creating provider: %v", err)
 			}
 			if tc.expectedSignInURL != "" {
-				testutil.Equal(t, o.provider.Data().SignInURL.String(), tc.expectedSignInURL)
+				testutil.Equal(t, provider.Data().SignInURL.String(), tc.expectedSignInURL)
 			}
 			if tc.expectedProviderURLInternalString != "" {
-				testutil.Equal(t, o.provider.Data().ProviderURLInternal.String(), tc.expectedProviderURLInternalString)
+				testutil.Equal(t, provider.Data().ProviderURLInternal.String(), tc.expectedProviderURLInternalString)
 			}
 		})
 	}

@@ -1,0 +1,34 @@
+# Codecov configuration file for this repo.
+# This file can be validated for syntax and layout issues using:
+#     cat codecov.yml | curl --data-binary @- https://codecov.io/validate
+# as per Codecov's documentation.
+
+
+# https://docs.codecov.io/docs/coverage-configuration
+coverage:
+  precision: 2
+  round: down
+  range: "50...80"
+
+  # https://docs.codecov.io/docs/commit-status
+  status:
+    project:
+      default:
+        threshold: 2
+    patch: no
+    changes: no
+
+parsers:
+  gcov:
+    branch_detection:
+      conditional: yes
+      loop: yes
+      method: no
+      macro: no
+
+# https://docs.codecov.io/docs/pull-request-comments
+comment:
+  layout: "header, diff, files"
+  behavior: default
+  require_changes: no
+

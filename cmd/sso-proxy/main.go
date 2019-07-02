@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
+
+	"github.com/kelseyhightower/envconfig"
 
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
-	"github.com/buzzfeed/sso/internal/pkg/options"
 	"github.com/buzzfeed/sso/internal/proxy"
-	"github.com/kelseyhightower/envconfig"
+	"github.com/buzzfeed/sso/internal/proxy/collector"
 )
 
 func init() {
@@ -31,22 +33,30 @@ func main() {
 		os.Exit(1)
 	}
 
-	validator := func(p *proxy.OAuthProxy) error {
-		p.EmailValidator = options.NewEmailValidator(opts.EmailDomains)
-		return nil
-	}
+	// we setup a runtime collector to emit stats
+	go func() {
+		c := collector.New(opts.StatsdClient, 30*time.Second)
+		c.Run()
+	}()
 
-	oauthproxy, err := proxy.NewOAuthProxy(opts, validator, proxy.SetCookieStore(opts))
+	ssoProxy, err := proxy.New(opts)
 	if err != nil {
-		logger.Error(err, "error creating oauthproxy")
+		logger.Error(err, "error creating sso proxy")
 		os.Exit(1)
 	}
+
+	loggingHandler := proxy.NewLoggingHandler(os.Stdout,
+		ssoProxy,
+		opts.RequestLogging,
+		opts.StatsdClient,
+	)
 
 	s := &http.Server{
 		Addr:         fmt.Sprintf(":%d", opts.Port),
 		ReadTimeout:  opts.TCPReadTimeout,
 		WriteTimeout: opts.TCPWriteTimeout,
-		Handler:      proxy.NewLoggingHandler(os.Stdout, oauthproxy.Handler(), opts.RequestLogging, oauthproxy.StatsdClient),
+		Handler:      loggingHandler,
 	}
+
 	logger.Fatal(s.ListenAndServe())
 }
