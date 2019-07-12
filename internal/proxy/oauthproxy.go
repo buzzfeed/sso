@@ -111,7 +111,7 @@ func SetRedisStore(opts *Options) func(*OAuthProxy) error {
 				return sessions.CreateMiscreantCookieCipher(opts.decodedCookieSecret)(&c.CookieStore)
 			},
 			func(c *sessions.RedisStore) error {
-				c.RedisConnectionURL = opts.RedisConnectionURL
+				c.ConnectionURL = opts.RedisConnectionURL
 				c.UseSentinel = opts.RedisUseSentinel
 				c.SentinelMasterName = opts.RedisSentinelMasterName
 				c.SentinelConnectionURLs = opts.RedisSentinelConnectionURLs
@@ -129,6 +129,7 @@ func SetRedisStore(opts *Options) func(*OAuthProxy) error {
 
 		op.csrfStore = redisStore
 		op.sessionStore = redisStore
+		op.cookieCipher = redisStore.CookieCipher
 		return nil
 	}
 }

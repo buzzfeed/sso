@@ -16,7 +16,7 @@ import (
 type RedisStore struct {
 	CookieStore
 	CreatedAt              time.Time
-	RedisConnectionURL     string
+	ConnectionURL          string
 	UseSentinel            bool
 	SentinelMasterName     string
 	SentinelConnectionURLs []string
@@ -47,7 +47,7 @@ func NewRedisStore(cookieName string, optFuncs ...func(*RedisStore) error) (*Red
 			return nil, errors.New("must provide redis connection url or sentinel config")
 		}
 	} else {
-		if r.RedisConnectionURL == "" {
+		if r.ConnectionURL == "" {
 			return nil, errors.New("must provide redis connection url or sentinel config")
 		}
 	}
@@ -70,7 +70,7 @@ func (r *RedisStore) initRedisClient() error {
 		return nil
 	}
 
-	opt, err := redis.ParseURL(r.RedisConnectionURL)
+	opt, err := redis.ParseURL(r.ConnectionURL)
 	if err != nil {
 		return fmt.Errorf("unable to parse redis url: %s", err)
 	}

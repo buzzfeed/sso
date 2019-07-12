@@ -37,13 +37,19 @@ func NewAuthenticatorMux(config Configuration, statsdClient *statsd.Client) (*Au
 		}
 
 		idpSlug := idp.Data().ProviderSlug
-		authenticator, err := NewAuthenticator(config,
+		opts := []func(*Authenticator) error{
 			SetValidator(validator),
 			SetProvider(idp),
-			SetCookieStore(config.SessionConfig, idpSlug),
 			SetStatsdClient(statsdClient),
 			SetRedirectURL(config.ServerConfig, idpSlug),
-		)
+		}
+
+		if config.SessionConfig.RedisConfig.Enabled() {
+			opts = append(opts, SetRedisStore(config.SessionConfig, idpSlug))
+		} else {
+			opts = append(opts, SetCookieStore(config.SessionConfig, idpSlug))
+		}
+		authenticator, err := NewAuthenticator(config, opts...)
 		if err != nil {
 			logger.Error(err, "error creating new Authenticator")
 			return nil, err

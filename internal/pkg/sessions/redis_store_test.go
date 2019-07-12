@@ -30,13 +30,13 @@ func TestNewRedisSession(t *testing.T) {
 		{
 			name: "opt func overrides default values",
 			optFuncs: []func(*RedisStore) error{func(s *RedisStore) error {
-				s.RedisConnectionURL = "redis://localhost:6379/"
+				s.ConnectionURL = "redis://localhost:6379/"
 				s.CookieExpire = time.Hour
 				return nil
 			}},
 			expectedClient: true,
 			expectedSession: &RedisStore{
-				RedisConnectionURL: "redis://localhost:6379/",
+				ConnectionURL: "redis://localhost:6379/",
 				CookieStore: CookieStore{
 					Name:           "cookieName",
 					CookieSecure:   true,

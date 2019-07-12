@@ -14,15 +14,18 @@ import (
 
 // DefaultAuthConfig specifies all the defaults used to configure sso-auth
 // All configuration can be set using environment variables. Below is a list of
-// configuration variables via their envivronment configuration
+// configuration variables via their environment configuration
 //
-// SESSION COOKIE_NAME
+// SESSION_COOKIE_NAME
 // SESSION_COOKIE_SECRET
 // SESSION_COOKIE_EXPIRE
 // SESSION_COOKIE_DOMAIN
 // SESSION_COOKIE_REFRESH
 // SESSION_COOKIE_SECURE
 // SESSION_COOKIE_HTTPONLY
+// SESSION_REDIS_CONNECTION
+// SESSION_REDIS_SENTINEL
+// SESSION_REDIS_MASTER
 // SESSION_LIFETIME
 // SESSION_KEY
 //
@@ -34,6 +37,9 @@ import (
 // PROVIDER_*_CLIENT_ID
 // PROVIDER_*_CLIENT_SECRET
 // PROVIDER_*_SCOPE
+//
+// PROVIDER_*_AZURE_TENANT
+// PROVIDER_*_AZURE_PROMPT
 //
 // PROVIDER_*_GOOGLE_CREDENTIALS
 // PROVIDER_*_GOOGLE_IMPERSONATE
@@ -83,6 +89,9 @@ func DefaultAuthConfig() Configuration {
 				Name:     "_sso_auth",
 				Secure:   true,
 				HTTPOnly: true,
+			},
+			RedisConfig: RedisConfig{
+				UseSentinel: false,
 			},
 		},
 		LoggingConfig: LoggingConfig{
@@ -275,8 +284,34 @@ func (gcc GroupCacheConfig) Validate() error {
 	return nil
 }
 
+type RedisConfig struct {
+	ConnectionURLs     []string `mapstructure:"connection"`
+	UseSentinel        bool     `mapstructure:"sentinel"`
+	SentinelMasterName string   `mapstructure:"master"`
+}
+
+func (rc RedisConfig) Enabled() bool {
+	// If redis connection URL is missing, use normal cookie sessions
+	return rc.UseSentinel || len(rc.ConnectionURLs) >= 1
+}
+
+func (rc RedisConfig) Validate() error {
+	if rc.UseSentinel {
+		if rc.SentinelMasterName == "" {
+			return xerrors.New("no sentinel master is configured")
+		} else if len(rc.ConnectionURLs) == 0 {
+			return xerrors.New("no sentinel connection URLs are configured")
+		}
+	} else if len(rc.ConnectionURLs) > 1 {
+		return xerrors.New("only one connection URL should be set unless sentinel enabled")
+	}
+	// If redis connection URL is missing, use normal cookie sessions
+	return nil
+}
+
 type SessionConfig struct {
 	CookieConfig CookieConfig `mapstructure:"cookie"`
+	RedisConfig  RedisConfig  `mapstructure:"redis"`
 
 	SessionLifetimeTTL time.Duration `mapstructure:"lifetime"`
 	Key                string        `mapstructure:"key"`
@@ -297,6 +332,9 @@ func (sc SessionConfig) Validate() error {
 
 	if err := sc.CookieConfig.Validate(); err != nil {
 		return xerrors.Errorf("invalid session.cookie config: %w", err)
+	}
+	if err := sc.RedisConfig.Validate(); err != nil {
+		return xerrors.Errorf("invalid session.redis config: %w", err)
 	}
 
 	return nil
