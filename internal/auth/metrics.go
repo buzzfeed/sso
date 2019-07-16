@@ -40,7 +40,10 @@ func GetActionTag(req *http.Request) string {
 	}
 	// get the action from the url path
 	path := req.URL.Path
-	if action, ok := pathToAction[path]; ok {
+	splitPath := strings.Split(path, "/")
+	pathBase := fmt.Sprintf("/%s", splitPath[len(splitPath)-1])
+
+	if action, ok := pathToAction[pathBase]; ok {
 		return action
 	}
 	if strings.HasPrefix(path, "/static/") {

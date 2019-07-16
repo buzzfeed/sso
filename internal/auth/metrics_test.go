@@ -138,7 +138,7 @@ func TestLogRequestMetrics(t *testing.T) {
 		},
 		{
 			name:       "sign_in path adds action to tags",
-			requestURL: "/sign_in?query=parameter",
+			requestURL: "/providerSlug/sign_in?query=parameter",
 			method:     "GET",
 			status:     http.StatusOK,
 			expectedTags: []string{
@@ -187,82 +187,82 @@ func TestGetActionTag(t *testing.T) {
 	}{
 		{
 			name:           "request with start in the path",
-			url:            "/start",
+			url:            "/providerSlug/start",
 			expectedAction: "start",
 		},
 		{
 			name:           "request with start in the path with query parameters",
-			url:            "/start?query=parameter",
+			url:            "/providerSlug/start?query=parameter",
 			expectedAction: "start",
 		},
 		{
 			name:           "request with sign_in in the path",
-			url:            "/sign_in",
+			url:            "/providerSlug/sign_in",
 			expectedAction: "sign_in",
 		},
 		{
 			name:           "request with sign_in in the path with query parameters",
-			url:            "/sign_in?query=parameter",
+			url:            "/providerSlug/sign_in?query=parameter",
 			expectedAction: "sign_in",
 		},
 		{
 			name:           "request with sign_out in the path",
-			url:            "/sign_out",
+			url:            "/providerSlug/sign_out",
 			expectedAction: "sign_out",
 		},
 		{
 			name:           "request with sign_out in the path with query parameters",
-			url:            "/sign_out?query=parameter",
+			url:            "/providerSlug/sign_out?query=parameter",
 			expectedAction: "sign_out",
 		},
 		{
 			name:           "request with callback in the path",
-			url:            "/callback",
+			url:            "/providerSlug/callback",
 			expectedAction: "callback",
 		},
 		{
 			name:           "request with sign_out in the path with query parameters",
-			url:            "/callback?query=parameter",
+			url:            "/providerSlug/callback?query=parameter",
 			expectedAction: "callback",
 		},
 		{
 			name:           "request with profile in the path",
-			url:            "/profile",
+			url:            "/providerSlug/profile",
 			expectedAction: "profile",
 		},
 		{
 			name:           "request with profile in the path with query parameters",
-			url:            "/profile?query=parameter",
+			url:            "/providerSlug/profile?query=parameter",
 			expectedAction: "profile",
 		},
 		{
 			name:           "request with validate in the path",
-			url:            "/validate",
+			url:            "/providerSlug/validate",
 			expectedAction: "validate",
 		},
 		{
 			name:           "request with validate in the path with query parameters",
-			url:            "/validate?query=parameter",
+			url:            "/providerSlug/validate?query=parameter",
 			expectedAction: "validate",
 		},
 		{
 			name:           "request with redeem in the path",
-			url:            "/redeem",
+			url:            "/providerSlug/redeem",
 			expectedAction: "redeem",
 		},
 		{
 			name:           "request with redeem in the path with query parameters",
-			url:            "/redeem?query=parameter",
+			url:            "/providerSlug/redeem?query=parameter",
 			expectedAction: "redeem",
 		},
 		{
 			name:           "request for static",
-			url:            "/static/some_file_path",
+			url:            "/static/providerSlug/some_file_path",
 			expectedAction: "static",
 		},
 		{
 			name:           "unknown action",
-			url:            "/omg_what_do_i_do",
+			url:            "/providerSlug/omg_what_do_i_do",
 			expectedAction: "unknown",
 		},
 	}
