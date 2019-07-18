@@ -25,12 +25,6 @@ func New(opts *Options) (*SSOProxy, error) {
 		optFuncs = append(optFuncs, SetRequestSigner(requestSigner))
 	}
 
-	if len(opts.EmailAddresses) != 0 {
-		optFuncs = append(optFuncs, SetValidator(options.NewEmailAddressValidator(opts.EmailAddresses)))
-	} else {
-		optFuncs = append(optFuncs, SetValidator(options.NewEmailDomainValidator(opts.EmailDomains)))
-	}
-
 	hostRouter := hostmux.NewRouter()
 	for _, upstreamConfig := range opts.upstreamConfigs {
 		provider, err := newProvider(opts, upstreamConfig)
@@ -41,6 +35,12 @@ func New(opts *Options) (*SSOProxy, error) {
 		handler, err := NewUpstreamReverseProxy(upstreamConfig, requestSigner)
 		if err != nil {
 			return nil, err
+		}
+
+		if len(upstreamConfig.AllowedEmailAddresses) != 0 {
+			optFuncs = append(optFuncs, SetValidator(options.NewEmailAddressValidator(upstreamConfig.AllowedEmailAddresses)))
+		} else if len(upstreamConfig.AllowedEmailDomains) != 0 {
+			optFuncs = append(optFuncs, SetValidator(options.NewEmailDomainValidator(upstreamConfig.AllowedEmailDomains)))
 		}
 
 		optFuncs = append(optFuncs,

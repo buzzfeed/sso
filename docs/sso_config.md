@@ -33,6 +33,8 @@ For example, the following config would have the following environment variables
   * **type** declares the type of route to use, right now there is just *simple* and *rewrite*.
   * **options** are a set of options that can be added to your configuration.
     * **allowed groups** optional list of authorized google groups that can access the service. If not specified, anyone within an email domain is allowed to access the service. *Note*: We do not support nested group authentication at this time. Groups must be made up of email addresses associated with individual's accounts. See [#133](https://github.com/buzzfeed/sso/issues/133).
+    * **allowed_email_domains** optional list of authorized email domains that can access the service.
+    * **allowed_email_addresses** optional list of authorized email addresses that can access the service.
     * **skip_auth_regex** skips authentication for paths matching these regular expressions. NOTE: Use with extreme caution.
     * **header_overrides** overrides any heads set either by SSO proxy itself or upstream applications. Useful for modifying browser security headers.
     * **inject_request_headers** adds headers to the request before the request is sent to the proxied service.  Useful for adding basic auth headers if needed.

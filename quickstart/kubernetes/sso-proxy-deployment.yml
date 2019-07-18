@@ -19,7 +19,7 @@ spec:
         ports:
         - containerPort: 4180
         env:
-          - name: EMAIL_DOMAIN
+          - name: DEFAULT_ALLOWED_EMAIL_DOMAINS
             value: 'mydomain.com'
           - name: UPSTREAM_CONFIGS
             value: /sso/upstream_configs.yml

@@ -25,11 +25,11 @@ services:
     entrypoint: /bin/sso-proxy
     environment:
       # Allow any google account to log in for demo purposes
-      - EMAIL_DOMAIN=*
+      - DEFAULT_ALLOWED_EMAIL_DOMAINS=*
 
       # (Optional) Allow specific google email address to log in for demo purposes
-      # This overrides EMAIL_DOMAIN
-      # - EMAIL_ADDRESSES=*
+      # This overrides DEFAULT_ALLOWED_EMAIL_DOMAIN
+      # - DEFAULT_ALLOWED_EMAIL_ADDRESSES=*
 
       - UPSTREAM_CONFIGS=/sso/upstream_configs.yml
       - PROVIDER_URL=http://sso-auth.localtest.me

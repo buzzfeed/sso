@@ -16,7 +16,7 @@ func testOptions() *Options {
 	o.CookieSecret = testEncodedCookieSecret
 	o.ClientID = "bazquux"
 	o.ClientSecret = "xyzzyplugh"
-	o.EmailDomains = []string{"*"}
+	o.DefaultAllowedEmailDomains = []string{"*"}
 	o.DefaultProviderSlug = "idp"
 	o.ProviderURLString = "https://www.example.com"
 	o.UpstreamConfigsFile = "testdata/upstream_configs.yml"
@@ -41,7 +41,12 @@ func errorMsg(msgs []string) string {
 
 func TestNewOptions(t *testing.T) {
 	o := NewOptions()
-	o.EmailDomains = []string{"*"}
+
+	upstreamConfig := &UpstreamConfig{
+		Service: "testService",
+	}
+	o.upstreamConfigs = []*UpstreamConfig{upstreamConfig}
+
 	err := o.Validate()
 	testutil.NotEqual(t, nil, err)
 
@@ -54,6 +59,7 @@ func TestNewOptions(t *testing.T) {
 		"missing setting: client-secret",
 		"missing setting: statsd-host",
 		"missing setting: statsd-port",
+		"missing setting: DEFAULT_ALLOWED_EMAIL_DOMAINS or DEFAULT_ALLOWED_EMAIL_ADDRESSES in either environment or upstream config in the following upstreams: [testService]",
 		"Invalid value for COOKIE_SECRET; must decode to 32 or 64 bytes, but decoded to 0 bytes",
 	})
 	testutil.Equal(t, expected, err.Error())
