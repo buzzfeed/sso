@@ -43,8 +43,8 @@ asked to fill in three fields.
 - **Name**: Any appropriate name is fine (e.g. `Dev`).
 - **Authorized JavaScript origins**: Leave this field blank.
 - **Authorized redirect URIs**: Add the URI of your `sso-auth` deployment, with the path suffix
-`/oauth2/callback`. For example, if `sso-auth` will  be accessible at the domain
-`sso-auth.example.com`, then add the URI `https://sso-auth.example.com/oauth2/callback`.
+`/google/callback`. For example, if `sso-auth` will  be accessible at the domain
+`sso-auth.example.com`, then add the URI `https://sso-auth.example.com/google/callback`.
 
 **⚡️ Note:** If you're following the [Quickstart guide](quickstart.md), use
 `http://sso-auth.localtest.me` as the Authorized redirect URI.
@@ -122,7 +122,12 @@ have been filled in, click the "Authorize" button.
 To give `sso-auth` permission to access Google Group information for users, the following
 environment variables must be set:
 
-- **`GOOGLE_ADMIN_EMAIL`**: An administrative email address on your organization's
+NOTE: `GOOGLEQUICKSTART` is a logical identifier that is used to group the configuration
+variables together for any one provider. This can be changed to an identifier that makes
+sense for your individual use case.
+If following the quickstart, make sure this identifier matches what you used there.
+
+- **`PROVIDER_GOOGLEQUICKSTART_GOOGLE_IMPERSONATE`**: An administrative email address on your organization's
 domain, the identity of which can be assumed by `sso`.
 - **`GOOGLE_SERVICE_ACCOUNT_JSON`**: The path to the JSON file downloaded at the time of
 service account creation above. There is no reason why this file should ever be accessed by any

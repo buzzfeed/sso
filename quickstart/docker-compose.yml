@@ -70,35 +70,36 @@ services:
       ./env
     environment:
       # Allow any google account to log in for demo purposes
-      - SSO_EMAIL_DOMAIN=*
+      - AUTHORIZE_EMAIL_DOMAINS=*
 
-      # (Optional) Allow specific google email address to log in for demo purposes
-      # This overrides SSO_EMAIL_DOMAIN
-      # - SSO_EMAIL_ADDRESSES=*
+      # (Optional) Allow specific email address to log in for demo purposes
+      # This overrides AUTHORIZE_EMAIL_DOMAINS
+      # - AUTHORIZE_EMAIL_ADDRESSES=*
 
-      - HOST=sso-auth.localtest.me
-      - REDIRECT_URL=http://sso-auth.localtest.me
-      - PROXY_ROOT_DOMAIN=localtest.me
+      - AUTHORIZE_PROXY_DOMAINS=localtest.me
+
+      - SERVER_SCHEME=http
+      - SERVER_HOST=sso-auth.localtest.me
 
       # These values must match sso-proxy's CLIENT_ID and CLIENT_SECRET values
-      - PROXY_CLIENT_ID=aGNHd3FqWUVDb1Z0NVFVZDE4Vk8xbWhQeVdoc3pjMnU=
-      - PROXY_CLIENT_SECRET=aDducXQzK2tPY3R4TmdqTGhaYS80eGYxcTUvWWJDb2M=
+      - CLIENT_PROXY_ID=aGNHd3FqWUVDb1Z0NVFVZDE4Vk8xbWhQeVdoc3pjMnU=
+      - CLIENT_PROXY_SECRET=aDducXQzK2tPY3R4TmdqTGhaYS80eGYxcTUvWWJDb2M=
 
       # XXX: These secrets are for demonstration purposes only! Use
       #
       #     openssl rand -base64 32
       #
       # to generate your own.
-      - AUTH_CODE_SECRET=c1kxTHcyN3FwdGRiZHpZRU15TUpNdFlpb1ZEUUw5R3M=
-      - COOKIE_SECRET=V2JBZk0zWGtsL29UcFUvWjVDWWQ2UHExNXJ0b2VhcDI=
+      - SESSION_KEY=c1kxTHcyN3FwdGRiZHpZRU15TUpNdFlpb1ZEUUw5R3M=
+      - SESSION_COOKIE_SECRET=V2JBZk0zWGtsL29UcFUvWjVDWWQ2UHExNXJ0b2VhcDI=
 
       # Disable https for demo purposes
-      - COOKIE_SECURE=false
+      - SESSION_COOKIE_SECURE=false
 
       # TODO: these config values should probably have defaults
       - CLUSTER=dev
-      - STATSD_HOST=127.0.0.1
-      - STATSD_PORT=8125
+      - METRICS_STATSD_HOST=127.0.0.1
+      - METRICS_STATSD_PORT=8125
 
       # Tells nginx-proxy service how to route requests to this service
       - VIRTUAL_HOST=sso-auth.localtest.me,host.docker.internal

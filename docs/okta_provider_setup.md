@@ -44,9 +44,9 @@ Select the 'Applications' dropdown and then 'Applications'. Click 'Add Applicati
 For 'Platform', choose `Web`, and for 'Sign on method' choose `OpenID Connect`. You will be asked to fill in some fields:
 - **Application Name**: Any appropriate name.
 -  **Application Logo**: Optional - an image for your app.
--  **Login redirect URIs**: Add the URI of your `sso-auth` deployment, with the path suffix `/oauth2/callback`.
+-  **Login redirect URIs**: Add the URI of your `sso-auth` deployment, with the path suffix `/okta/callback`.
     For example, if `sso-auth` will be accessible at the domain `sso-auth.example.com`, then add the URI
-    `https://sso-auth.example.com/oauth2/callback`. Multiple URIs can be added if required.
+    `https://sso-auth.example.com/okta/callback`. Multiple URIs can be added if required.
 -  **Logout redirect URIs**: This can be left blank.
 
 **⚡️ Note**: If you're following the [Quickstart guide](https://github.com/buzzfeed/sso/blob/master/docs/quickstart.md), use `http://sso-auth.localtest.me` as the Authorized redirect URI.
