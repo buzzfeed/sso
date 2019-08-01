@@ -24,8 +24,6 @@ import (
 // Cluster - the cluster in which this is running, used for upstream configs
 // Scheme - the default scheme, used for upstream configs
 // SkipAuthPreflight - will skip authentication for OPTIONS requests, default false
-// EmailDomains - csv list of emails with the specified domain to authenticate. Use * to authenticate any email
-// EmailAddresses - []string - authenticate emails with the specified email address (may be given multiple times). Use * to authenticate any email
 // DefaultAllowedGroups - csv list of default allowed groups that are applied to authorize access to upstreams. Will be overridden by groups specified in upstream configs.
 // ClientID - the OAuth Client ID: ie: "123456.apps.googleusercontent.com"
 // ClientSecret - The OAuth Client Secret
@@ -60,8 +58,6 @@ type Options struct {
 
 	SkipAuthPreflight bool `envconfig:"SKIP_AUTH_PREFLIGHT"`
 
-	EmailDomains         []string `envconfig:"EMAIL_DOMAIN"`
-	EmailAddresses       []string `envconfig:"EMAIL_ADDRESSES"`
 	DefaultAllowedGroups []string `envconfig:"DEFAULT_ALLOWED_GROUPS"`
 
 	ClientID     string `envconfig:"CLIENT_ID"`
@@ -147,10 +143,6 @@ func (o *Options) Validate() error {
 	if o.ClientSecret == "" {
 		msgs = append(msgs, "missing setting: client-secret")
 	}
-	if len(o.EmailDomains) == 0 && len(o.EmailAddresses) == 0 {
-		msgs = append(msgs, "missing setting: email-domain or email-address")
-	}
-
 	if o.StatsdHost == "" {
 		msgs = append(msgs, "missing setting: statsd-host")
 	}

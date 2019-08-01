@@ -16,7 +16,6 @@ func testOptions() *Options {
 	o.CookieSecret = testEncodedCookieSecret
 	o.ClientID = "bazquux"
 	o.ClientSecret = "xyzzyplugh"
-	o.EmailDomains = []string{"*"}
 	o.DefaultProviderSlug = "idp"
 	o.ProviderURLString = "https://www.example.com"
 	o.UpstreamConfigsFile = "testdata/upstream_configs.yml"
@@ -41,7 +40,6 @@ func errorMsg(msgs []string) string {
 
 func TestNewOptions(t *testing.T) {
 	o := NewOptions()
-	o.EmailDomains = []string{"*"}
 	err := o.Validate()
 	testutil.NotEqual(t, nil, err)
 
