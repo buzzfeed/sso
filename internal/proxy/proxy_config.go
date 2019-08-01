@@ -92,6 +92,8 @@ type OptionsConfig struct {
 	HeaderOverrides    map[string]string `yaml:"header_overrides"`
 	SkipAuthRegex      []string          `yaml:"skip_auth_regex"`
 	AllowedGroups      []string          `yaml:"allowed_groups"`
+	EmailDomains       []string          `yaml:"allowed_email_domains"`
+	EmailAddresses     []string          `yaml:"allowed_email_addresses"`
 	TLSSkipVerify      bool              `yaml:"tls_skip_verify"`
 	PreserveHost       bool              `yaml:"preserve_host"`
 	Timeout            time.Duration     `yaml:"timeout"`
@@ -99,8 +101,6 @@ type OptionsConfig struct {
 	FlushInterval      time.Duration     `yaml:"flush_interval"`
 	SkipRequestSigning bool              `yaml:"skip_request_signing"`
 	ProviderSlug       string            `yaml:"provider_slug"`
-	EmailDomains       []string          `yaml:"email_domains"`
-	EmailAddresses     []string          `yaml:"email_addresses"`
 
 	// CookieName is still set globally, so we do not provide override behavior
 	CookieName string
