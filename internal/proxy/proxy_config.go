@@ -62,6 +62,8 @@ type UpstreamConfig struct {
 	SkipRequestSigning    bool
 	CookieName            string
 	ProviderSlug          string
+	EmailDomains          []string
+	EmailAddresses        []string
 }
 
 // RouteConfig maps to the yaml config fields,
@@ -90,6 +92,8 @@ type OptionsConfig struct {
 	HeaderOverrides    map[string]string `yaml:"header_overrides"`
 	SkipAuthRegex      []string          `yaml:"skip_auth_regex"`
 	AllowedGroups      []string          `yaml:"allowed_groups"`
+	EmailDomains       []string          `yaml:"allowed_email_domains"`
+	EmailAddresses     []string          `yaml:"allowed_email_addresses"`
 	TLSSkipVerify      bool              `yaml:"tls_skip_verify"`
 	PreserveHost       bool              `yaml:"preserve_host"`
 	Timeout            time.Duration     `yaml:"timeout"`
@@ -403,6 +407,8 @@ func parseOptionsConfig(proxy *UpstreamConfig, defaultOpts *OptionsConfig) error
 	proxy.SkipRequestSigning = dst.SkipRequestSigning
 	proxy.CookieName = dst.CookieName
 	proxy.ProviderSlug = dst.ProviderSlug
+	proxy.EmailDomains = dst.EmailDomains
+	proxy.EmailAddresses = dst.EmailAddresses
 
 	proxy.RouteConfig.Options = nil
 
