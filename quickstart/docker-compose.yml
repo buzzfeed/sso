@@ -45,7 +45,6 @@ services:
       #     openssl rand -base64 32
       #
       # to generate your own.
-      - AUTH_CODE_SECRET=SVM0NEFMUUlaZGxyaFVhOGxsQ0wvOFYyZTh2S2Fha1U=
       - COOKIE_SECRET=WEl0Y054TXNUN2ltTWRkazZ0YmNpRTlucXBPQUY2VHU=
 
       # Disable https for demo purposes

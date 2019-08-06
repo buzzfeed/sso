@@ -99,10 +99,6 @@ func assignProvider(pc ProviderConfig) func(*Authenticator) error {
 	}
 }
 
-// generated using `openssl rand 32 -base64`
-var testEncodedCookieSecret = "x7xzsM1Ky4vGQPwqy6uTztfr3jtm/pIdRbJXgE0q8kU="
-var testAuthCodeSecret = "qICChm3wdjbjcWymm7PefwtPP6/PZv+udkFEubTeE38="
-
 func newRevokeServer(accessToken string) (*url.URL, *httptest.Server) {
 	s := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		r.ParseForm()
