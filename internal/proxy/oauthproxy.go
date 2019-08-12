@@ -793,6 +793,10 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 		return ErrUserNotAuthorized
 	}
 
+	for key, val := range p.upstreamConfig.InjectRequestHeaders {
+		req.Header.Set(key, val)
+	}
+
 	req.Header.Set("X-Forwarded-User", session.User)
 
 	if p.passAccessToken && session.AccessToken != "" {
@@ -802,9 +806,6 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 	req.Header.Set("X-Forwarded-Email", session.Email)
 	req.Header.Set("X-Forwarded-Groups", strings.Join(session.Groups, ","))
 
-	for key, val := range p.upstreamConfig.InjectRequestHeaders {
-		req.Header.Set(key, val)
-	}
 	// stash authenticated user so that it can be logged later (see func logRequest)
 	rw.Header().Set(loggingUserHeader, session.Email)
 
