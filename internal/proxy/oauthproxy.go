@@ -793,6 +793,10 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 		return ErrUserNotAuthorized
 	}
 
+	for key, val := range p.upstreamConfig.InjectRequestHeaders {
+		req.Header.Set(key, val)
+	}
+
 	req.Header.Set("X-Forwarded-User", session.User)
 
 	if p.passAccessToken && session.AccessToken != "" {

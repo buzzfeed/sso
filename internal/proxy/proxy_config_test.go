@@ -355,6 +355,39 @@ func TestUpstreamConfigHeaderOverrides(t *testing.T) {
 	}
 }
 
+func TestUpstreamConfigInjectRequestHeaders(t *testing.T) {
+	wantHeaders := map[string]string{
+		"Authorization": "Basic",
+	}
+	templateVars := map[string]string{
+		"cluster":     "sso",
+		"root_domain": "dev",
+	}
+	upstreamConfigs, err := loadServiceConfigs([]byte(`
+- service: foo
+  default:
+    from: foo.{{cluster}}.{{root_domain}}
+    to: foo-internal.{{cluster}}.{{root_domain}}
+    options:
+      inject_request_headers:
+        Authorization: Basic
+`), "sso", "http", templateVars, nil)
+	if err != nil {
+		t.Fatalf("expected to parse upstream configs: %s", err)
+	}
+
+	if len(upstreamConfigs) == 0 {
+		t.Fatalf("expected service config")
+	}
+
+	upstreamConfig := upstreamConfigs[0]
+	if !reflect.DeepEqual(upstreamConfig.InjectRequestHeaders, wantHeaders) {
+		t.Logf("want: %v", wantHeaders)
+		t.Logf(" got: %v", upstreamConfig.InjectRequestHeaders)
+		t.Errorf("got unexpected header overrides")
+	}
+}
+
 func TestUpstreamConfigErrorParsing(t *testing.T) {
 	testCases := []struct {
 		Name    string
