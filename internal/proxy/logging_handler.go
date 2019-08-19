@@ -4,7 +4,10 @@
 package proxy
 
 import (
+	"bufio"
+	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -36,6 +39,14 @@ func (l *responseLogger) extractUser() {
 		l.authInfo = authInfo
 		l.w.Header().Del(loggingUserHeader)
 	}
+}
+
+// Support Websockets
+func (l *responseLogger) Hijack() (rwc net.Conn, buf *bufio.ReadWriter, err error) {
+	if hij, ok := l.w.(http.Hijacker); ok {
+		return hij.Hijack()
+	}
+	return nil, nil, errors.New("http.Hijacker is not available on writer")
 }
 
 func (l *responseLogger) Write(b []byte) (int, error) {
