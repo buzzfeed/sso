@@ -66,6 +66,12 @@ import (
 func DefaultAuthConfig() Configuration {
 	return Configuration{
 		ProviderConfigs: map[string]ProviderConfig{},
+		GroupCacheConfig: GroupCacheConfig{
+			CacheIntervalConfig: CacheIntervalConfig{
+				Provider: 10 * time.Minute,
+				Refresh:  10 * time.Minute,
+			},
+		},
 		ClientConfigs: map[string]ClientConfig{
 			"proxy": ClientConfig{},
 		},
@@ -134,13 +140,14 @@ var (
 
 // Configuration is the parent struct that holds all the configuration
 type Configuration struct {
-	ProviderConfigs map[string]ProviderConfig `mapstructure:"provider"`
-	ClientConfigs   map[string]ClientConfig   `mapstructure:"client"`
-	AuthorizeConfig AuthorizeConfig           `mapstructure:"authorize"`
-	SessionConfig   SessionConfig             `mapstructure:"session"`
-	ServerConfig    ServerConfig              `mapstructure:"server"`
-	MetricsConfig   MetricsConfig             `mapstructrue:"metrics"`
-	LoggingConfig   LoggingConfig             `mapstructure:"logging"`
+	ProviderConfigs  map[string]ProviderConfig `mapstructure:"provider"`
+	ClientConfigs    map[string]ClientConfig   `mapstructure:"client"`
+	GroupCacheConfig GroupCacheConfig          `mapstructure:"groupcache"`
+	AuthorizeConfig  AuthorizeConfig           `mapstructure:"authorize"`
+	SessionConfig    SessionConfig             `mapstructure:"session"`
+	ServerConfig     ServerConfig              `mapstructure:"server"`
+	MetricsConfig    MetricsConfig             `mapstructrue:"metrics"`
+	LoggingConfig    LoggingConfig             `mapstructure:"logging"`
 }
 
 func (c Configuration) Validate() error {
@@ -268,10 +275,12 @@ func (opc OktaProviderConfig) Validate() error {
 }
 
 type GroupCacheConfig struct {
-	Interval struct {
-		Provider time.Duration `mapstructure:"provider"`
-		Refresh  time.Duration `mapstructure:"refresh"`
-	} `mapstructure:"interval"`
+	CacheIntervalConfig CacheIntervalConfig `mapstructure:"interval"`
+}
+
+type CacheIntervalConfig struct {
+	Provider time.Duration `mapstructure:"provider"`
+	Refresh  time.Duration `mapstructure:"refresh"`
 }
 
 func (gcc GroupCacheConfig) Validate() error {
