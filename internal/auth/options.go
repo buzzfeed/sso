@@ -37,7 +37,7 @@ func newProvider(pc ProviderConfig, sc SessionConfig) (providers.Provider, error
 			return nil, err
 		}
 
-		cache := groups.NewFillCache(googleProvider.PopulateMembers, pc.GroupCacheConfig.Interval.Refresh)
+		cache := groups.NewFillCache(googleProvider.PopulateMembers, pc.GroupCacheConfig.CacheIntervalConfig.Refresh)
 		googleProvider.GroupsCache = cache
 
 		singleFlightProvider = providers.NewSingleFlightProvider(googleProvider)
@@ -49,7 +49,7 @@ func newProvider(pc ProviderConfig, sc SessionConfig) (providers.Provider, error
 		}
 
 		tags := []string{"provider:okta"}
-		cache := providers.NewGroupCache(oktaProvider, pc.GroupCacheConfig.Interval.Provider, oktaProvider.StatsdClient, tags)
+		cache := providers.NewGroupCache(oktaProvider, pc.GroupCacheConfig.CacheIntervalConfig.Provider, oktaProvider.StatsdClient, tags)
 		singleFlightProvider = providers.NewSingleFlightProvider(cache)
 	case "test":
 		return providers.NewTestProvider(nil), nil
