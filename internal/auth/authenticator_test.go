@@ -1589,37 +1589,3 @@ func TestOAuthStart(t *testing.T) {
 		})
 	}
 }
-
-func TestGoogleProviderApiSettings(t *testing.T) {
-	provider, err := newProvider(
-		ProviderConfig{ProviderType: "google"},
-		SessionConfig{SessionLifetimeTTL: 1 * time.Hour},
-	)
-	if err != nil {
-		t.Fatalf("unexpected err generating google provider: %v", err)
-	}
-	p := provider.Data()
-	testutil.Equal(t, "https://accounts.google.com/o/oauth2/v2/auth",
-		p.SignInURL.String())
-	testutil.Equal(t, "https://www.googleapis.com/oauth2/v4/token",
-		p.RedeemURL.String())
-
-	testutil.Equal(t, "", p.ProfileURL.String())
-	testutil.Equal(t, "profile email", p.Scope)
-}
-
-func TestGoogleGroupInvalidFile(t *testing.T) {
-	_, err := newProvider(
-		ProviderConfig{
-			ProviderType: "google",
-			GoogleProviderConfig: GoogleProviderConfig{
-				Credentials: "file_doesnt_exist.json",
-			},
-		},
-		SessionConfig{
-			SessionLifetimeTTL: 1 * time.Hour,
-		},
-	)
-	testutil.NotEqual(t, nil, err)
-	testutil.Equal(t, "could not read google credentials file", err.Error())
-}

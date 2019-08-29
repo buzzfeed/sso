@@ -2,6 +2,7 @@ module github.com/buzzfeed/sso
 
 require (
 	github.com/18F/hmacauth v0.0.0-20151013130326-9232a6386b73
+	github.com/aws/aws-sdk-go v1.23.12
 	github.com/benbjohnson/clock v0.0.0-20161215174838-7dc76406b6d3
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869 // indirect
 	github.com/datadog/datadog-go v0.0.0-20180822151419-281ae9f2d895

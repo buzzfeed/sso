@@ -40,11 +40,13 @@ func newProvider(pc ProviderConfig, sc SessionConfig) (providers.Provider, error
 
 		cache := groups.NewFillCache(googleProvider.PopulateMembers, pc.GroupCacheConfig.CacheIntervalConfig.Refresh)
 		googleProvider.GroupsCache = cache
-
 		singleFlightProvider = providers.NewSingleFlightProvider(googleProvider)
 	case providers.OktaProviderName:
 		opc := pc.OktaProviderConfig
-		oktaProvider, err := providers.NewOktaProvider(p, opc.OrgURL, opc.ServerID)
+		oktaProvider, err := providers.NewOktaProvider(p,
+			opc.OrgURL,
+			opc.ServerID,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -52,6 +54,22 @@ func newProvider(pc ProviderConfig, sc SessionConfig) (providers.Provider, error
 		tags := []string{"provider:okta"}
 		cache := providers.NewGroupCache(oktaProvider, pc.GroupCacheConfig.CacheIntervalConfig.Provider, oktaProvider.StatsdClient, tags)
 		singleFlightProvider = providers.NewSingleFlightProvider(cache)
+	case providers.AmazonCognitoProviderName:
+		acpc := pc.AmazonCognitoProviderConfig
+		amazonCognitoProvider, err := providers.NewAmazonCognitoProvider(p,
+			acpc.OrgURL,
+			acpc.Region,
+			acpc.UserPoolID,
+			acpc.Credentials.ID,
+			acpc.Credentials.Secret,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		cache := groups.NewFillCache(amazonCognitoProvider.PopulateMembers, pc.GroupCacheConfig.CacheIntervalConfig.Refresh)
+		amazonCognitoProvider.GroupsCache = cache
+		singleFlightProvider = providers.NewSingleFlightProvider(amazonCognitoProvider)
 	case "test":
 		return providers.NewTestProvider(nil), nil
 	default:
