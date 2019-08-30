@@ -1,38 +1,72 @@
 package options
 
 import (
+	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/buzzfeed/sso/internal/pkg/sessions"
 )
 
-// NewEmailAddressValidator returns a function that checks whether a given email is valid based on a list
-// of email addresses. The address "*" is a wild card that matches any non-empty email.
-func NewEmailAddressValidator(emails []string) func(string) bool {
-	allowAll := false
+var (
+	_ Validator = EmailAddressValidator{}
+
+	// These error message should be formatted in such a way that is appropriate
+	// for display to the end user.
+	ErrEmailAddressDenied = errors.New("Unauthorized Email Address")
+)
+
+type EmailAddressValidator struct {
+	AllowedEmails []string
+}
+
+// NewEmailAddressValidator takes in a list of email addresses and returns a Validator object.
+// The validator can be used to validate that the session.Email:
+// - is non-empty
+// - matches one of the originally passed in email addresses
+//   (case insensitive)
+// - if the originally passed in list of emails consists only of "*", then all emails
+//   are considered valid based on their domain.
+// If valid, nil is returned in place of an error.
+func NewEmailAddressValidator(allowedEmails []string) EmailAddressValidator {
 	var emailAddresses []string
 
-	for _, email := range emails {
-		if email == "*" {
-			allowAll = true
-		}
+	for _, email := range allowedEmails {
 		emailAddress := fmt.Sprintf("%s", strings.ToLower(email))
 		emailAddresses = append(emailAddresses, emailAddress)
 	}
 
-	if allowAll {
-		return func(email string) bool { return email != "" }
+	return EmailAddressValidator{
+		AllowedEmails: emailAddresses,
+	}
+}
+
+func (v EmailAddressValidator) Validate(session *sessions.SessionState) error {
+	if session.Email == "" {
+		return ErrInvalidEmailAddress
 	}
 
-	return func(email string) bool {
-		if email == "" {
-			return false
-		}
-		email = strings.ToLower(email)
-		for _, emailItem := range emailAddresses {
-			if email == emailItem {
-				return true
-			}
-		}
-		return false
+	if len(v.AllowedEmails) == 0 {
+		return ErrEmailAddressDenied
 	}
+
+	if len(v.AllowedEmails) == 1 && v.AllowedEmails[0] == "*" {
+		return nil
+	}
+
+	err := v.validate(session)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (v EmailAddressValidator) validate(session *sessions.SessionState) error {
+	email := strings.ToLower(session.Email)
+	for _, emailItem := range v.AllowedEmails {
+		if email == emailItem {
+			return nil
+		}
+	}
+	return ErrEmailAddressDenied
 }

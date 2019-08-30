@@ -2,119 +2,148 @@ package options
 
 import (
 	"testing"
+
+	"github.com/buzzfeed/sso/internal/pkg/sessions"
 )
 
 func TestEmailAddressValidatorValidator(t *testing.T) {
 	testCases := []struct {
-		name        string
-		domains     []string
-		email       string
-		expectValid bool
+		name          string
+		AllowedEmails []string
+		email         string
+		expectedErr   error
+		session       *sessions.SessionState
 	}{
 		{
-			name:        "nothing should validate when address list is empty",
-			domains:     []string(nil),
-			email:       "foo@example.com",
-			expectValid: false,
+			name:          "nothing should validate when address list is empty",
+			AllowedEmails: []string(nil),
+			session: &sessions.SessionState{
+				Email: "foo@example.com",
+			},
+			expectedErr: ErrEmailAddressDenied,
 		},
 		{
-			name:        "single address validation",
-			domains:     []string{"foo@example.com"},
-			email:       "foo@example.com",
-			expectValid: true,
+			name:          "single address validation",
+			AllowedEmails: []string{"foo@example.com"},
+			session: &sessions.SessionState{
+				Email: "foo@example.com",
+			},
+			expectedErr: nil,
 		},
 		{
-			name:        "substring matches are rejected",
-			domains:     []string{"foo@example.com"},
-			email:       "foo@hackerexample.com",
-			expectValid: false,
+			name:          "substring matches are rejected",
+			AllowedEmails: []string{"foo@example.com"},
+			session: &sessions.SessionState{
+				Email: "foo@hackerexample.com",
+			},
+			expectedErr: ErrEmailAddressDenied,
 		},
 		{
-			name:        "no subdomain rollup happens",
-			domains:     []string{"foo@example.com"},
-			email:       "foo@bar.example.com",
-			expectValid: false,
+			name:          "no subdomain rollup happens",
+			AllowedEmails: []string{"foo@example.com"},
+			session: &sessions.SessionState{
+				Email: "foo@bar.example.com",
+			},
+			expectedErr: ErrEmailAddressDenied,
 		},
 		{
-			name:        "multiple address validation still rejects other addresses",
-			domains:     []string{"foo@abc.com", "foo@xyz.com"},
-			email:       "foo@example.com",
-			expectValid: false,
+			name:          "multiple address validation still rejects other addresses",
+			AllowedEmails: []string{"foo@abc.com", "foo@xyz.com"},
+			session: &sessions.SessionState{
+				Email: "foo@example.com",
+			},
+			expectedErr: ErrEmailAddressDenied,
 		},
 		{
-			name:        "multiple address validation still accepts emails from either address",
-			domains:     []string{"foo@abc.com", "foo@xyz.com"},
-			email:       "foo@abc.com",
-			expectValid: true,
+			name:          "multiple address validation still accepts emails from either address",
+			AllowedEmails: []string{"foo@abc.com", "foo@xyz.com"},
+			session: &sessions.SessionState{
+				Email: "foo@abc.com",
+			},
+			expectedErr: nil,
 		},
 		{
-			name:        "multiple address validation still rejects other addresses",
-			domains:     []string{"foo@abc.com", "bar@xyz.com"},
-			email:       "bar@xyz.com",
-			expectValid: true,
+			name:          "multiple address validation still rejects other addresses",
+			AllowedEmails: []string{"foo@abc.com", "bar@xyz.com"},
+			session: &sessions.SessionState{
+				Email: "bar@xyz.com",
+			},
+			expectedErr: nil,
 		},
 		{
-			name:        "comparisons are case insensitive",
-			domains:     []string{"Foo@Example.Com"},
-			email:       "foo@example.com",
-			expectValid: true,
+			name:          "comparisons are case insensitive-1",
+			AllowedEmails: []string{"Foo@Example.Com"},
+			session: &sessions.SessionState{
+				Email: "foo@example.com",
+			},
+			expectedErr: nil,
 		},
 		{
-			name:        "comparisons are case insensitive",
-			domains:     []string{"Foo@Example.Com"},
-			email:       "foo@EXAMPLE.COM",
-			expectValid: true,
+			name:          "comparisons are case insensitive-2",
+			AllowedEmails: []string{"Foo@Example.Com"},
+			session: &sessions.SessionState{
+				Email: "foo@EXAMPLE.COM",
+			},
+			expectedErr: nil,
 		},
 		{
-			name:        "comparisons are case insensitive",
-			domains:     []string{"foo@example.com"},
-			email:       "foo@ExAmPlE.CoM",
-			expectValid: true,
+			name:          "comparisons are case insensitive-3",
+			AllowedEmails: []string{"foo@example.com"},
+			session: &sessions.SessionState{
+				Email: "foo@ExAmPLE.CoM",
+			},
+			expectedErr: nil,
 		},
 		{
-			name:        "single wildcard allows all",
-			domains:     []string{"*"},
-			email:       "foo@example.com",
-			expectValid: true,
+			name:          "single wildcard allows all",
+			AllowedEmails: []string{"*"},
+			session: &sessions.SessionState{
+				Email: "foo@example.com",
+			},
+			expectedErr: nil,
 		},
 		{
-			name:        "single wildcard allows all",
-			domains:     []string{"*"},
-			email:       "bar@gmail.com",
-			expectValid: true,
+			name:          "single wildcard allows all",
+			AllowedEmails: []string{"*"},
+			session: &sessions.SessionState{
+				Email: "bar@gmail.com",
+			},
+			expectedErr: nil,
 		},
 		{
-			name:        "wildcard in list allows all",
-			domains:     []string{"foo@example.com", "*"},
-			email:       "foo@example.com",
-			expectValid: true,
+			name:          "wildcard is ignored if other domains included",
+			AllowedEmails: []string{"foo@example.com", "*"},
+			session: &sessions.SessionState{
+				Email: "foo@gmail.com",
+			},
+			expectedErr: ErrEmailAddressDenied,
 		},
 		{
-			name:        "wildcard in list allows all",
-			domains:     []string{"foo@example.com", "*"},
-			email:       "foo@gmail.com",
-			expectValid: true,
+			name:          "empty email rejected",
+			AllowedEmails: []string{"foo@example.com"},
+			email:         "",
+			session: &sessions.SessionState{
+				Email: "",
+			},
+			expectedErr: ErrInvalidEmailAddress,
 		},
 		{
-			name:        "empty email rejected",
-			domains:     []string{"foo@example.com"},
-			email:       "",
-			expectValid: false,
-		},
-		{
-			name:        "wildcard still rejects empty emails",
-			domains:     []string{"*"},
-			email:       "",
-			expectValid: false,
+			name:          "wildcard still rejects empty emails",
+			AllowedEmails: []string{"*"},
+			email:         "",
+			session: &sessions.SessionState{
+				Email: "",
+			},
+			expectedErr: ErrInvalidEmailAddress,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			emailValidator := NewEmailAddressValidator(tc.domains)
-			valid := emailValidator(tc.email)
-			if valid != tc.expectValid {
-				t.Fatalf("expected %v, got %v", tc.expectValid, valid)
+			emailValidator := NewEmailAddressValidator(tc.AllowedEmails)
+			err := emailValidator.Validate(tc.session)
+			if err != tc.expectedErr {
+				t.Fatalf("expected %v, got %v", tc.expectedErr, err)
 			}
 		})
 	}

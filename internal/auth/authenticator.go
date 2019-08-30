@@ -12,6 +12,7 @@ import (
 	"github.com/buzzfeed/sso/internal/auth/providers"
 	"github.com/buzzfeed/sso/internal/pkg/aead"
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
+	"github.com/buzzfeed/sso/internal/pkg/options"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	"github.com/buzzfeed/sso/internal/pkg/templates"
 
@@ -20,7 +21,7 @@ import (
 
 // Authenticator stores all the information associated with proxying the request.
 type Authenticator struct {
-	Validator        func(string) bool
+	Validators       []options.Validator
 	EmailDomains     []string
 	ProxyRootDomains []string
 	Host             string
@@ -225,10 +226,15 @@ func (p *Authenticator) authenticate(rw http.ResponseWriter, req *http.Request) 
 		}
 	}
 
-	if !p.Validator(session.Email) {
-		logger.WithUser(session.Email).Error("invalid email user")
+	errors := options.RunValidators(p.Validators, session)
+	if len(errors) == len(p.Validators) {
+		logger.WithUser(session.Email).Info(
+			fmt.Sprintf("permission denied: unauthorized: %q", errors))
 		return nil, ErrUserNotAuthorized
 	}
+
+	logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(
+		fmt.Sprintf("authentication: user passed validation"))
 
 	return session, nil
 }
@@ -575,13 +581,24 @@ func (p *Authenticator) getOAuthCallback(rw http.ResponseWriter, req *http.Reque
 	// Set cookie, or deny: The authenticator validates the session email and group
 	// - for p.Validator see validator.go#newValidatorImpl for more info
 	// - for p.provider.ValidateGroup see providers/google.go#ValidateGroup for more info
-	if !p.Validator(session.Email) {
+
+	errors := options.RunValidators(p.Validators, session)
+	if len(errors) == len(p.Validators) {
 		tags := append(tags, "error:invalid_email")
 		p.StatsdClient.Incr("application_error", tags, 1.0)
-		logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Error(
-			"invalid_email", "permission denied; unauthorized user")
-		return "", HTTPError{Code: http.StatusForbidden, Message: "Invalid Account"}
+		logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(
+			fmt.Sprintf("oauth callback: unauthorized: %q", errors))
+
+		formattedErrors := make([]string, 0, len(errors))
+		for _, err := range errors {
+			formattedErrors = append(formattedErrors, err.Error())
+		}
+		errorMsg := fmt.Sprintf("We ran into some issues while validating your account: \"%s\"",
+			strings.Join(formattedErrors, ", "))
+		return "", HTTPError{Code: http.StatusForbidden, Message: errorMsg}
 	}
+	logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(
+		fmt.Sprintf("oauth callback: user passed validation"))
 
 	logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info("authentication complete")
 	err = p.sessionStore.SaveSession(rw, req, session)
