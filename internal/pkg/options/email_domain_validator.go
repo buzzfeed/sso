@@ -9,11 +9,14 @@ import (
 // of domains. The domain "*" is a wild card that matches any non-empty email.
 func NewEmailDomainValidator(domains []string) func(string) bool {
 	allowAll := false
-	for i, domain := range domains {
+	var emailDomains []string
+
+	for _, domain := range domains {
 		if domain == "*" {
 			allowAll = true
 		}
-		domains[i] = fmt.Sprintf("@%s", strings.ToLower(domain))
+		emailDomain := fmt.Sprintf("@%s", strings.ToLower(domain))
+		emailDomains = append(emailDomains, emailDomain)
 	}
 
 	if allowAll {
@@ -25,7 +28,7 @@ func NewEmailDomainValidator(domains []string) func(string) bool {
 			return false
 		}
 		email = strings.ToLower(email)
-		for _, domain := range domains {
+		for _, domain := range emailDomains {
 			if strings.HasSuffix(email, domain) {
 				return true
 			}

@@ -29,7 +29,7 @@ func main() {
 
 	err = opts.Validate()
 	if err != nil {
-		logger.Error(err, "error validing options")
+		logger.Error(err, "error validating options")
 		os.Exit(1)
 	}
 

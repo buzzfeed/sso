@@ -9,11 +9,14 @@ import (
 // of email addresses. The address "*" is a wild card that matches any non-empty email.
 func NewEmailAddressValidator(emails []string) func(string) bool {
 	allowAll := false
-	for i, email := range emails {
+	var emailAddresses []string
+
+	for _, email := range emails {
 		if email == "*" {
 			allowAll = true
 		}
-		emails[i] = fmt.Sprintf("%s", strings.ToLower(email))
+		emailAddress := fmt.Sprintf("%s", strings.ToLower(email))
+		emailAddresses = append(emailAddresses, emailAddress)
 	}
 
 	if allowAll {
@@ -25,7 +28,7 @@ func NewEmailAddressValidator(emails []string) func(string) bool {
 			return false
 		}
 		email = strings.ToLower(email)
-		for _, emailItem := range emails {
+		for _, emailItem := range emailAddresses {
 			if email == emailItem {
 				return true
 			}
