@@ -106,8 +106,7 @@ func DefaultAuthConfig() Configuration {
 		// we provide no defaults for these right now
 		AuthorizeConfig: AuthorizeConfig{
 			EmailConfig: EmailConfig{
-				Domains:   []string{},
-				Addresses: []string{},
+				Domains: []string{},
 			},
 			ProxyConfig: ProxyConfig{
 				Domains: []string{},
@@ -428,17 +427,12 @@ func (ac AuthorizeConfig) Validate() error {
 }
 
 type EmailConfig struct {
-	Domains   []string `mapstructure:"domains"`
-	Addresses []string `mapstructure:"addresses"`
+	Domains []string `mapstructure:"domains"`
 }
 
 func (ec EmailConfig) Validate() error {
-	if len(ec.Domains) > 0 && len(ec.Addresses) > 0 {
-		return xerrors.New("can not specify both email.domains and email.addesses")
-	}
-
-	if len(ec.Domains) == 0 && len(ec.Addresses) == 0 {
-		return xerrors.New("must specify either email.domains or email.addresses")
+	if len(ec.Domains) == 0 {
+		return xerrors.New("no email.domains configured")
 	}
 
 	return nil
