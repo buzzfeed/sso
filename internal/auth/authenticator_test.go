@@ -66,13 +66,6 @@ func setTestProvider(provider *providers.TestProvider) func(*Authenticator) erro
 	}
 }
 
-func setMockValidator(response bool) func(*Authenticator) error {
-	return func(a *Authenticator) error {
-		a.Validator = func(string) bool { return response }
-		return nil
-	}
-}
-
 func setRedirectURL(redirectURL *url.URL) func(*Authenticator) error {
 	return func(a *Authenticator) error {
 		a.redirectURL = redirectURL
@@ -424,7 +417,6 @@ func TestSignIn(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			config := testConfiguration(t)
 			auth, err := NewAuthenticator(config,
-				setMockValidator(tc.validEmail),
 				setMockSessionStore(tc.mockSessionStore),
 				setMockTempl(),
 				setMockRedirectURL(),
@@ -571,7 +563,6 @@ func TestSignOutPage(t *testing.T) {
 			provider.RevokeError = tc.RevokeError
 
 			p, _ := NewAuthenticator(config,
-				setMockValidator(true),
 				setMockSessionStore(tc.mockSessionStore),
 				setMockTempl(),
 				setTestProvider(provider),
@@ -947,9 +938,7 @@ func TestGetProfile(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			config := testConfiguration(t)
-			p, _ := NewAuthenticator(config,
-				setMockValidator(true),
-			)
+			p, _ := NewAuthenticator(config)
 			u, _ := url.Parse("http://example.com")
 			testProvider := providers.NewTestProvider(u)
 			testProvider.Groups = tc.groupEmails
@@ -1049,9 +1038,7 @@ func TestRedeemCode(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			config := testConfiguration(t)
 
-			proxy, _ := NewAuthenticator(config,
-				setMockValidator(true),
-			)
+			proxy, _ := NewAuthenticator(config)
 
 			testURL, err := url.Parse("example.com")
 			if err != nil {
@@ -1438,7 +1425,6 @@ func TestOAuthCallback(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			config := testConfiguration(t)
 			proxy, _ := NewAuthenticator(config,
-				setMockValidator(tc.validEmail),
 				setMockCSRFStore(tc.csrfResp),
 				setMockSessionStore(tc.sessionStore),
 			)
@@ -1559,7 +1545,6 @@ func TestOAuthStart(t *testing.T) {
 			provider := providers.NewTestProvider(nil)
 			proxy, _ := NewAuthenticator(config,
 				setTestProvider(provider),
-				setMockValidator(true),
 				setMockRedirectURL(),
 				setMockCSRFStore(&sessions.MockCSRFStore{}),
 			)

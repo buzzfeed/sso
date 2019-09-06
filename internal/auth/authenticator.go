@@ -20,7 +20,6 @@ import (
 
 // Authenticator stores all the information associated with proxying the request.
 type Authenticator struct {
-	Validator        func(string) bool
 	EmailDomains     []string
 	ProxyRootDomains []string
 	Host             string
@@ -223,11 +222,6 @@ func (p *Authenticator) authenticate(rw http.ResponseWriter, req *http.Request) 
 			p.sessionStore.ClearSession(rw, req)
 			return nil, err
 		}
-	}
-
-	if !p.Validator(session.Email) {
-		logger.WithUser(session.Email).Error("invalid email user")
-		return nil, ErrUserNotAuthorized
 	}
 
 	return session, nil
@@ -567,17 +561,6 @@ func (p *Authenticator) getOAuthCallback(rw http.ResponseWriter, req *http.Reque
 		tags = append(tags, "error:invalid_redirect_parameter")
 		p.StatsdClient.Incr("application_error", tags, 1.0)
 		return "", HTTPError{Code: http.StatusForbidden, Message: "Invalid Redirect URI"}
-	}
-
-	// Set cookie, or deny: The authenticator validates the session email and group
-	// - for p.Validator see validator.go#newValidatorImpl for more info
-	// - for p.provider.ValidateGroup see providers/google.go#ValidateGroup for more info
-	if !p.Validator(session.Email) {
-		tags := append(tags, "error:invalid_email")
-		p.StatsdClient.Incr("application_error", tags, 1.0)
-		logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Error(
-			"invalid_email", "permission denied; unauthorized user")
-		return "", HTTPError{Code: http.StatusForbidden, Message: "Invalid Account"}
 	}
 
 	logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info("authentication complete")

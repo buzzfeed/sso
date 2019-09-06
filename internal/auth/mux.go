@@ -30,7 +30,6 @@ func NewAuthenticatorMux(config Configuration, statsdClient *statsd.Client) (*Au
 
 		idpSlug := idp.Data().ProviderSlug
 		authenticator, err := NewAuthenticator(config,
-			SetValidator(validator),
 			SetProvider(idp),
 			SetCookieStore(config.SessionConfig, idpSlug),
 			SetStatsdClient(statsdClient),
