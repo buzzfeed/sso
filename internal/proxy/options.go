@@ -24,8 +24,8 @@ import (
 // Cluster - the cluster in which this is running, used for upstream configs
 // Scheme - the default scheme, used for upstream configs
 // SkipAuthPreflight - will skip authentication for OPTIONS requests, default false
-// EmailDomains - csv list of emails with the specified domain to authenticate. Use * to authenticate any email
-// EmailAddresses - []string - authenticate emails with the specified email address (may be given multiple times). Use * to authenticate any email
+// DefaultAllowedEmailDomains - csv list of emails with the specified domain to authenticate. Use * to authenticate any email
+// DefaultAllowedEmailAddresses - []string - authenticate emails with the specified email address (may be given multiple times). Use * to authenticate any email
 // DefaultAllowedGroups - csv list of default allowed groups that are applied to authorize access to upstreams. Will be overridden by groups specified in upstream configs.
 // ClientID - the OAuth Client ID: ie: "123456.apps.googleusercontent.com"
 // ClientSecret - The OAuth Client Secret
@@ -60,9 +60,9 @@ type Options struct {
 
 	SkipAuthPreflight bool `envconfig:"SKIP_AUTH_PREFLIGHT"`
 
-	EmailDomains         []string `envconfig:"EMAIL_DOMAIN"`
-	EmailAddresses       []string `envconfig:"EMAIL_ADDRESSES"`
-	DefaultAllowedGroups []string `envconfig:"DEFAULT_ALLOWED_GROUPS"`
+	DefaultAllowedEmailDomains   []string `envconfig:"DEFAULT_ALLOWED_EMAIL_DOMAINS"`
+	DefaultAllowedEmailAddresses []string `envconfig:"DEFAULT_ALLOWED_EMAIL_ADDRESSES"`
+	DefaultAllowedGroups         []string `envconfig:"DEFAULT_ALLOWED_GROUPS"`
 
 	ClientID     string `envconfig:"CLIENT_ID"`
 	ClientSecret string `envconfig:"CLIENT_SECRET"`
@@ -121,8 +121,10 @@ func NewOptions() *Options {
 		DefaultUpstreamTimeout:          time.Duration(1) * time.Second,
 		DefaultUpstreamTCPResetDeadline: time.Duration(1) * time.Minute,
 
-		DefaultAllowedGroups: []string{},
-		PassAccessToken:      false,
+		DefaultAllowedEmailAddresses: []string{},
+		DefaultAllowedEmailDomains:   []string{},
+		DefaultAllowedGroups:         []string{},
+		PassAccessToken:              false,
 	}
 }
 
@@ -146,9 +148,6 @@ func (o *Options) Validate() error {
 	}
 	if o.ClientSecret == "" {
 		msgs = append(msgs, "missing setting: client-secret")
-	}
-	if len(o.EmailDomains) == 0 && len(o.EmailAddresses) == 0 {
-		msgs = append(msgs, "missing setting: email-domain or email-address")
 	}
 
 	if o.StatsdHost == "" {
@@ -178,11 +177,13 @@ func (o *Options) Validate() error {
 		}
 
 		defaultUpstreamOptionsConfig := &OptionsConfig{
-			AllowedGroups: o.DefaultAllowedGroups,
-			Timeout:       o.DefaultUpstreamTimeout,
-			ResetDeadline: o.DefaultUpstreamTCPResetDeadline,
-			ProviderSlug:  o.DefaultProviderSlug,
-			CookieName:    o.CookieName,
+			AllowedEmailAddresses: o.DefaultAllowedEmailAddresses,
+			AllowedEmailDomains:   o.DefaultAllowedEmailDomains,
+			AllowedGroups:         o.DefaultAllowedGroups,
+			Timeout:               o.DefaultUpstreamTimeout,
+			ResetDeadline:         o.DefaultUpstreamTCPResetDeadline,
+			ProviderSlug:          o.DefaultProviderSlug,
+			CookieName:            o.CookieName,
 		}
 
 		o.upstreamConfigs, err = loadServiceConfigs(rawBytes, o.Cluster, o.Scheme, templateVars, defaultUpstreamOptionsConfig)
@@ -192,10 +193,20 @@ func (o *Options) Validate() error {
 	}
 
 	if o.upstreamConfigs != nil {
+		invalidUpstreams := []string{}
 		for _, uc := range o.upstreamConfigs {
 			if uc.Timeout > o.TCPWriteTimeout {
 				o.TCPWriteTimeout = uc.Timeout
 			}
+
+			if len(uc.AllowedEmailDomains) == 0 && len(uc.AllowedEmailAddresses) == 0 {
+				invalidUpstreams = append(invalidUpstreams, uc.Service)
+			}
+		}
+		if len(invalidUpstreams) != 0 {
+			msgs = append(msgs, fmt.Sprintf(
+				"missing setting: DEFAULT_ALLOWED_EMAIL_DOMAINS or DEFAULT_ALLOWED_EMAIL_ADDRESSES in either environment or upstream config in the following upstreams: %v",
+				invalidUpstreams))
 		}
 	}
 

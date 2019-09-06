@@ -52,6 +52,8 @@ type UpstreamConfig struct {
 
 	SkipAuthCompiledRegex []*regexp.Regexp
 	AllowedGroups         []string
+	AllowedEmailDomains   []string
+	AllowedEmailAddresses []string
 	TLSSkipVerify         bool
 	PreserveHost          bool
 	HMACAuth              hmacauth.HmacAuth
@@ -88,17 +90,19 @@ type RouteConfig struct {
 // * skip_request_signing - skip request signing if this behavior is problematic or undesired. For requests with large http bodies
 //   this maybe useful to unset as http bodies are read into memory in order to sign.
 type OptionsConfig struct {
-	HeaderOverrides      map[string]string `yaml:"header_overrides"`
-	InjectRequestHeaders map[string]string `yaml:"inject_request_headers"`
-	SkipAuthRegex        []string          `yaml:"skip_auth_regex"`
-	AllowedGroups        []string          `yaml:"allowed_groups"`
-	TLSSkipVerify        bool              `yaml:"tls_skip_verify"`
-	PreserveHost         bool              `yaml:"preserve_host"`
-	Timeout              time.Duration     `yaml:"timeout"`
-	ResetDeadline        time.Duration     `yaml:"reset_deadline"`
-	FlushInterval        time.Duration     `yaml:"flush_interval"`
-	SkipRequestSigning   bool              `yaml:"skip_request_signing"`
-	ProviderSlug         string            `yaml:"provider_slug"`
+	HeaderOverrides       map[string]string `yaml:"header_overrides"`
+	InjectRequestHeaders  map[string]string `yaml:"inject_request_headers"`
+	SkipAuthRegex         []string          `yaml:"skip_auth_regex"`
+	AllowedGroups         []string          `yaml:"allowed_groups"`
+	AllowedEmailDomains   []string          `yaml:"allowed_email_domains"`
+	AllowedEmailAddresses []string          `yaml:"allowed_email_addresses"`
+	TLSSkipVerify         bool              `yaml:"tls_skip_verify"`
+	PreserveHost          bool              `yaml:"preserve_host"`
+	Timeout               time.Duration     `yaml:"timeout"`
+	ResetDeadline         time.Duration     `yaml:"reset_deadline"`
+	FlushInterval         time.Duration     `yaml:"flush_interval"`
+	SkipRequestSigning    bool              `yaml:"skip_request_signing"`
+	ProviderSlug          string            `yaml:"provider_slug"`
 
 	// CookieName is still set globally, so we do not provide override behavior
 	CookieName string
@@ -396,6 +400,8 @@ func parseOptionsConfig(proxy *UpstreamConfig, defaultOpts *OptionsConfig) error
 	}
 
 	proxy.AllowedGroups = dst.AllowedGroups
+	proxy.AllowedEmailDomains = dst.AllowedEmailDomains
+	proxy.AllowedEmailAddresses = dst.AllowedEmailAddresses
 	proxy.Timeout = dst.Timeout
 	proxy.ResetDeadline = dst.ResetDeadline
 	proxy.FlushInterval = dst.FlushInterval
