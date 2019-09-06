@@ -131,6 +131,57 @@ func TestEnvironmentOverridesConfiguration(t *testing.T) {
 			},
 		},
 		{
+			Name: "Test Sessions",
+			EnvOverrides: map[string]string{
+				"SESSION_LIFETIME": "1h",
+				"SESSION_KEY":      "abcdefg",
+			},
+			CheckFunc: func(c Configuration, t *testing.T) {
+				assertEq(1*time.Hour, c.SessionConfig.SessionLifetimeTTL, t)
+				assertEq("abcdefg", c.SessionConfig.Key, t)
+			},
+		},
+		{
+			Name: "Test Redis Sessions",
+			EnvOverrides: map[string]string{
+				"SESSION_REDIS_CONNECTION": "redis://master.example.com:6379",
+			},
+			CheckFunc: func(c Configuration, t *testing.T) {
+				redisConf := c.SessionConfig.RedisConfig
+				assertEq([]string{"redis://master.example.com:6379"}, redisConf.ConnectionURLs, t)
+			},
+		},
+		{
+			Name: "Test Redis Sentinel Sessions",
+			EnvOverrides: map[string]string{
+				"SESSION_REDIS_SENTINEL":   "true",
+				"SESSION_REDIS_MASTER":     "redis://master.example.com:6379",
+				"SESSION_REDIS_CONNECTION": "redis://instance-001.example.com:6379,redis://instance-002.example.com:6379,redis://instance-003.example.com:6379",
+			},
+			CheckFunc: func(c Configuration, t *testing.T) {
+				redisConf := c.SessionConfig.RedisConfig
+				assertEq(true, redisConf.UseSentinel, t)
+				assertEq("redis://master.example.com:6379", redisConf.SentinelMasterName, t)
+				assertEq([]string{
+					"redis://instance-001.example.com:6379",
+					"redis://instance-002.example.com:6379",
+					"redis://instance-003.example.com:6379",
+				}, redisConf.ConnectionURLs, t)
+			},
+		},
+		{
+			Name: "Test Cookie Sessions",
+			EnvOverrides: map[string]string{
+				"SESSION_COOKIE_NAME":   "sso_auth_test",
+				"SESSION_COOKIE_SECRET": "s3kr1t",
+			},
+			CheckFunc: func(c Configuration, t *testing.T) {
+				cookieConf := c.SessionConfig.CookieConfig
+				assertEq("sso_auth_test", cookieConf.Name, t)
+				assertEq("s3kr1t", cookieConf.Secret, t)
+			},
+		},
+		{
 			Name: "Test Multiple Providers",
 			EnvOverrides: map[string]string{
 				// foo

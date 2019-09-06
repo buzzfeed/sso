@@ -80,6 +80,11 @@ type Options struct {
 	CookieSecure   bool          `envconfig:"COOKIE_SECURE" default:"true"`
 	CookieHTTPOnly bool          `envconfig:"COOKIE_HTTP_ONLY"`
 
+	RedisConnectionURL          string   `envconfig:"REDIS_CONNECTION_URL"`
+	RedisUseSentinel            bool     `envconfig:"REDIS_USE_SENTINEL"`
+	RedisSentinelMasterName     string   `envconfig:"REDIS_SENTINEL_MASTER_NAME"`
+	RedisSentinelConnectionURLs []string `envconfig:"REDIS_SENTINEL_CONNECTION_URLS"`
+
 	PassAccessToken bool `envconfig:"PASS_ACCESS_TOKEN" default:"false"`
 
 	Provider            string `envconfig:"PROVIDER" default:"sso"`
