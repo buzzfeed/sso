@@ -14,7 +14,7 @@ type Provider interface {
 	ValidateGroup(string, []string, string) ([]string, bool, error)
 	UserGroups(string, []string, string) ([]string, error)
 	ValidateSessionState(*sessions.SessionState, []string) bool
-	GetSignInURL(redirectURL *url.URL, finalRedirect string) *url.URL
+	GetSignInURL(redirectURL *url.URL, finalRedirect string, allowedDomains []string) *url.URL
 	GetSignOutURL(redirectURL *url.URL) *url.URL
 	RefreshSession(*sessions.SessionState, []string) (bool, error)
 }

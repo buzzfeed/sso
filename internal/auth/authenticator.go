@@ -20,7 +20,6 @@ import (
 
 // Authenticator stores all the information associated with proxying the request.
 type Authenticator struct {
-	EmailDomains     []string
 	ProxyRootDomains []string
 	Host             string
 	Scheme           string
@@ -79,7 +78,6 @@ func NewAuthenticator(config Configuration, optionFuncs ...func(*Authenticator) 
 	p := &Authenticator{
 		ProxyClientID:     config.ClientConfigs["proxy"].ID,
 		ProxyClientSecret: config.ClientConfigs["proxy"].Secret,
-		EmailDomains:      config.AuthorizeConfig.EmailConfig.Domains,
 		Host:              config.ServerConfig.Host,
 		Scheme:            config.ServerConfig.Scheme,
 
@@ -134,6 +132,7 @@ type signInResp struct {
 
 // SignInPage directs the user to the sign in page
 func (p *Authenticator) SignInPage(rw http.ResponseWriter, req *http.Request, code int) {
+	logger := log.NewLogEntry()
 	rw.WriteHeader(code)
 
 	// We construct this URL based on the known callback URL that we send to Google.
@@ -151,10 +150,16 @@ func (p *Authenticator) SignInPage(rw http.ResponseWriter, req *http.Request, co
 	// validateRedirectURI middleware already ensures that this is a valid URL
 	destinationURL, _ := url.Parse(redirectURL.Query().Get("redirect_uri"))
 
+	emailDomainsFormValue := req.FormValue("email_domains")
+	emailDomains := []string{}
+	if emailDomainsFormValue != "" {
+		emailDomains = strings.Split(emailDomainsFormValue, ",")
+	}
+
 	t := signInResp{
 		ProviderName: p.provider.Data().ProviderName,
 		ProviderSlug: p.provider.Data().ProviderSlug,
-		EmailDomains: p.EmailDomains,
+		EmailDomains: emailDomains,
 		Redirect:     redirectURL.String(),
 		Destination:  destinationURL.Host,
 		Version:      VERSION,

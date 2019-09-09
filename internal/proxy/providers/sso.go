@@ -409,7 +409,7 @@ func (p *SSOProvider) ValidateSessionState(s *sessions.SessionState, allowedGrou
 }
 
 // GetSignInURL with typical oauth parameters
-func (p *SSOProvider) GetSignInURL(redirectURL *url.URL, state string) *url.URL {
+func (p *SSOProvider) GetSignInURL(redirectURL *url.URL, state string, allowedDomains []string) *url.URL {
 	a := *p.Data().SignInURL
 	now := time.Now()
 	rawRedirect := redirectURL.String()
@@ -421,6 +421,8 @@ func (p *SSOProvider) GetSignInURL(redirectURL *url.URL, state string) *url.URL 
 	params.Add("state", state)
 	params.Set("ts", fmt.Sprint(now.Unix()))
 	params.Set("sig", p.signRedirectURL(rawRedirect, now))
+	params.Add("email_domains", strings.Join(allowedDomains, ","))
+
 	a.RawQuery = params.Encode()
 	return &a
 }
