@@ -132,7 +132,6 @@ type signInResp struct {
 
 // SignInPage directs the user to the sign in page
 func (p *Authenticator) SignInPage(rw http.ResponseWriter, req *http.Request, code int) {
-	logger := log.NewLogEntry()
 	rw.WriteHeader(code)
 
 	// We construct this URL based on the known callback URL that we send to Google.
