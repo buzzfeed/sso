@@ -61,9 +61,6 @@ func testConfiguration(t *testing.T) Configuration {
 			ProxyConfig: ProxyConfig{
 				Domains: []string{"proxy.local", "root.local", "example.com"},
 			},
-			EmailConfig: EmailConfig{
-				Domains: []string{"proxy.local"},
-			},
 		},
 	}
 	err := c.Validate()
@@ -163,15 +160,6 @@ func TestEnvironmentOverridesConfiguration(t *testing.T) {
 				assertEq("baz-client-id", baz.ClientConfig.ID, t)
 			},
 		},
-		{
-			Name: "Test ENV CSV Lists",
-			EnvOverrides: map[string]string{
-				"AUTHORIZE_EMAIL_DOMAINS": "proxy.local,root.local",
-			},
-			CheckFunc: func(c Configuration, t *testing.T) {
-				assertEq([]string{"proxy.local", "root.local"}, c.AuthorizeConfig.EmailConfig.Domains, t)
-			},
-		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
@@ -246,9 +234,6 @@ func TestConfigValidate(t *testing.T) {
 				AuthorizeConfig: AuthorizeConfig{
 					ProxyConfig: ProxyConfig{
 						Domains: []string{"proxy.local", "root.local"},
-					},
-					EmailConfig: EmailConfig{
-						Domains: []string{"proxy.local"},
 					},
 				},
 			},

@@ -128,7 +128,6 @@ func TestSignIn(t *testing.T) {
 		mockAuthCodeCipher     *aead.MockCipher
 		refreshResponse        providerRefreshResponse
 		providerValidToken     bool
-		validEmail             bool
 		expectedSignInPage     bool
 		expectedDestinationURL string
 		expectedCode           int
@@ -232,23 +231,6 @@ func TestSignIn(t *testing.T) {
 			expectedErrorResponse: &errResponse{"save error"},
 		},
 		{
-			name: "refresh period expired, successful refresh, invalid email",
-			mockSessionStore: &sessions.MockSessionStore{
-				Session: &sessions.SessionState{
-					Email:            "email",
-					AccessToken:      "accesstoken",
-					RefreshToken:     "refresh",
-					LifetimeDeadline: time.Now().Add(time.Hour),
-					RefreshDeadline:  time.Now().Add(-time.Hour),
-				},
-			},
-			refreshResponse: providerRefreshResponse{
-				OK: true,
-			},
-			expectedCode:          http.StatusUnauthorized,
-			expectedErrorResponse: &errResponse{ErrUserNotAuthorized.Error()},
-		},
-		{
 			name: "valid session state, save session error",
 			mockSessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
@@ -265,7 +247,7 @@ func TestSignIn(t *testing.T) {
 			expectedErrorResponse: &errResponse{"save error"},
 		},
 		{
-			name: "invalid session state, invalid email",
+			name: "invalid session state",
 			mockSessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
 					Email:            "email",
@@ -292,7 +274,6 @@ func TestSignIn(t *testing.T) {
 			refreshResponse: providerRefreshResponse{
 				OK: true,
 			},
-			validEmail:            true,
 			expectedCode:          http.StatusForbidden,
 			expectedErrorResponse: &errResponse{"no state parameter supplied"},
 		},
@@ -313,7 +294,6 @@ func TestSignIn(t *testing.T) {
 			refreshResponse: providerRefreshResponse{
 				OK: true,
 			},
-			validEmail:            true,
 			expectedCode:          http.StatusForbidden,
 			expectedErrorResponse: &errResponse{"no redirect_uri parameter supplied"},
 		},
@@ -335,7 +315,6 @@ func TestSignIn(t *testing.T) {
 			refreshResponse: providerRefreshResponse{
 				OK: true,
 			},
-			validEmail:            true,
 			expectedCode:          http.StatusBadRequest,
 			expectedErrorResponse: &errResponse{"malformed redirect_uri parameter passed"},
 		},
@@ -360,7 +339,6 @@ func TestSignIn(t *testing.T) {
 			mockAuthCodeCipher: &aead.MockCipher{
 				MarshalError: fmt.Errorf("error marshal"),
 			},
-			validEmail:            true,
 			expectedCode:          http.StatusInternalServerError,
 			expectedErrorResponse: &errResponse{"error marshal"},
 		},
@@ -385,7 +363,6 @@ func TestSignIn(t *testing.T) {
 			mockAuthCodeCipher: &aead.MockCipher{
 				MarshalString: "abcdefg",
 			},
-			validEmail:   true,
 			expectedCode: http.StatusFound,
 		},
 		{
@@ -403,7 +380,6 @@ func TestSignIn(t *testing.T) {
 				"state":        "state",
 				"redirect_uri": "http://foo.example.com",
 			},
-			validEmail:         true,
 			providerValidToken: true,
 			mockAuthCodeCipher: &aead.MockCipher{
 				MarshalString: "abcdefg",
@@ -1207,7 +1183,6 @@ func TestOAuthCallback(t *testing.T) {
 		paramsMap          map[string]string
 		expectedError      error
 		testRedeemResponse testRedeemResponse
-		validEmail         bool
 		csrfResp           *sessions.MockCSRFStore
 		sessionStore       *sessions.MockSessionStore
 		expectedRedirect   string
@@ -1325,29 +1300,7 @@ func TestOAuthCallback(t *testing.T) {
 		},
 
 		{
-			name: "invalid email address",
-			paramsMap: map[string]string{
-				"code":  "authCode",
-				"state": base64.URLEncoding.EncodeToString([]byte("state:http://www.example.com/something")),
-			},
-			testRedeemResponse: testRedeemResponse{
-				SessionState: &sessions.SessionState{
-					Email:           "example@email.com",
-					AccessToken:     "accessToken",
-					RefreshDeadline: time.Now().Add(time.Hour),
-					RefreshToken:    "refresh",
-				},
-			},
-			csrfResp: &sessions.MockCSRFStore{
-				Cookie: &http.Cookie{
-					Name:  "something_csrf",
-					Value: "state",
-				},
-			},
-			expectedError: HTTPError{Code: http.StatusForbidden, Message: "Invalid Account"},
-		},
-		{
-			name: "valid email, invalid redirect",
+			name: "invalid redirect",
 			paramsMap: map[string]string{
 				"code":  "authCode",
 				"state": base64.URLEncoding.EncodeToString([]byte("state:something")),
@@ -1366,11 +1319,10 @@ func TestOAuthCallback(t *testing.T) {
 					Value: "state",
 				},
 			},
-			validEmail:    true,
 			expectedError: HTTPError{Code: http.StatusForbidden, Message: "Invalid Redirect URI"},
 		},
 		{
-			name: "valid email, valid redirect, save error",
+			name: "valid redirect, save error",
 			paramsMap: map[string]string{
 				"code":  "authCode",
 				"state": base64.URLEncoding.EncodeToString([]byte("state:http://www.example.com/something")),
@@ -1392,11 +1344,10 @@ func TestOAuthCallback(t *testing.T) {
 			sessionStore: &sessions.MockSessionStore{
 				SaveError: fmt.Errorf("saveError"),
 			},
-			validEmail:    true,
 			expectedError: HTTPError{Code: http.StatusInternalServerError, Message: "Internal Error"},
 		},
 		{
-			name: "valid email, valid redirect, valid save",
+			name: "valid redirect, valid save",
 			paramsMap: map[string]string{
 				"code":  "authCode",
 				"state": base64.URLEncoding.EncodeToString([]byte("state:http://www.example.com/something")),
@@ -1416,7 +1367,6 @@ func TestOAuthCallback(t *testing.T) {
 				},
 			},
 			sessionStore:     &sessions.MockSessionStore{},
-			validEmail:       true,
 			expectedRedirect: "http://www.example.com/something",
 		},
 	}

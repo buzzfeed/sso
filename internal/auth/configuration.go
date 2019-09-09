@@ -54,7 +54,6 @@ import (
 // SERVER_TIMEOUT_READ
 //
 // AUTHORIZE_PROXY_DOMAINS
-// AUTHORIZE_EMAIL_DOMAINS
 //
 // METRICS_STATSD_PORT
 // METRICS_STATSD_HOST
@@ -104,9 +103,6 @@ func DefaultAuthConfig() Configuration {
 		},
 		// we provide no defaults for these right now
 		AuthorizeConfig: AuthorizeConfig{
-			EmailConfig: EmailConfig{
-				Domains: []string{},
-			},
 			ProxyConfig: ProxyConfig{
 				Domains: []string{},
 			},
@@ -124,7 +120,6 @@ var (
 	_ Validator = ProviderConfig{}
 	_ Validator = ClientConfig{}
 	_ Validator = AuthorizeConfig{}
-	_ Validator = EmailConfig{}
 	_ Validator = ProxyConfig{}
 	_ Validator = ServerConfig{}
 	_ Validator = MetricsConfig{}
@@ -409,29 +404,12 @@ func (cc ClientConfig) Validate() error {
 }
 
 type AuthorizeConfig struct {
-	EmailConfig EmailConfig `mapstructure:"email"`
 	ProxyConfig ProxyConfig `mapstructure:"proxy"`
 }
 
 func (ac AuthorizeConfig) Validate() error {
-	if err := ac.EmailConfig.Validate(); err != nil {
-		return xerrors.Errorf("invalid authorize.email config: %w", err)
-	}
-
 	if err := ac.ProxyConfig.Validate(); err != nil {
 		return xerrors.Errorf("invalid authorize.proxy config: %w", err)
-	}
-
-	return nil
-}
-
-type EmailConfig struct {
-	Domains []string `mapstructure:"domains"`
-}
-
-func (ec EmailConfig) Validate() error {
-	if len(ec.Domains) == 0 {
-		return xerrors.New("no email.domains configured")
 	}
 
 	return nil
