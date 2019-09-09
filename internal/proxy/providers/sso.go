@@ -421,7 +421,7 @@ func (p *SSOProvider) GetSignInURL(redirectURL *url.URL, state string, allowedDo
 	params.Add("state", state)
 	params.Set("ts", fmt.Sprint(now.Unix()))
 	params.Set("sig", p.signRedirectURL(rawRedirect, now))
-	params.Add("email_domains", strings.Join(allowedDomains, ","))
+	params.Set("email_domains", strings.Join(allowedDomains, ","))
 
 	a.RawQuery = params.Encode()
 	return &a

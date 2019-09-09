@@ -135,6 +135,9 @@ func TestSignIn(t *testing.T) {
 	}{
 		{
 			name: "err no cookie calls proxy oauth redirect, no params map redirects to sign in page",
+			paramsMap: map[string]string{
+				"email_domains": "testone.com,testtwo.com",
+			},
 			mockSessionStore: &sessions.MockSessionStore{
 				LoadError: http.ErrNoCookie,
 			},
@@ -148,7 +151,8 @@ func TestSignIn(t *testing.T) {
 				LoadError: http.ErrNoCookie,
 			},
 			paramsMap: map[string]string{
-				"redirect_uri": "http://foo.example.com",
+				"email_domains": "testone.com,testtwo.com",
+				"redirect_uri":  "http://foo.example.com",
 			},
 			expectedSignInPage:     true,
 			expectedDestinationURL: "foo.example.com",
@@ -167,6 +171,9 @@ func TestSignIn(t *testing.T) {
 		},
 		{
 			name: "expired lifetime of session clears session and redirects to sign in",
+			paramsMap: map[string]string{
+				"email_domains": "testone.com,testtwo.com",
+			},
 			mockSessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
 					Email:            "email",
@@ -427,7 +434,7 @@ func TestSignIn(t *testing.T) {
 				expectedSignInResp := &signInResp{
 					ProviderName: provider.Data().ProviderName,
 					ProviderSlug: "test",
-					EmailDomains: auth.EmailDomains,
+					EmailDomains: []string{"testone.com", "testtwo.com"},
 					Redirect:     u.String(),
 					Destination:  tc.expectedDestinationURL,
 					Version:      VERSION,
