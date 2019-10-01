@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/buzzfeed/sso/internal/auth/circuit"
@@ -206,7 +207,7 @@ func (p *OktaProvider) oktaRequest(method, endpoint string, params url.Values, t
 				ErrorDescription string `json:"error_description"`
 			}
 			e := json.Unmarshal(respBody, &response)
-			if e == nil && response.ErrorDescription == "Token expired or revoked" {
+			if e == nil && strings.Contains(strings.ToLower(response.ErrorDescription), "token is invalid or expired") {
 				p.StatsdClient.Incr("provider.token_revoked", tags, 1.0)
 				return ErrTokenRevoked
 			}
@@ -373,7 +374,6 @@ func (p *OktaProvider) RefreshSessionIfNeeded(s *sessions.SessionState) (bool, e
 	if s == nil || !s.RefreshPeriodExpired() || s.RefreshToken == "" {
 		return false, nil
 	}
-
 	newToken, duration, err := p.RefreshAccessToken(s.RefreshToken)
 	if err != nil {
 		return false, err

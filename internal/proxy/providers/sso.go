@@ -31,6 +31,7 @@ var (
 var (
 	ErrMissingRefreshToken     = errors.New("missing refresh token")
 	ErrAuthProviderUnavailable = errors.New("auth provider unavailable")
+	ErrTokenRevoked            = errors.New("token revoked or expired")
 )
 
 var userAgentString string
@@ -321,6 +322,8 @@ func (p *SSOProvider) redeemRefreshToken(refreshToken string) (token string, exp
 	if resp.StatusCode != http.StatusCreated {
 		if isProviderUnavailable(resp.StatusCode) {
 			err = ErrAuthProviderUnavailable
+		} else if resp.StatusCode == http.StatusUnauthorized {
+			err = ErrTokenRevoked
 		} else {
 			err = fmt.Errorf("got %d from %q %s", resp.StatusCode, p.RefreshURL.String(), body)
 		}

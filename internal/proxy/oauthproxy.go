@@ -679,6 +679,9 @@ func (p *OAuthProxy) Proxy(rw http.ResponseWriter, req *http.Request) {
 			// We know the user is not authorized for the request, we show them a forbidden page
 			p.ErrorPage(rw, req, http.StatusForbidden, "Forbidden", "You're not authorized to view this page")
 			return
+		case providers.ErrTokenRevoked:
+			p.ErrorPage(rw, req, http.StatusUnauthorized, "Unauthorized", "Token Expired or Revoked")
+			return
 		default:
 			logger.Error(err, "unknown error authenticating user")
 			tags = append(tags, "error:internal_error")

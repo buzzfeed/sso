@@ -259,6 +259,9 @@ func (p *Authenticator) SignIn(rw http.ResponseWriter, req *http.Request) {
 		p.ProxyOAuthRedirect(rw, req, session, tags)
 	case http.ErrNoCookie:
 		p.SignInPage(rw, req, http.StatusOK)
+	case providers.ErrTokenRevoked:
+		p.sessionStore.ClearSession(rw, req)
+		p.SignInPage(rw, req, http.StatusOK)
 	case sessions.ErrLifetimeExpired, sessions.ErrInvalidSession:
 		p.sessionStore.ClearSession(rw, req)
 		p.SignInPage(rw, req, http.StatusOK)
