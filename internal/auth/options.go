@@ -25,7 +25,15 @@ func newProvider(pc ProviderConfig, sc SessionConfig) (providers.Provider, error
 
 	var singleFlightProvider providers.Provider
 	switch pc.ProviderType {
-	case providers.GoogleProviderName: // Google
+	case providers.AzureProviderName:
+		apc := pc.AzureProviderConfig
+		azureProvider, err := providers.NewAzureV2Provider(p)
+		if err != nil {
+			return nil, err
+		}
+		azureProvider.Configure(apc.Tenant)
+		singleFlightProvider = providers.NewSingleFlightProvider(azureProvider)
+	case providers.GoogleProviderName:
 		gpc := pc.GoogleProviderConfig
 		googleProvider, err := providers.NewGoogleProvider(p,
 			gpc.ApprovalPrompt,
@@ -41,6 +49,13 @@ func newProvider(pc ProviderConfig, sc SessionConfig) (providers.Provider, error
 		googleProvider.GroupsCache = cache
 
 		singleFlightProvider = providers.NewSingleFlightProvider(googleProvider)
+	case providers.OIDCProviderName:
+		opc := pc.OIDCProviderConfig
+		oidcProvider, err := providers.NewOIDCProvider(p, opc.DiscoveryURL)
+		if err != nil {
+			return nil, err
+		}
+		singleFlightProvider = providers.NewSingleFlightProvider(oidcProvider)
 	case providers.OktaProviderName:
 		opc := pc.OktaProviderConfig
 		oktaProvider, err := providers.NewOktaProvider(p, opc.OrgURL, opc.ServerID)

@@ -108,7 +108,7 @@ func (p *Authenticator) newMux() http.Handler {
 	serviceMux.HandleFunc("/start", p.withMethods(p.OAuthStart, "GET"))
 	serviceMux.HandleFunc("/sign_in", p.withMethods(p.validateClientID(p.validateRedirectURI(p.validateSignature(p.SignIn))), "GET"))
 	serviceMux.HandleFunc("/sign_out", p.withMethods(p.validateRedirectURI(p.validateSignature(p.SignOut)), "GET", "POST"))
-	serviceMux.HandleFunc("/callback", p.withMethods(p.OAuthCallback, "GET"))
+	serviceMux.HandleFunc("/callback", p.withMethods(p.OAuthCallback, "GET", "POST"))
 	serviceMux.HandleFunc("/profile", p.withMethods(p.validateClientID(p.validateClientSecret(p.GetProfile)), "GET"))
 	serviceMux.HandleFunc("/validate", p.withMethods(p.validateClientID(p.validateClientSecret(p.ValidateToken)), "GET"))
 	serviceMux.HandleFunc("/redeem", p.withMethods(p.validateClientID(p.validateClientSecret(p.Redeem)), "POST"))
@@ -463,8 +463,8 @@ func (p *Authenticator) OAuthStart(rw http.ResponseWriter, req *http.Request) {
 	// Here we validate the redirect that is nested within the redirect_uri.
 	// `authRedirectURL` points to step D, `proxyRedirectURL` points to step E.
 	//
-	//    A*       B             C               D              E
-	// /start -> Google -> auth /callback -> /sign_in -> proxy /callback
+	// A*        B             C                 D           E
+	// /start -> IdProvider -> auth /callback -> /sign_in -> proxy /callback
 	//
 	// * you are here
 	proxyRedirectURL, err := url.Parse(authRedirectURL.Query().Get("redirect_uri"))
@@ -488,7 +488,7 @@ func (p *Authenticator) OAuthStart(rw http.ResponseWriter, req *http.Request) {
 
 func (p *Authenticator) redeemCode(host, code string) (*sessions.SessionState, error) {
 	// The authenticator redeems `code` for an access token, and uses the token to request user
-	// info from the provider (Google).
+	// info from the provider.
 
 	redirectURI := p.GetRedirectURI(host)
 	// see providers/google.go#Redeem for more info
@@ -504,7 +504,7 @@ func (p *Authenticator) redeemCode(host, code string) (*sessions.SessionState, e
 }
 
 func (p *Authenticator) getOAuthCallback(rw http.ResponseWriter, req *http.Request) (string, error) {
-	// After the provider (Google) redirects back to the sso proxy, the proxy uses this
+	// After the provider redirects back to the sso proxy, the proxy uses this
 	// endpoint to set up auth cookies.
 	logger := log.NewLogEntry()
 

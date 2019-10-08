@@ -20,12 +20,14 @@ import (
 
 func newProviderServer(body []byte, code int) (*url.URL, *httptest.Server) {
 	s := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		rw.Header().Set("Content-Type", "application/json")
 		rw.WriteHeader(code)
 		rw.Write(body)
 	}))
 	u, _ := url.Parse(s.URL)
 	return u, s
 }
+
 func newGoogleProvider(providerData *ProviderData) *GoogleProvider {
 	if providerData == nil {
 		providerData = &ProviderData{
@@ -279,7 +281,7 @@ func TestGoogleProviderRevoke(t *testing.T) {
 	}
 }
 
-func TestValidateGroupMembers(t *testing.T) {
+func TestGoogleValidateGroupMembers(t *testing.T) {
 	testCases := []struct {
 		name                  string
 		inputAllowedGroups    []string

@@ -89,8 +89,9 @@ func (c *MiscreantCipher) Decrypt(joined []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-// Marshal marshals the interface state as JSON, encrypts the JSON using the cipher
-// and base64 encodes the binary value as a string and returns the result
+// Marshal marshals the interface state as JSON, gzips it, encrypts the JSON
+// using the cipher, and base64 encodes the binary value as a string and
+// returns the result.
 func (c *MiscreantCipher) Marshal(s interface{}) (string, error) {
 	// encode json value
 	plaintext, err := json.Marshal(s)
@@ -98,7 +99,7 @@ func (c *MiscreantCipher) Marshal(s interface{}) (string, error) {
 		return "", err
 	}
 
-	// gunzip the bytes
+	// gzip the bytes
 	var jsonBuffer bytes.Buffer
 	w := gzip.NewWriter(&jsonBuffer)
 	w.Write(plaintext)
@@ -115,8 +116,9 @@ func (c *MiscreantCipher) Marshal(s interface{}) (string, error) {
 	return encoded, nil
 }
 
-// Unmarshal takes the marshaled string, base64-decodes into a byte slice, decrypts the
-// byte slice the passed cipher, and unmarshals the resulting JSON into the struct pointer passed
+// Unmarshal takes the marshaled string, base64-decodes into a byte slice,
+// decrypts the byte slice the pased cipher, gunzips it, and unmarshals
+// the resulting JSON into the struct pointer passed.
 func (c *MiscreantCipher) Unmarshal(value string, s interface{}) error {
 	// convert base64 string value to bytes
 	ciphertext, err := base64.RawURLEncoding.DecodeString(value)
@@ -130,7 +132,7 @@ func (c *MiscreantCipher) Unmarshal(value string, s interface{}) error {
 		return err
 	}
 
-	// gzip the bytes
+	// gunzip the bytes
 	var jsonBuffer bytes.Buffer
 	r, err := gzip.NewReader(bytes.NewBuffer(plaintext))
 	if err != nil {

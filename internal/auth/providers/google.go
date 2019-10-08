@@ -21,6 +21,12 @@ import (
 	"github.com/datadog/datadog-go/statsd"
 )
 
+var (
+	// This is a compile-time check to make sure our types correctly implement the interface:
+	// https://medium.com/@matryer/c167afed3aae
+	_ Provider = &GoogleProvider{}
+)
+
 // GoogleProvider is an implementation of the Provider interface.
 type GoogleProvider struct {
 	*ProviderData

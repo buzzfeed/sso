@@ -172,7 +172,7 @@ func (p *ProviderData) RefreshSessionIfNeeded(s *sessions.SessionState) (bool, e
 	return false, nil
 }
 
-// RefreshAccessToken returns a nont implemented error.
+// RefreshAccessToken returns a not implemented error.
 func (p *ProviderData) RefreshAccessToken(refreshToken string) (string, time.Duration, error) {
 	return "", 0, ErrNotImplemented
 }

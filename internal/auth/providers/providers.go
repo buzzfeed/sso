@@ -29,8 +29,12 @@ var (
 )
 
 const (
+	// AzureProviderName identifies the Azure AD v2 provider
+	AzureProviderName = "azure_v2"
 	// GoogleProviderName identifies the Google provider
 	GoogleProviderName = "google"
+	// OIDCProviderName identifies the OpenID Connect provider
+	OIDCProviderName = "oidc"
 	// OktaProviderName identities the Okta provider
 	OktaProviderName = "okta"
 )
