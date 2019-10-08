@@ -95,14 +95,6 @@ func SetRedirectURL(serverConfig ServerConfig, slug string) func(*Authenticator)
 	}
 }
 
-// SetValidator sets the email validator
-func SetValidator(validator func(string) bool) func(*Authenticator) error {
-	return func(a *Authenticator) error {
-		a.Validator = validator
-		return nil
-	}
-}
-
 // SetCookieStore sets the cookie store to use a miscreant cipher
 func SetCookieStore(sessionConfig SessionConfig, providerSlug string) func(*Authenticator) error {
 	return func(a *Authenticator) error {

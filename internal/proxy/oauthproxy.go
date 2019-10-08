@@ -472,8 +472,8 @@ func (p *OAuthProxy) OAuthStart(rw http.ResponseWriter, req *http.Request, tags 
 		p.ErrorPage(rw, req, http.StatusInternalServerError, "Internal Error", err.Error())
 		return
 	}
-
-	signinURL := p.provider.GetSignInURL(callbackURL, encryptedState)
+	allowedDomains := p.upstreamConfig.AllowedEmailDomains
+	signinURL := p.provider.GetSignInURL(callbackURL, encryptedState, allowedDomains)
 	logger.WithSignInURL(signinURL).Info("starting OAuth flow")
 	http.Redirect(rw, req, signinURL.String(), http.StatusFound)
 }

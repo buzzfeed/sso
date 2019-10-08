@@ -131,8 +131,8 @@ func (p *SingleFlightProvider) RefreshSession(s *sessions.SessionState, allowedG
 }
 
 // GetSignInURL calls the GetSignInURL for the provider, which will return the sign in url
-func (p *SingleFlightProvider) GetSignInURL(redirectURI *url.URL, finalRedirect string) *url.URL {
-	return p.provider.GetSignInURL(redirectURI, finalRedirect)
+func (p *SingleFlightProvider) GetSignInURL(redirectURI *url.URL, finalRedirect string, allowedDomains []string) *url.URL {
+	return p.provider.GetSignInURL(redirectURI, finalRedirect, allowedDomains)
 }
 
 // GetSignOutURL calls the GetSignOutURL for the provider, which will return the sign out url
