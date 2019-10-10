@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/18F/hmacauth"
+	"github.com/gorilla/websocket"
 )
 
 func TestDeleteCookie(t *testing.T) {
@@ -831,6 +832,115 @@ func TestHMACSignatures(t *testing.T) {
 				t.Logf("have: %v", resp.StatusCode)
 				t.Logf("want: %v", http.StatusOK)
 				t.Fatalf("got unexpected status code")
+			}
+		})
+	}
+}
+
+func TestWebsocketSupport(t *testing.T) {
+	testCases := []struct {
+		Name          string
+		FlushInterval time.Duration
+		Timeout       time.Duration
+		ExpectedMsg   string
+		ExpectedErr   error
+	}{
+		{
+			Name:          "valid websocket support",
+			FlushInterval: 100 * time.Millisecond,
+			Timeout:       10 * time.Second,
+			ExpectedMsg:   "websocket-support-enabled",
+		},
+		{
+			// this test currently exists to mimic and record the behavior
+			// that occurs when a non-positive flush interval is set.
+			// (we set a default timeout, but no default flush interval)
+			// this test should be updated if this is combatted against.
+			Name:          "invalid websocket support, non-positive flush interval",
+			FlushInterval: 0,
+			Timeout:       10 * time.Second,
+			ExpectedErr:   websocket.ErrBadHandshake,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			var upgrader = websocket.Upgrader{
+				ReadBufferSize:  1024,
+				WriteBufferSize: 1024,
+			}
+			// set up http server with websocket support,
+			// and simple functionality of reading and respoding
+			// with a message.
+			backend := httptest.NewServer(http.HandlerFunc(
+				func(w http.ResponseWriter, r *http.Request) {
+					conn, err := upgrader.Upgrade(w, r, nil)
+					if err != nil {
+						return
+					}
+					for {
+						messageType, p, err := conn.ReadMessage()
+						if err != nil {
+							return
+						}
+						if err := conn.WriteMessage(messageType, p); err != nil {
+							return
+						}
+					}
+				},
+			))
+			defer backend.Close()
+
+			// set up upstream with FlushInterval (required for websocket)
+			u, _ := url.Parse(backend.URL)
+			config := &UpstreamConfig{
+				Route: &SimpleRoute{
+					ToURL: u,
+				},
+				FlushInterval: tc.FlushInterval,
+				Timeout:       tc.Timeout,
+			}
+
+			reverseProxy, err := NewUpstreamReverseProxy(config, nil)
+			if err != nil {
+				t.Fatalf("unexpected err: %v", err)
+			}
+
+			frontend := httptest.NewServer(reverseProxy)
+			defer frontend.Close()
+
+			// test websocket connectivity
+			// send message, and expect it to be returned afterwards.
+			websocketURL, _ := url.Parse(frontend.URL)
+			websocketURL.Scheme = "ws"
+			ws, _, err := websocket.DefaultDialer.Dial(websocketURL.String(), nil)
+			if err != nil {
+				if err == tc.ExpectedErr {
+					// if the expected error is returned we want to set the test as passed
+					// and stop further execution. this is purely related to the
+					// 'invalid websocket support, non-positive flush interval' test.
+					return
+				} else {
+					t.Logf("expected: %q", tc.ExpectedErr)
+					t.Logf("     got: %q", err)
+					t.Fatalf("unexpected error returned")
+				}
+			}
+			defer ws.Close()
+
+			if err := ws.WriteMessage(websocket.TextMessage, []byte(tc.ExpectedMsg)); err != nil {
+				t.Fatalf("%v", err)
+			}
+
+			_, byteResp, err := ws.ReadMessage()
+			if err != nil {
+				t.Fatalf("%v", err)
+			}
+
+			resp := string(byteResp)
+			if resp != tc.ExpectedMsg {
+				t.Logf("expected: %q", tc.ExpectedMsg)
+				t.Logf("     got: %q", resp)
+				t.Fatalf("unexpected message returned")
 			}
 		})
 	}

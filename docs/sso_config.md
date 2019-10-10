@@ -178,6 +178,9 @@ honored as valid. The grace period ends either after the TTL expires or when
 * The grace period defined by `grace_period_ttl` is granted on a per-user basis,
   starting from the first failure to authenticate.
 
+### Websockets
+SSO supports upstreams that use websockets, providing the upstream has a positive flush interval (`flush_interval`) set.
+
 
 ### `sso_proxy` Endpoints
 * `/` - Begins the proxy process, attempting to authenticate the session cookie, redirecting to `sso-authenticator` if there is no cookie or an invalid one.
