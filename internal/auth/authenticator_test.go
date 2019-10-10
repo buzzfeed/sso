@@ -17,6 +17,7 @@ import (
 
 	"github.com/buzzfeed/sso/internal/auth/providers"
 	"github.com/buzzfeed/sso/internal/pkg/aead"
+	"github.com/buzzfeed/sso/internal/pkg/options"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	"github.com/buzzfeed/sso/internal/pkg/templates"
 	"github.com/buzzfeed/sso/internal/pkg/testutil"
@@ -62,13 +63,6 @@ func setMockAuthCodeCipher(cipher *aead.MockCipher, s interface{}) func(*Authent
 func setTestProvider(provider *providers.TestProvider) func(*Authenticator) error {
 	return func(a *Authenticator) error {
 		a.provider = provider
-		return nil
-	}
-}
-
-func setMockValidator(response bool) func(*Authenticator) error {
-	return func(a *Authenticator) error {
-		a.Validator = func(string) bool { return response }
 		return nil
 	}
 }
@@ -424,7 +418,7 @@ func TestSignIn(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			config := testConfiguration(t)
 			auth, err := NewAuthenticator(config,
-				setMockValidator(tc.validEmail),
+				SetValidators([]options.Validator{options.NewMockValidator(tc.validEmail)}),
 				setMockSessionStore(tc.mockSessionStore),
 				setMockTempl(),
 				setMockRedirectURL(),
@@ -571,7 +565,7 @@ func TestSignOutPage(t *testing.T) {
 			provider.RevokeError = tc.RevokeError
 
 			p, _ := NewAuthenticator(config,
-				setMockValidator(true),
+				SetValidators([]options.Validator{options.NewMockValidator(true)}),
 				setMockSessionStore(tc.mockSessionStore),
 				setMockTempl(),
 				setTestProvider(provider),
@@ -948,7 +942,7 @@ func TestGetProfile(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			config := testConfiguration(t)
 			p, _ := NewAuthenticator(config,
-				setMockValidator(true),
+				SetValidators([]options.Validator{options.NewMockValidator(true)}),
 			)
 			u, _ := url.Parse("http://example.com")
 			testProvider := providers.NewTestProvider(u)
@@ -1050,7 +1044,7 @@ func TestRedeemCode(t *testing.T) {
 			config := testConfiguration(t)
 
 			proxy, _ := NewAuthenticator(config,
-				setMockValidator(true),
+				SetValidators([]options.Validator{options.NewMockValidator(true)}),
 			)
 
 			testURL, err := url.Parse("example.com")
@@ -1357,7 +1351,8 @@ func TestOAuthCallback(t *testing.T) {
 					Value: "state",
 				},
 			},
-			expectedError: HTTPError{Code: http.StatusForbidden, Message: "Invalid Account"},
+			expectedError: HTTPError{Code: http.StatusForbidden,
+				Message: "We ran into some issues while validating your account: \"MockValidator error\""},
 		},
 		{
 			name: "valid email, invalid redirect",
@@ -1438,7 +1433,7 @@ func TestOAuthCallback(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			config := testConfiguration(t)
 			proxy, _ := NewAuthenticator(config,
-				setMockValidator(tc.validEmail),
+				SetValidators([]options.Validator{options.NewMockValidator(tc.validEmail)}),
 				setMockCSRFStore(tc.csrfResp),
 				setMockSessionStore(tc.sessionStore),
 			)
@@ -1559,7 +1554,7 @@ func TestOAuthStart(t *testing.T) {
 			provider := providers.NewTestProvider(nil)
 			proxy, _ := NewAuthenticator(config,
 				setTestProvider(provider),
-				setMockValidator(true),
+				SetValidators([]options.Validator{options.NewMockValidator(true)}),
 				setMockRedirectURL(),
 				setMockCSRFStore(&sessions.MockCSRFStore{}),
 			)

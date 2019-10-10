@@ -17,6 +17,7 @@ func New(opts *Options) (*SSOProxy, error) {
 
 	var requestSigner *RequestSigner
 	var err error
+
 	if opts.RequestSigningKey != "" {
 		requestSigner, err = NewRequestSigner(opts.RequestSigningKey)
 		if err != nil {
@@ -37,17 +38,23 @@ func New(opts *Options) (*SSOProxy, error) {
 			return nil, err
 		}
 
+		validators := []options.Validator{}
 		if len(upstreamConfig.AllowedEmailAddresses) != 0 {
-			optFuncs = append(optFuncs, SetValidator(options.NewEmailAddressValidator(upstreamConfig.AllowedEmailAddresses)))
-		} else if len(upstreamConfig.AllowedEmailDomains) != 0 {
-			optFuncs = append(optFuncs, SetValidator(options.NewEmailDomainValidator(upstreamConfig.AllowedEmailDomains)))
+			validators = append(validators, options.NewEmailAddressValidator(upstreamConfig.AllowedEmailAddresses))
 		}
+
+		if len(upstreamConfig.AllowedEmailDomains) != 0 {
+			validators = append(validators, options.NewEmailDomainValidator(upstreamConfig.AllowedEmailDomains))
+		}
+
+		validators = append(validators, options.NewEmailGroupValidator(provider, upstreamConfig.AllowedGroups))
 
 		optFuncs = append(optFuncs,
 			SetProvider(provider),
 			SetCookieStore(opts),
 			SetUpstreamConfig(upstreamConfig),
 			SetProxyHandler(handler),
+			SetValidators(validators),
 		)
 
 		oauthproxy, err := NewOAuthProxy(opts, optFuncs...)

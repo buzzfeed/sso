@@ -13,6 +13,7 @@ import (
 
 	"github.com/buzzfeed/sso/internal/pkg/aead"
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
+	"github.com/buzzfeed/sso/internal/pkg/options"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	"github.com/buzzfeed/sso/internal/proxy/providers"
 
@@ -53,15 +54,12 @@ func (e *ErrOAuthProxyMisconfigured) Error() string {
 
 const statusInvalidHost = 421
 
-// EmailValidatorFn function type for validating email addresses.
-type EmailValidatorFn func(string) bool
-
 // OAuthProxy stores all the information associated with proxying the request.
 type OAuthProxy struct {
-	cookieSecure   bool
-	emailValidator EmailValidatorFn
-	redirectURL    *url.URL // the url to receive requests at
-	templates      *template.Template
+	cookieSecure bool
+	Validators   []options.Validator
+	redirectURL  *url.URL // the url to receive requests at
+	templates    *template.Template
 
 	skipAuthPreflight bool
 	passAccessToken   bool
@@ -152,9 +150,9 @@ func SetProxyHandler(handler http.Handler) func(*OAuthProxy) error {
 }
 
 // SetValidator sets the email validator as a functional option
-func SetValidator(validator func(string) bool) func(*OAuthProxy) error {
+func SetValidators(validators []options.Validator) func(*OAuthProxy) error {
 	return func(op *OAuthProxy) error {
-		op.emailValidator = validator
+		op.Validators = validators
 		return nil
 	}
 }
@@ -176,9 +174,9 @@ type StateParameter struct {
 // NewOAuthProxy creates a new OAuthProxy struct.
 func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthProxy, error) {
 	p := &OAuthProxy{
-		cookieSecure:   opts.CookieSecure,
-		StatsdClient:   opts.StatsdClient,
-		emailValidator: func(_ string) bool { return true },
+		cookieSecure: opts.CookieSecure,
+		StatsdClient: opts.StatsdClient,
+		Validators:   []options.Validator{},
 
 		redirectURL: &url.URL{Path: "/oauth2/callback"},
 		templates:   getTemplates(),
@@ -567,40 +565,29 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	// We validate the user information, and check that this user has proper authorization
-	// for the resources requested. This can be set via the email address or any groups.
+	// for the resources requested.
 	//
 	// set cookie, or deny
-	if !p.emailValidator(session.Email) {
-		tags = append(tags, "error:invalid_email")
+
+	errors := options.RunValidators(p.Validators, session)
+	if len(errors) == len(p.Validators) {
+		tags = append(tags, "error:validation_failed")
 		p.StatsdClient.Incr("application_error", tags, 1.0)
 		logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(
-			"permission denied: unauthorized")
-		p.ErrorPage(rw, req, http.StatusForbidden, "Permission Denied", "Invalid Account")
+			fmt.Sprintf("permission denied: unauthorized: %q", errors))
+
+		formattedErrors := make([]string, 0, len(errors))
+		for _, err := range errors {
+			formattedErrors = append(formattedErrors, err.Error())
+		}
+		errorMsg := fmt.Sprintf("We ran into some issues while validating your account: \"%s\"",
+			strings.Join(formattedErrors, ", "))
+		p.ErrorPage(rw, req, http.StatusForbidden, "Permission Denied", errorMsg)
 		return
 	}
 
-	allowedGroups := p.upstreamConfig.AllowedGroups
-
-	inGroups, validGroup, err := p.provider.ValidateGroup(session.Email, allowedGroups, session.AccessToken)
-	if err != nil {
-		tags = append(tags, "error:user_group_failed")
-		p.StatsdClient.Incr("provider_error", tags, 1.0)
-		logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(
-			"couldn't fetch user groups")
-		p.ErrorPage(rw, req, http.StatusInternalServerError, "Internal Error", "Error validating group membership, please try again")
-		return
-	}
-	if !validGroup {
-		tags = append(tags, "error:unauthorized_email")
-		p.StatsdClient.Incr("provider_error", tags, 1.0)
-		logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).WithAllowedGroups(
-			allowedGroups).Info("permission denied: unauthorized")
-		p.ErrorPage(rw, req, http.StatusForbidden, "Permission Denied", "Group membership required")
-		return
-	}
-	logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).WithInGroups(inGroups).Info(
-		"authentication complete")
-	session.Groups = inGroups
+	logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).WithInGroups(session.Groups).Info(
+		fmt.Sprintf("oauth callback: user validated "))
 
 	// We store the session in a cookie and redirect the user back to the application
 	err = p.sessionStore.SaveSession(rw, req, session)
@@ -703,6 +690,9 @@ func (p *OAuthProxy) Proxy(rw http.ResponseWriter, req *http.Request) {
 func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (err error) {
 	logger := log.NewLogEntry().WithRemoteAddress(getRemoteAddr(req))
 
+	remoteAddr := getRemoteAddr(req)
+	tags := []string{"action:authenticate"}
+
 	allowedGroups := p.upstreamConfig.AllowedGroups
 
 	// Clear the session cookie if anything goes wrong.
@@ -791,10 +781,17 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 		}
 	}
 
-	if !p.emailValidator(session.Email) {
-		logger.WithUser(session.Email).Error("not authorized")
+	errors := options.RunValidators(p.Validators, session)
+	if len(errors) == len(p.Validators) {
+		tags = append(tags, "error:validation_failed")
+		p.StatsdClient.Incr("application_error", tags, 1.0)
+		logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(
+			fmt.Sprintf("permission denied: unauthorized: %q", errors))
 		return ErrUserNotAuthorized
 	}
+
+	logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(
+		fmt.Sprintf("authentication: user validated"))
 
 	for key, val := range p.upstreamConfig.InjectRequestHeaders {
 		req.Header.Set(key, val)

@@ -20,6 +20,7 @@ import (
 	"github.com/mccutchen/go-httpbin/httpbin"
 
 	"github.com/buzzfeed/sso/internal/pkg/aead"
+	"github.com/buzzfeed/sso/internal/pkg/options"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	"github.com/buzzfeed/sso/internal/pkg/testutil"
 	"github.com/buzzfeed/sso/internal/proxy/providers"
@@ -28,22 +29,6 @@ import (
 func init() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
-}
-
-func testValidatorFunc(valid bool) func(*OAuthProxy) error {
-	return func(p *OAuthProxy) error {
-		p.emailValidator = func(string) bool {
-			return valid
-		}
-		return nil
-	}
-}
-
-func setValidator(f func(string) bool) func(*OAuthProxy) error {
-	return func(p *OAuthProxy) error {
-		p.emailValidator = f
-		return nil
-	}
 }
 
 func setCSRFStore(s sessions.CSRFStore) func(*OAuthProxy) error {
@@ -139,7 +124,7 @@ func testNewOAuthProxy(t *testing.T, optFuncs ...func(*OAuthProxy) error) (*OAut
 	}
 
 	standardOptFuncs := []func(*OAuthProxy) error{
-		testValidatorFunc(true),
+		SetValidators([]options.Validator{options.NewMockValidator(true)}),
 		SetProvider(provider),
 		setSessionStore(&sessions.MockSessionStore{Session: testSession()}),
 		SetUpstreamConfig(upstreamConfig),
@@ -270,7 +255,7 @@ func TestAuthOnlyEndpoint(t *testing.T) {
 
 			proxy, close := testNewOAuthProxy(t,
 				setSessionStore(tc.sessionStore),
-				setValidator(func(_ string) bool { return tc.validEmail }),
+				SetValidators([]options.Validator{options.NewMockValidator(tc.validEmail)}),
 				SetProvider(tp),
 			)
 			defer close()
