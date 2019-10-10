@@ -1,0 +1,23 @@
+name-template: 'v$NEXT_PATCH_VERSION'
+tag-template: 'v$NEXT_PATCH_VERSION'
+change-template: '*#$NUMBER - $TITLE'
+branches: master
+categories:
+  - title: 'Features 🚀'
+    labels:
+      - 'feature'
+      - 'enhancement'
+  - title: 'Bug Fixes 🐛'
+    labels:
+      - 'bugfix'
+      - 'bug'
+  - title: 'Documentation 📖'
+    label:
+      - 'documentation'
+template: |
+  ## What’s Changed
+
+  $CHANGES
+
+  Release Contributors: $CONTRIBUTORS
+
