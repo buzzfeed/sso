@@ -12,7 +12,7 @@ rm -rf   $DIR/dist
 mkdir -p $DIR/dist
 
 arch=$(go env GOARCH)
-version='2.0.0'
+version='2.1.0'
 goversion=$(go version | awk '{print $3}')
 
 echo "... building v$version for $linux/$arch"
