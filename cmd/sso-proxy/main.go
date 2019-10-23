@@ -8,17 +8,18 @@ import (
 
 	"github.com/kelseyhightower/envconfig"
 
-	log "github.com/buzzfeed/sso/internal/pkg/logging"
+	"github.com/buzzfeed/sso/internal/pkg/httpserver"
+	"github.com/buzzfeed/sso/internal/pkg/logging"
 	"github.com/buzzfeed/sso/internal/proxy"
 	"github.com/buzzfeed/sso/internal/proxy/collector"
 )
 
 func init() {
-	log.SetServiceName("sso-proxy")
+	logging.SetServiceName("sso-proxy")
 }
 
 func main() {
-	logger := log.NewLogEntry()
+	logger := logging.NewLogEntry()
 
 	opts := proxy.NewOptions()
 	err := envconfig.Process("", opts)
@@ -58,5 +59,7 @@ func main() {
 		Handler:      loggingHandler,
 	}
 
-	logger.Fatal(s.ListenAndServe())
+	if err := httpserver.Run(s, opts.ShutdownTimeout, logger); err != nil {
+		logger.WithError(err).Fatal("error running server")
+	}
 }
