@@ -21,7 +21,11 @@ services:
   #  - http://httpbin.sso.localtest.me
   # ===========================================================================
   sso-proxy:
-    image: buzzfeed/sso-dev:latest # change this to `build: ..` to try local changes
+    # Swap the two lines below to build from the current commit instead of
+    # pulling the latest dev image
+    image: buzzfeed/sso-dev:latest
+    # build: ..
+
     entrypoint: /bin/sso-proxy
     environment:
       # Allow any google account to log in for demo purposes
@@ -63,7 +67,11 @@ services:
       - 4180
 
   sso-auth:
-    image: buzzfeed/sso-dev:latest # change this to `build: ..` to try local changes
+    # Swap the two lines below to build from the current commit instead of
+    # pulling the latest dev image
+    image: buzzfeed/sso-dev:latest
+    # build: ..
+
     entrypoint: /bin/sso-auth
     env_file:
       ./env

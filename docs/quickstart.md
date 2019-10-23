@@ -4,7 +4,7 @@ This quickstart guide will walk you through the process of creating a set of
 Google OAuth credentials and using Docker Compose to run an example deployment
 of **sso** protecting two upstream services.
 
-To learn how to get started using SSO with Kubernetes, you can check out this [blog post](https://medium.com/@while1eq1/single-sign-on-for-internal-apps-in-kubernetes-using-google-oauth-sso-2386a34bc433) and [example](/quickstart/kubernetes), added and written by [Bill Broach](https://twitter.com/while1eq1), one of our community contributors! 
+To learn how to get started using SSO with Kubernetes, you can check out this [blog post](https://medium.com/@while1eq1/single-sign-on-for-internal-apps-in-kubernetes-using-google-oauth-sso-2386a34bc433) and [example](/quickstart/kubernetes), added and written by [Bill Broach](https://twitter.com/while1eq1), one of our community contributors!
 
 
 ## Prerequisites
@@ -39,20 +39,24 @@ documentation.
 At the end of step 2, you will have a client ID and client secret. Create a new
 file called `env` and input those values like so:
 
-NOTE: `GOOGLEQUICKSTART` is a logical identifier that is used to group the configuration
-variables together for any one provider. This can be changed to an identifier that makes
-sense for your individual use case.
-
     PROVIDER_GOOGLEQUICKSTART_CLIENT_ID=<client id value>.apps.googleusercontent.com
     PROVIDER_GOOGLEQUICKSTART_CLIENT_SECRET=<client secret value>
-
-As well as these, you also need to give a provider 'slug' for the configuration of the
-provider http routes.
-
-Add the below lines into the `env` file you just created:
-
     PROVIDER_GOOGLEQUICKSTART_TYPE=google
     PROVIDER_GOOGLEQUICKSTART_SLUG=google
+
+Notes:
+
+- Start by copying `env.google.example` to `env` (`cp env.google.example env`)
+
+- `GOOGLEQUICKSTART` is a logical identifier that is used to group the
+  configuration variables together for any one provider. This can be changed to
+  an identifier that makes sense for your individual use case.
+
+- `PROVIDER_*_TYPE` tells **sso** which provider type to use for a
+  configuration identifier (`GOOGLEQUICKSTART` in this case)
+
+- `PROVIDER_*_SLUG` controls the "slug" in the OAuth callback URL (i.e.,
+  the `/google/` in `http://sso-auth.localtest.me/google/callback`).
 
 This file will be used to configure `sso-auth` in the example deployment to
 allow you to log to **sso**.
@@ -63,33 +67,42 @@ Once you've completed the [Okta Provider Setup](okta_provider_setup.md) (alterna
 can skip to and complete Section 3 of the [Okta Provider Setup](okta_provider_setup.md) instead),
 follow through the below steps:
 
-**⚡️ Note:** Use `http://sso-auth.localtest.me` as the
+**⚡️ Note:** Use `http://sso-auth.localtest.me/okta/callback` as the
 **Authorized redirect URI** in step 3.
 
-At the end of step 3 you will be given a client ID and client secret which can be found at the bottom
-of the settings page for the Application you've created.
+At the end of step 3 you will be given a client ID and client secret, which can
+be found at the bottom of the settings page for the Application you've created.
 Create a new file called `env` with those values, like so:
-
-NOTE: `OKTAQUICKSTART` is a logical identifier that is used to group the configuration
-variables together for any one provider. This can be changed to an identifier that makes
-sense for your individual use case.
 
     PROVIDER_OKTAQUICKSTART_CLIENT_ID=<client id value>
     PROVIDER_OKTAQUICKSTART_CLIENT_SECRET=<client secret value>
-
-As well as these, you also need to make sure **sso** knows to use the 'Okta' provider
-(Okta is not the default provider), provide your Okta organisation URL (for example, 'sso-test.okta.com'),
-and give a provider 'slug' for the configuration of http routes.
-
-Add the below lines into the `env` file you just created:
-
-    DEFAULT_PROVIDER_SLUG=okta
     PROVIDER_OKTAQUICKSTART_OKTA_URL=<organisation url>
     PROVIDER_OKTAQUICKSTART_TYPE=okta
     PROVIDER_OKTAQUICKSTART_SLUG=okta
+    DEFAULT_PROVIDER_SLUG=okta
 
-If you are not using the default Okta authorization server you will also need to add `PROVIDER_SERVER_ID=<okta auth server ID>`
-to the above file.
+Notes:
+
+- Start by copying `env.okta.example` to `env` (`cp env.okta.example env`)
+
+- `OKTAQUICKSTART` is a logical identifier that is used to group the
+  configuration variables together for any one provider. This can be changed to
+  an identifier that makes sense for your individual use case.
+
+- `PROVIDER_*_TYPE` tells **sso** which provider type to use for a
+  configuration identifier (`OKTAQUICKSTART` in this case)
+
+- `PROVIDER_*_SLUG` controls the "slug" in the OAuth callback URL (i.e.,
+  the `/okta/` in `http://sso-auth.localtest.me/okta/callback`).
+
+- `PROVIDER_*_OKTA_URL` is configures the Okta provider with your Okta
+  organization URL (e.g. `sso-test.okta.com`)
+
+- `DEFAULT_PROVIDER_SLUG` tells **sso** to use the Okta provider by default
+
+- **If you are not using the default Okta authorization server** you will also
+  need to add `PROVIDER_OKTAQUICKSTART_SERVER_ID=<okta auth server ID>` to the
+  above file.
 
 This file will be used to configure `sso-auth` in the example deployment to
 allow you to log in to **sso**.

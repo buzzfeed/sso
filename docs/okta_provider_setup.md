@@ -49,7 +49,7 @@ For 'Platform', choose `Web`, and for 'Sign on method' choose `OpenID Connect`. 
     `https://sso-auth.example.com/okta/callback`. Multiple URIs can be added if required.
 -  **Logout redirect URIs**: This can be left blank.
 
-**⚡️ Note**: If you're following the [Quickstart guide](https://github.com/buzzfeed/sso/blob/master/docs/quickstart.md), use `http://sso-auth.localtest.me` as the Authorized redirect URI.
+**⚡️ Note**: If you're following the [Quickstart guide](https://github.com/buzzfeed/sso/blob/master/docs/quickstart.md), use `http://sso-auth.localtest.me/okta/callback` as the Authorized redirect URI.
 
 ## 4. Finish configuring your Application
 
