@@ -36,8 +36,10 @@ documentation.
 **⚡️ Note:** Use `http://sso-auth.localtest.me/google/callback` as the
 **Authorized redirect URI** in step 2.
 
-At the end of step 2, you will have a client ID and client secret. Create a new
-file called `env` and input those values like so:
+At the end of step 2, you will have a client ID and client secret.
+
+Copy `env.google.example` to `env` (i.e. `cp env.google.example env`) and fill
+the placeholder values with your new client ID and client secret, like so:
 
     PROVIDER_GOOGLEQUICKSTART_CLIENT_ID=<client id value>.apps.googleusercontent.com
     PROVIDER_GOOGLEQUICKSTART_CLIENT_SECRET=<client secret value>
@@ -45,8 +47,6 @@ file called `env` and input those values like so:
     PROVIDER_GOOGLEQUICKSTART_SLUG=google
 
 Notes:
-
-- Start by copying `env.google.example` to `env` (`cp env.google.example env`)
 
 - `GOOGLEQUICKSTART` is a logical identifier that is used to group the
   configuration variables together for any one provider. This can be changed to
@@ -72,7 +72,10 @@ follow through the below steps:
 
 At the end of step 3 you will be given a client ID and client secret, which can
 be found at the bottom of the settings page for the Application you've created.
-Create a new file called `env` with those values, like so:
+
+Copy `env.okta.example` to `env` (i.e. `cp env.okta.example env`) and fill the
+placeholder values with your new client ID, client secret, and Okta URL, like
+so:
 
     PROVIDER_OKTAQUICKSTART_CLIENT_ID=<client id value>
     PROVIDER_OKTAQUICKSTART_CLIENT_SECRET=<client secret value>
@@ -82,8 +85,6 @@ Create a new file called `env` with those values, like so:
     DEFAULT_PROVIDER_SLUG=okta
 
 Notes:
-
-- Start by copying `env.okta.example` to `env` (`cp env.okta.example env`)
 
 - `OKTAQUICKSTART` is a logical identifier that is used to group the
   configuration variables together for any one provider. This can be changed to
@@ -95,7 +96,7 @@ Notes:
 - `PROVIDER_*_SLUG` controls the "slug" in the OAuth callback URL (i.e.,
   the `/okta/` in `http://sso-auth.localtest.me/okta/callback`).
 
-- `PROVIDER_*_OKTA_URL` is configures the Okta provider with your Okta
+- `PROVIDER_*_OKTA_URL` configures the Okta provider with your Okta
   organization URL (e.g. `sso-test.okta.com`)
 
 - `DEFAULT_PROVIDER_SLUG` tells **sso** to use the Okta provider by default
@@ -104,8 +105,8 @@ Notes:
   need to add `PROVIDER_OKTAQUICKSTART_SERVER_ID=<okta auth server ID>` to the
   above file.
 
-This file will be used to configure `sso-auth` in the example deployment to
-allow you to log in to **sso**.
+This `env` file will be used to configure `sso-auth` in the example deployment
+to allow you to log in to **sso**.
 
 ## 3. Create example `sso` deployment
 
