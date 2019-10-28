@@ -47,7 +47,7 @@ asked to fill in three fields.
 `sso-auth.example.com`, then add the URI `https://sso-auth.example.com/google/callback`.
 
 **⚡️ Note:** If you're following the [Quickstart guide](quickstart.md), use
-`http://sso-auth.localtest.me` as the Authorized redirect URI.
+`http://sso-auth.localtest.me/google/callback` as the Authorized redirect URI.
 
 ![Credentials](img/setup-credentials.jpg)
 
