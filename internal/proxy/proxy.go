@@ -47,7 +47,9 @@ func New(opts *Options) (*SSOProxy, error) {
 			validators = append(validators, options.NewEmailDomainValidator(upstreamConfig.AllowedEmailDomains))
 		}
 
-		validators = append(validators, options.NewEmailGroupValidator(provider, upstreamConfig.AllowedGroups))
+		if len(upstreamConfig.AllowedGroups) != 0 {
+			validators = append(validators, options.NewEmailGroupValidator(provider, upstreamConfig.AllowedGroups))
+		}
 
 		optFuncs = append(optFuncs,
 			SetProvider(provider),

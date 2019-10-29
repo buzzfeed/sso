@@ -22,8 +22,6 @@ type EmailGroupValidator struct {
 
 // NewEmailGroupValidator takes in a Provider object and a list of groups, and returns a Validator object.
 // The validator can be used to validate that the session.Email:
-// - if an empty list is passed in in place of a list of groups, all session.Emails will be considered valid
-//   regardless of group membership with that particular Provider.
 // - according to the Provider that was passed in, is a member of one of the originally passed in groups.
 // If valid, nil is returned in place of an error.
 func NewEmailGroupValidator(provider providers.Provider, allowedGroups []string) EmailGroupValidator {
@@ -34,10 +32,6 @@ func NewEmailGroupValidator(provider providers.Provider, allowedGroups []string)
 }
 
 func (v EmailGroupValidator) Validate(session *sessions.SessionState) error {
-	if len(v.AllowedGroups) == 0 {
-		return nil
-	}
-
 	err := v.validate(session)
 	if err != nil {
 		return err
