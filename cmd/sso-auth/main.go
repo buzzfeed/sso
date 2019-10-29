@@ -9,11 +9,19 @@ import (
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
 )
 
+var goVersion string
+
 func init() {
 	log.SetServiceName("sso-authenticator")
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "version" {
+		fmt.Println(auth.VERSION)
+		fmt.Println(goVersion)
+		os.Exit(1)
+	}
+
 	logger := log.NewLogEntry()
 
 	config, err := auth.LoadConfig()
