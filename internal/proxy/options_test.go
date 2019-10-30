@@ -59,7 +59,7 @@ func TestNewOptions(t *testing.T) {
 		"missing setting: client-secret",
 		"missing setting: statsd-host",
 		"missing setting: statsd-port",
-		"missing setting: DEFAULT_ALLOWED_EMAIL_DOMAINS or DEFAULT_ALLOWED_EMAIL_ADDRESSES in either environment or upstream config in the following upstreams: [testService]",
+		"missing setting: ALLOWED_EMAIL_DOMAINS, ALLOWED_EMAIL_ADDRESSES, ALLOWED_GROUPS default in environment or override in upstream config in the following upstreams: [testService]",
 		"Invalid value for COOKIE_SECRET; must decode to 32 or 64 bytes, but decoded to 0 bytes",
 	})
 	testutil.Equal(t, expected, err.Error())

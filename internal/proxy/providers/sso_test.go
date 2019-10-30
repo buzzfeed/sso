@@ -144,11 +144,11 @@ func TestSSOProviderGroups(t *testing.T) {
 		ProfileStatus    int
 	}{
 		{
-			Name:             "valid when no group id set",
+			Name:             "invalid when no group id set",
 			Email:            "michael.bland@gsa.gov",
 			Groups:           []string{},
 			ProxyGroupIds:    []string{},
-			ExpectedValid:    true,
+			ExpectedValid:    false,
 			ExpectedInGroups: []string{},
 			ExpectError:      nil,
 		},
@@ -311,7 +311,7 @@ func TestSSOProviderValidateSessionState(t *testing.T) {
 		ExpectedValid    bool
 	}{
 		{
-			Name: "valid when no group id set",
+			Name: "invalid when no group id set",
 			SessionState: &sessions.SessionState{
 				AccessToken: "abc",
 				Email:       "michael.bland@gsa.gov",
@@ -319,7 +319,7 @@ func TestSSOProviderValidateSessionState(t *testing.T) {
 			ProviderResponse: http.StatusOK,
 			Groups:           []string{},
 			ProxyGroupIds:    []string{},
-			ExpectedValid:    true,
+			ExpectedValid:    false,
 		},
 		{
 			Name: "invalid when response is is not 200",

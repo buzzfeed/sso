@@ -199,13 +199,13 @@ func (o *Options) Validate() error {
 				o.TCPWriteTimeout = uc.Timeout
 			}
 
-			if len(uc.AllowedEmailDomains) == 0 && len(uc.AllowedEmailAddresses) == 0 {
+			if len(uc.AllowedEmailDomains) == 0 && len(uc.AllowedEmailAddresses) == 0 && len(uc.AllowedGroups) == 0 {
 				invalidUpstreams = append(invalidUpstreams, uc.Service)
 			}
 		}
 		if len(invalidUpstreams) != 0 {
 			msgs = append(msgs, fmt.Sprintf(
-				"missing setting: DEFAULT_ALLOWED_EMAIL_DOMAINS or DEFAULT_ALLOWED_EMAIL_ADDRESSES in either environment or upstream config in the following upstreams: %v",
+				"missing setting: ALLOWED_EMAIL_DOMAINS, ALLOWED_EMAIL_ADDRESSES, ALLOWED_GROUPS default in environment or override in upstream config in the following upstreams: %v",
 				invalidUpstreams))
 		}
 	}
