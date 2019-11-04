@@ -52,6 +52,7 @@ import (
 // SERVER_TIMEOUT_REQUEST
 // SERVER_TIMEOUT_WRITE
 // SERVER_TIMEOUT_READ
+// SERVER_TIMEOUT_SHUTDOWN
 //
 // AUTHORIZE_PROXY_DOMAINS
 // AUTHORIZE_EMAIL_DOMAINS
@@ -79,9 +80,10 @@ func DefaultAuthConfig() Configuration {
 			Port:   4180,
 			Scheme: "https",
 			TimeoutConfig: TimeoutConfig{
-				Write:   30 * time.Second,
-				Read:    30 * time.Second,
-				Request: 45 * time.Second,
+				Write:    30 * time.Second,
+				Read:     30 * time.Second,
+				Request:  45 * time.Second,
+				Shutdown: 46 * time.Second, // by default, shutdown timeout matches request timeout + a little headroom
 			},
 		},
 		SessionConfig: SessionConfig{
@@ -384,9 +386,10 @@ func (sc ServerConfig) Validate() error {
 }
 
 type TimeoutConfig struct {
-	Write   time.Duration `mapstructure:"write"`
-	Read    time.Duration `mapstructure:"read"`
-	Request time.Duration `mapstructure:"request"`
+	Write    time.Duration `mapstructure:"write"`
+	Read     time.Duration `mapstructure:"read"`
+	Request  time.Duration `mapstructure:"request"`
+	Shutdown time.Duration `mapstructure:"shutdown"`
 }
 
 func (tc TimeoutConfig) Validate() error {

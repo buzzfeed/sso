@@ -31,12 +31,13 @@ CLIENT_PROXY_SECRET - string - Client secret matching the SSO Proxy client secre
 
 ### Server
 ```
-SERVER_SCHEME          - string - scheme the server will use, e.g. `https`
-SERVER_HOST            - string - host header that's required on incoming requests
-SERVER_PORT            - string - port the http server listens on
-SERVER_TIMEOUT_REQUEST - time.Duration - overall request timeout
-SERVER_TIMEOUT_WRITE   - time.Duration - write request timeout
-SERVER_TIMEOUT_READ    - time.Duration - read request timeout
+SERVER_SCHEME           - string - scheme the server will use, e.g. `https`
+SERVER_HOST             - string - host header that's required on incoming requests
+SERVER_PORT             - string - port the http server listens on
+SERVER_TIMEOUT_REQUEST  - time.Duration - overall request timeout
+SERVER_TIMEOUT_WRITE    - time.Duration - write request timeout
+SERVER_TIMEOUT_READ     - time.Duration - read request timeout
+SERVER_TIMEOUT_SHUTDOWN - time.Duration - time to allow in-flight requests to complete before server shutdown
 ```
 
 
@@ -69,7 +70,7 @@ PROVIDER_*_TYPE          - string - determines the type of provider (supported o
 PROVIDER_*_SLUG          - string - unique provider 'slug' that is used to separate and create routes to individual providers.
 PROVIDER_*_CLIENT_ID     - string - OAuth Client ID
 PROVIDER_*_CLIENT_SECRET - string - OAuth Client secret
-PROVIDER_*_SCOPE         - string - OAuth scopes the provider will use. Default standard set of scopes pre-set in individual provider 
+PROVIDER_*_SCOPE         - string - OAuth scopes the provider will use. Default standard set of scopes pre-set in individual provider
 files; which this configuration variable overrides.
 ```
 

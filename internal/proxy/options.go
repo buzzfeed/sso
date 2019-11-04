@@ -49,6 +49,7 @@ import (
 // RequestLoging - boolean whether or not to log requests
 // StatsdHost - host addr for statsd client to listen on
 // StatsdPort - port for statsdclient to listen on
+// ShutdownTimeout - maximum time to wait for in-flight HTTP requests to complete before shutdown
 type Options struct {
 	Port int `envconfig:"PORT" default:"4180"`
 
@@ -96,6 +97,8 @@ type Options struct {
 	StatsdPort int    `envconfig:"STATSD_PORT"`
 
 	RequestSigningKey string `envconfig:"REQUEST_SIGNATURE_KEY"`
+
+	ShutdownTimeout time.Duration `envconfig:"SHUTDOWN_TIMEOUT" default:"30s"`
 
 	StatsdClient *statsd.Client
 

@@ -6,15 +6,16 @@ import (
 	"os"
 
 	"github.com/buzzfeed/sso/internal/auth"
-	log "github.com/buzzfeed/sso/internal/pkg/logging"
+	"github.com/buzzfeed/sso/internal/pkg/httpserver"
+	"github.com/buzzfeed/sso/internal/pkg/logging"
 )
 
 func init() {
-	log.SetServiceName("sso-authenticator")
+	logging.SetServiceName("sso-authenticator")
 }
 
 func main() {
-	logger := log.NewLogEntry()
+	logger := logging.NewLogEntry()
 
 	config, err := auth.LoadConfig()
 	if err != nil {
@@ -53,5 +54,7 @@ func main() {
 		Handler:      auth.NewLoggingHandler(os.Stdout, timeoutHandler, config.LoggingConfig.Enable, statsdClient),
 	}
 
-	logger.Fatal(s.ListenAndServe())
+	if err := httpserver.Run(s, config.ServerConfig.TimeoutConfig.Shutdown, logger); err != nil {
+		logger.WithError(err).Fatal("error running server")
+	}
 }
