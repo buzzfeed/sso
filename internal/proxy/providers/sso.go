@@ -202,6 +202,7 @@ func (p *SSOProvider) ValidateGroup(email string, allowedGroups []string, access
 
 // UserGroups takes an email and returns the UserGroups for that email
 func (p *SSOProvider) UserGroups(email string, groups []string, accessToken string) ([]string, error) {
+	logger := log.NewLogEntry()
 	params := url.Values{}
 	params.Add("email", email)
 	params.Add("client_id", p.ClientID)
@@ -209,6 +210,7 @@ func (p *SSOProvider) UserGroups(email string, groups []string, accessToken stri
 
 	req, err := p.newRequest("GET", fmt.Sprintf("%s?%s", p.ProfileURL.String(), params.Encode()), nil)
 	if err != nil {
+		logger.WithUser(email).WithRequestURI(p.ProfileURL.String()).Error(err, "error retrieving user groups")
 		return nil, err
 	}
 
