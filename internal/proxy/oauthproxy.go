@@ -569,7 +569,7 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 	//
 	// set cookie, or deny
 
-	errors := options.RunValidators(p.Validators, session)
+	errors := options.RunValidators(p.Validators, options.OAuthCallbackFlow, session)
 	if len(errors) == len(p.Validators) {
 		tags = append(tags, "error:validation_failed")
 		p.StatsdClient.Incr("application_error", tags, 1.0)
@@ -781,7 +781,7 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 		}
 	}
 
-	errors := options.RunValidators(p.Validators, session)
+	errors := options.RunValidators(p.Validators, options.ProxyAuthFlow, session)
 	if len(errors) == len(p.Validators) {
 		tags = append(tags, "error:validation_failed")
 		p.StatsdClient.Incr("application_error", tags, 1.0)

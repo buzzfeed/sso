@@ -31,6 +31,13 @@ func NewEmailGroupValidator(provider providers.Provider, allowedGroups []string)
 	}
 }
 
+// Flags defines which flows this validator should be ran against.
+func (v EmailGroupValidator) Flags() validatorFlag {
+	return OAuthCallbackFlow
+}
+
+// Validate attempts to validate the session, returning an error for invalid
+// sessions, or nil for valid sessions.
 func (v EmailGroupValidator) Validate(session *sessions.SessionState) error {
 	err := v.validate(session)
 	if err != nil {

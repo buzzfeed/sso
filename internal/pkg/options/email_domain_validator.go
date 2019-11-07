@@ -44,6 +44,13 @@ func NewEmailDomainValidator(allowedDomains []string) *EmailDomainValidator {
 	}
 }
 
+// Flags defines which flows this validator should be ran against.
+func (v *EmailDomainValidator) Flags() validatorFlag {
+	return OAuthCallbackFlow | ProxyAuthFlow | AuthenticatorFlow
+}
+
+// Validate attempts to validate the session, returning an error for invalid
+// sessions, or nil for valid sessions.
 func (v *EmailDomainValidator) Validate(session *sessions.SessionState) error {
 	if session.Email == "" {
 		return ErrInvalidEmailAddress

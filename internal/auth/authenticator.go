@@ -226,7 +226,7 @@ func (p *Authenticator) authenticate(rw http.ResponseWriter, req *http.Request) 
 		}
 	}
 
-	errors := options.RunValidators(p.Validators, session)
+	errors := options.RunValidators(p.Validators, options.AuthenticatorFlow, session)
 	if len(errors) == len(p.Validators) {
 		logger.WithUser(session.Email).Info(
 			fmt.Sprintf("permission denied: unauthorized: %q", errors))
@@ -582,7 +582,7 @@ func (p *Authenticator) getOAuthCallback(rw http.ResponseWriter, req *http.Reque
 	// - for p.Validator see validator.go#newValidatorImpl for more info
 	// - for p.provider.ValidateGroup see providers/google.go#ValidateGroup for more info
 
-	errors := options.RunValidators(p.Validators, session)
+	errors := options.RunValidators(p.Validators, options.AuthenticatorFlow, session)
 	if len(errors) == len(p.Validators) {
 		tags := append(tags, "error:invalid_email")
 		p.StatsdClient.Incr("application_error", tags, 1.0)

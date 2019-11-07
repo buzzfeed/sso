@@ -20,6 +20,10 @@ func NewMockValidator(result bool) MockValidator {
 	}
 }
 
+func (v MockValidator) Flags() validatorFlag {
+	return OAuthCallbackFlow | ProxyAuthFlow | AuthenticatorFlow
+}
+
 func (v MockValidator) Validate(session *sessions.SessionState) error {
 	if v.Result {
 		return nil
