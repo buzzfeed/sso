@@ -270,12 +270,25 @@ func (p *SSOProvider) RefreshSession(s *sessions.SessionState, allowedGroups []s
 	}
 
 	errors := options.RunValidators(p.Validators, session)
+	if len(errors) == 1 && errors[0] == ErrAuthProviderUnavailable && p.withinGracePeriod(session) {
+		// When we only have one error returned from the validators, and
+		// the error tells us that the auth provider is not explicitlty denying
+		// authentication, and is merely unavailable, we validate and continue as
+		// normal during the "grace period"
+		tags := []string{"action:refresh_session", "error:user_groups_failed"}
+		p.StatsdClient.Incr("provider_error_fallback", tags, 1.0)
+		s.RefreshDeadline = extendDeadline(p.SessionValidTTL)
+		return true, nil
+	}
+
 	if len(errors) == len(p.Validators) {
+		// Otherwise, if all of the validators error and the auth provider
+		// wasn't unavailable then we deny authentication
 		tags = append(tags, "error:validation_failed")
 		p.StatsdClient.Incr("application_error", tags, 1.0)
 		logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(
 			fmt.Sprintf("permission denied: unauthorized: %q", errors))
-		return ErrUserNotAuthorized
+		return false, ErrUserNotAuthorized
 	}
 
 	s.AccessToken = newToken
@@ -370,12 +383,25 @@ func (p *SSOProvider) ValidateSessionState(s *sessions.SessionState, allowedGrou
 	}
 
 	errors := options.RunValidators(p.Validators, session)
+	if len(errors) == 1 && errors[0] == ErrAuthProviderUnavailable && p.withinGracePeriod(session) {
+		// When we only have one error returned from the validators, and it
+		// informs us that the auth provider is not explicitlty denying
+		// authentication, and is merely unavailable, we validate and conitnue as
+		// normal during the "grace period"
+		tags := []string{"action:validate_session", "error:user_groups_failed"}
+		p.StatsdClient.Incr("provider_error_fallback", tags, 1.0)
+		s.ValidDeadline = extendDeadline(p.SessionValidTTL)
+		return true
+	}
+
 	if len(errors) == len(p.Validators) {
+		// Otherwise, if all of the validators error and the auth provider
+		// wasn't unavailable then we deny authentication
 		tags = append(tags, "error:validation_failed")
 		p.StatsdClient.Incr("application_error", tags, 1.0)
 		logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(
 			fmt.Sprintf("permission denied: unauthorized: %q", errors))
-		return ErrUserNotAuthorized
+		return false
 	}
 
 	s.ValidDeadline = extendDeadline(p.SessionValidTTL)
