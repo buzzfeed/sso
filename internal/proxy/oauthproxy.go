@@ -728,6 +728,8 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 	} else if session.RefreshPeriodExpired() {
 		// Refresh period is the period in which the access token is valid. This is ultimately
 		// controlled by the upstream provider and tends to be around 1 hour.
+
+		// all validators are ran when refreshing the session
 		ok, err := p.provider.RefreshSession(session, allowedGroups)
 		// We failed to refresh the session successfully
 		// clear the cookie and reject the request
@@ -759,6 +761,8 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 		// check for valid requests. This should be set to something like a minute.
 		// This calls up the provider chain to validate this user is still active
 		// and hasn't been de-authorized.
+
+		// all validators are ran when validating the session
 		ok := p.provider.ValidateSessionState(session, allowedGroups)
 		if !ok {
 			// This user is now no longer authorized, or we failed to
