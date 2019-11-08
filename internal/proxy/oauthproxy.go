@@ -781,18 +781,6 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 		}
 	}
 
-	errors := options.RunValidators(p.Validators, session)
-	if len(errors) == len(p.Validators) {
-		tags = append(tags, "error:validation_failed")
-		p.StatsdClient.Incr("application_error", tags, 1.0)
-		logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(
-			fmt.Sprintf("permission denied: unauthorized: %q", errors))
-		return ErrUserNotAuthorized
-	}
-
-	logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(
-		fmt.Sprintf("authentication: user validated"))
-
 	for key, val := range p.upstreamConfig.InjectRequestHeaders {
 		req.Header.Set(key, val)
 	}

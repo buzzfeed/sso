@@ -17,6 +17,7 @@ import (
 	"time"
 
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
+	"github.com/buzzfeed/sso/internal/pkg/options"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	"github.com/datadog/datadog-go/statsd"
 )
@@ -268,23 +269,14 @@ func (p *SSOProvider) RefreshSession(s *sessions.SessionState, allowedGroups []s
 		return false, err
 	}
 
-	inGroups, validGroup, err := p.ValidateGroup(s.Email, allowedGroups, newToken)
-	if err != nil {
-		// When we detect that the auth provider is not explicitly denying
-		// authentication, and is merely unavailable, we refresh and continue
-		// as normal during the "grace period"
-		if err == ErrAuthProviderUnavailable && p.withinGracePeriod(s) {
-			tags := []string{"action:refresh_session", "error:user_groups_failed"}
-			p.StatsdClient.Incr("provider_error_fallback", tags, 1.0)
-			s.RefreshDeadline = extendDeadline(p.SessionValidTTL)
-			return true, nil
-		}
-		return false, err
+	errors := options.RunValidators(p.Validators, session)
+	if len(errors) == len(p.Validators) {
+		tags = append(tags, "error:validation_failed")
+		p.StatsdClient.Incr("application_error", tags, 1.0)
+		logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(
+			fmt.Sprintf("permission denied: unauthorized: %q", errors))
+		return ErrUserNotAuthorized
 	}
-	if !validGroup {
-		return false, errors.New("Group membership revoked")
-	}
-	s.Groups = inGroups
 
 	s.AccessToken = newToken
 	s.RefreshDeadline = extendDeadline(duration)
@@ -377,28 +369,14 @@ func (p *SSOProvider) ValidateSessionState(s *sessions.SessionState, allowedGrou
 		return false
 	}
 
-	// check the user is in the proper group(s)
-	inGroups, validGroup, err := p.ValidateGroup(s.Email, allowedGroups, s.AccessToken)
-	if err != nil {
-		// When we detect that the auth provider is not explicitly denying
-		// authentication, and is merely unavailable, we validate and continue
-		// as normal during the "grace period"
-		if err == ErrAuthProviderUnavailable && p.withinGracePeriod(s) {
-			tags := []string{"action:validate_session", "error:user_groups_failed"}
-			p.StatsdClient.Incr("provider_error_fallback", tags, 1.0)
-			s.ValidDeadline = extendDeadline(p.SessionValidTTL)
-			return true
-		}
-		logger.WithUser(s.Email).Error(err, "error fetching group memberships")
-		return false
+	errors := options.RunValidators(p.Validators, session)
+	if len(errors) == len(p.Validators) {
+		tags = append(tags, "error:validation_failed")
+		p.StatsdClient.Incr("application_error", tags, 1.0)
+		logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(
+			fmt.Sprintf("permission denied: unauthorized: %q", errors))
+		return ErrUserNotAuthorized
 	}
-
-	if !validGroup {
-		logger.WithUser(s.Email).WithAllowedGroups(allowedGroups).Info(
-			"user is no longer in valid groups")
-		return false
-	}
-	s.Groups = inGroups
 
 	s.ValidDeadline = extendDeadline(p.SessionValidTTL)
 	s.GracePeriodStart = time.Time{}
