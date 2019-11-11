@@ -781,13 +781,23 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 		}
 	}
 
-	errors := options.RunValidators(p.Validators, session)
-	if len(errors) == len(p.Validators) {
-		tags = append(tags, "error:validation_failed")
-		p.StatsdClient.Incr("application_error", tags, 1.0)
-		logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(
-			fmt.Sprintf("permission denied: unauthorized: %q", errors))
-		return ErrUserNotAuthorized
+	// We revalidate group membership whenever the session is refreshed or revalidated
+	// just above in the call to ValidateSessionState and RefreshSession.
+	// To reduce strain on upstream identity providers we only revalidate email domains and
+	// addresses on each request here.
+	for _, v := range p.Validators {
+		_, EmailGroupValidator := v.(options.EmailGroupValidator)
+
+		if !EmailGroupValidator {
+			err := v.Validate(session)
+			if err != nil {
+				tags = append(tags, "error:validation_failed")
+				p.StatsdClient.Incr("application_error", tags, 1.0)
+				logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(
+					fmt.Sprintf("permission denied: unauthorized: %q", err))
+				return ErrUserNotAuthorized
+			}
+		}
 	}
 
 	logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(

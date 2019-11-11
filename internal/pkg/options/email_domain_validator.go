@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	_ Validator = &EmailDomainValidator{}
+	_ Validator = EmailDomainValidator{}
 
 	// These error message should be formatted in such a way that is appropriate
 	// for display to the end user.
@@ -28,7 +28,7 @@ type EmailDomainValidator struct {
 // - if the originally passed in list of domains consists only of "*", then all emails
 //   are considered valid based on their domain.
 // If valid, nil is returned in place of an error.
-func NewEmailDomainValidator(allowedDomains []string) *EmailDomainValidator {
+func NewEmailDomainValidator(allowedDomains []string) EmailDomainValidator {
 	emailDomains := make([]string, 0, len(allowedDomains))
 
 	for _, domain := range allowedDomains {
@@ -39,12 +39,12 @@ func NewEmailDomainValidator(allowedDomains []string) *EmailDomainValidator {
 			emailDomains = append(emailDomains, emailDomain)
 		}
 	}
-	return &EmailDomainValidator{
+	return EmailDomainValidator{
 		AllowedDomains: emailDomains,
 	}
 }
 
-func (v *EmailDomainValidator) Validate(session *sessions.SessionState) error {
+func (v EmailDomainValidator) Validate(session *sessions.SessionState) error {
 	if session.Email == "" {
 		return ErrInvalidEmailAddress
 	}
@@ -64,7 +64,7 @@ func (v *EmailDomainValidator) Validate(session *sessions.SessionState) error {
 	return nil
 }
 
-func (v *EmailDomainValidator) validate(session *sessions.SessionState) error {
+func (v EmailDomainValidator) validate(session *sessions.SessionState) error {
 	email := strings.ToLower(session.Email)
 	for _, domain := range v.AllowedDomains {
 		if strings.HasSuffix(email, domain) {
