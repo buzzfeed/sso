@@ -115,7 +115,12 @@ func (c *FillCache) RefreshLoop(group string) bool {
 	c.refreshLoopGroups[group] = struct{}{}
 	c.mu.Unlock()
 
+	// we want the cache to be refreshed once immediately,
+	// and then again upon each tick. so we create a channel and
+	// send to it once, triggering a refresh straight away.
+	triggerOnceCh := make(chan bool)
 	ticker := time.NewTicker(c.refreshTTL)
+
 	go func() {
 		// cleanup if this goroutine exits
 		defer func() {
@@ -125,29 +130,37 @@ func (c *FillCache) RefreshLoop(group string) bool {
 		}()
 
 		for {
+			logger := log.NewLogEntry()
 			select {
 			case <-c.stopCh:
 				return
+			case <-triggerOnceCh:
+				break
 			case <-ticker.C:
-				logger := log.NewLogEntry()
+				break
+			}
 
-				logger.WithUserGroup(group).Info("updating fill cache")
-				updated, err := c.Update(group)
-				if err != nil {
-					c.StatsdClient.Incr("groups_cache.error",
-						[]string{
-							fmt.Sprintf("group:%s", group),
-							fmt.Sprintf("error:%s", err),
-						}, 1.0)
-					logger.WithUserGroup(group).Error(
-						err, "error updating fill cache")
-				}
-				if !updated {
-					logger.WithUserGroup(group).Info("cache was not updated")
-				}
+			logger.WithUserGroup(group).Info("updating fill cache")
+			updated, err := c.Update(group)
+			if err != nil {
+				c.StatsdClient.Incr("groups_cache.error",
+					[]string{
+						fmt.Sprintf("group:%s", group),
+						fmt.Sprintf("error:%s", err),
+					}, 1.0)
+				logger.WithUserGroup(group).Error(
+					err, "error updating fill cache")
+			}
+			if !updated {
+				logger.WithUserGroup(group).Info("cache was not updated")
 			}
 		}
 	}()
+
+	// trigger initial cache refresh
+	triggerOnceCh <- true
+	// closing seems to cause it to be triggered every second or so
+	//close(triggerOnceCh)
 	return true
 }
 
