@@ -93,6 +93,27 @@ func (c *FillCache) Update(group string) (bool, error) {
 	return false, err
 }
 
+// update wraps the Update method, adding instrumentation
+func (c *FillCache) update(group string) {
+	logger := log.NewLogEntry()
+	logger.WithUserGroup(group).Info("updating fill cache")
+
+	updated, err := c.Update(group)
+	if err != nil {
+		c.StatsdClient.Incr("groups_cache.error",
+			[]string{
+				fmt.Sprintf("group:%s", group),
+				fmt.Sprintf("error:%s", err),
+			}, 1.0)
+		logger.WithUserGroup(group).Error(
+			err, "error updating fill cache")
+	}
+
+	if !updated {
+		logger.WithUserGroup(group).Info("cache was not updated")
+	}
+}
+
 // RefreshLoop runs in a separate goroutine for the key in the cache and
 // updates the cache value for that key every refreshTTL
 func (c *FillCache) RefreshLoop(group string) bool {
@@ -115,12 +136,7 @@ func (c *FillCache) RefreshLoop(group string) bool {
 	c.refreshLoopGroups[group] = struct{}{}
 	c.mu.Unlock()
 
-	// we want the cache to be refreshed once immediately,
-	// and then again upon each tick. so we create a channel and
-	// send to it once, triggering a refresh straight away.
-	triggerOnceCh := make(chan bool)
 	ticker := time.NewTicker(c.refreshTTL)
-
 	go func() {
 		// cleanup if this goroutine exits
 		defer func() {
@@ -129,38 +145,19 @@ func (c *FillCache) RefreshLoop(group string) bool {
 			c.mu.Unlock()
 		}()
 
+		// we update the cache once before looping to ensure the cache is filled immediately,
+		// instead of only after c.refreshTTL
+		c.update(group)
+
 		for {
-			logger := log.NewLogEntry()
 			select {
 			case <-c.stopCh:
 				return
-			case <-triggerOnceCh:
-				break
 			case <-ticker.C:
-				break
-			}
-
-			logger.WithUserGroup(group).Info("updating fill cache")
-			updated, err := c.Update(group)
-			if err != nil {
-				c.StatsdClient.Incr("groups_cache.error",
-					[]string{
-						fmt.Sprintf("group:%s", group),
-						fmt.Sprintf("error:%s", err),
-					}, 1.0)
-				logger.WithUserGroup(group).Error(
-					err, "error updating fill cache")
-			}
-			if !updated {
-				logger.WithUserGroup(group).Info("cache was not updated")
+				c.update(group)
 			}
 		}
 	}()
-
-	// trigger initial cache refresh
-	triggerOnceCh <- true
-	// closing seems to cause it to be triggered every second or so
-	//close(triggerOnceCh)
 	return true
 }
 
