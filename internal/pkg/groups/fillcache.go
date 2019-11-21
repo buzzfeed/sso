@@ -127,6 +127,7 @@ func (c *FillCache) RefreshLoop(group string) bool {
 
 	ticker := time.NewTicker(c.refreshTTL)
 	go func() {
+		logger := log.NewLogEntry()
 		// cleanup if this goroutine exits
 		defer func() {
 			c.mu.Lock()
