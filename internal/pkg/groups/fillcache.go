@@ -19,7 +19,7 @@ type MemberSetCache interface {
 	// Get returns a MemberSet from the cache
 	Get(string) (MemberSet, bool)
 	// Update updates the MemberSet of a given key, return a boolean updated value, and and error
-	Update(string) (bool, error)
+	Update(string) bool
 	// RefreshLoop starts an update refresh loop for a given key and returns a boolean value of it was started
 	RefreshLoop(string) bool
 	// Stop is a function to stop all goroutines that may have been spun up for the cache.
@@ -71,11 +71,14 @@ func (c *FillCache) Get(group string) (MemberSet, bool) {
 // Update recomputes the value for the given key, unless another goroutine is
 // already computing the value, and returns a bool indicating whether the value
 // was updated
-func (c *FillCache) Update(group string) (bool, error) {
+func (c *FillCache) Update(group string) bool {
+	logger := log.NewLogEntry()
+	logger.WithUserGroup(group).Info("updating fill cache")
+
 	c.mu.Lock()
 	if _, waiting := c.inflight[group]; waiting {
 		c.mu.Unlock()
-		return false, nil
+		return false
 	}
 
 	c.inflight[group] = struct{}{}
@@ -88,30 +91,16 @@ func (c *FillCache) Update(group string) (bool, error) {
 
 	if err == nil {
 		c.cache[group] = val
-		return true, nil
-	}
-	return false, err
-}
-
-// update wraps the Update method, adding instrumentation
-func (c *FillCache) update(group string) {
-	logger := log.NewLogEntry()
-	logger.WithUserGroup(group).Info("updating fill cache")
-
-	updated, err := c.Update(group)
-	if err != nil {
-		c.StatsdClient.Incr("groups_cache.error",
-			[]string{
-				fmt.Sprintf("group:%s", group),
-				fmt.Sprintf("error:%s", err),
-			}, 1.0)
-		logger.WithUserGroup(group).Error(
-			err, "error updating fill cache")
+		return true
 	}
 
-	if !updated {
-		logger.WithUserGroup(group).Info("cache was not updated")
-	}
+	c.StatsdClient.Incr("groups_cache.error",
+		[]string{
+			fmt.Sprintf("group:%s", group),
+			fmt.Sprintf("error:%s", err),
+		}, 1.0)
+	logger.WithUserGroup(group).Error(err, "error updating fill cache")
+	return false
 }
 
 // RefreshLoop runs in a separate goroutine for the key in the cache and
@@ -147,14 +136,20 @@ func (c *FillCache) RefreshLoop(group string) bool {
 
 		// we update the cache once before looping to ensure the cache is filled immediately,
 		// instead of only after c.refreshTTL
-		c.update(group)
+		updated := c.Update(group)
+		if !updated {
+			logger.WithUserGroup(group).Info("cache was not updated")
+		}
 
 		for {
 			select {
 			case <-c.stopCh:
 				return
 			case <-ticker.C:
-				c.update(group)
+				updated = c.Update(group)
+				if !updated {
+					logger.WithUserGroup(group).Info("cache was not updated")
+				}
 			}
 		}
 	}()
