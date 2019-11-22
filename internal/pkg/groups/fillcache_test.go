@@ -64,9 +64,20 @@ func TestRefreshLoop(t *testing.T) {
 			if tc.refreshLoopGroups != nil {
 				fillCache.refreshLoopGroups = tc.refreshLoopGroups
 			}
+
 			started := fillCache.RefreshLoop("group1")
+
 			if tc.expectedStarted != started {
 				t.Errorf("expected started to be %v but was %v", tc.expectedStarted, started)
+			}
+
+			if tc.expectedStarted {
+				// wait briefly to allow the cache to be updated
+				time.Sleep(50 * time.Millisecond)
+				_, ok := fillCache.Get("group1")
+				if !ok {
+					t.Errorf("expected the group cache to be updated immediately")
+				}
 			}
 
 		})
