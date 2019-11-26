@@ -79,7 +79,7 @@ func NewRequestSigner(signingKeyPemStr string) (*RequestSigner, error) {
 	keyHash = hasher.Sum(keyHash)
 
 	return &RequestSigner{
-		newHasher:       func() hash.Hash { return sha256.New() },
+		newHasher:    func() hash.Hash { return sha256.New() },
 		signingKey:   privateKey,
 		publicKeyStr: string(publicKeyPEM),
 		publicKeyID:  hex.EncodeToString(keyHash),
