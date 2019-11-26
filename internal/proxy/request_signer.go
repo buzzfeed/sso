@@ -38,7 +38,7 @@ var signingKeyHeader = "kid"
 // RequestSigner exposes an interface for digitally signing requests using an RSA private key.
 // See comments for the Sign() method below, for more on how this signature is constructed.
 type RequestSigner struct {
-	newHasher       func() hash.Hash
+	newHasher    func() hash.Hash
 	signingKey   crypto.Signer
 	publicKeyStr string
 	publicKeyID  string
