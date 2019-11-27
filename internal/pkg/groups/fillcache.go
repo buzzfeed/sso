@@ -18,9 +18,9 @@ const (
 type MemberSetCache interface {
 	// Get returns a MemberSet from the cache
 	Get(string) (MemberSet, bool)
-	// Update updates the MemberSet of a given key, return a boolean updated value, and and error
+	// Update updates the MemberSet of a given key and returns a boolean value indicating whether the value was updated or not.
 	Update(string) bool
-	// RefreshLoop starts an update refresh loop for a given key and returns a boolean value of it was started
+	// RefreshLoop starts an update refresh loop for a given key and returns a boolean value indicating whether a refresh loop has been started or not
 	RefreshLoop(string) bool
 	// Stop is a function to stop all goroutines that may have been spun up for the cache.
 	Stop()
