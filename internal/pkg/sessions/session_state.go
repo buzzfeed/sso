@@ -45,6 +45,14 @@ func (s *SessionState) ValidationPeriodExpired() bool {
 	return isExpired(s.ValidDeadline)
 }
 
+// IsWithinGracePeriod returns true if the session is still within the grace period
+func (s *SessionState) IsWithinGracePeriod(gracePeriodTTL time.Duration) bool {
+	if s.GracePeriodStart.IsZero() {
+		s.GracePeriodStart = time.Now()
+	}
+	return s.GracePeriodStart.Add(gracePeriodTTL).After(time.Now())
+}
+
 func isExpired(t time.Time) bool {
 	if t.Before(time.Now()) {
 		return true

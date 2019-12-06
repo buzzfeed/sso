@@ -10,7 +10,6 @@ var (
 	// These error message should be formatted in such a way that is appropriate
 	// for display to the end user.
 	ErrInvalidEmailAddress = errors.New("Invalid Email Address In Session State")
-	ErrValidationError     = errors.New("Error during validation")
 )
 
 type Validator interface {

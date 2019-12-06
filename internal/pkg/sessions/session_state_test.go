@@ -71,4 +71,12 @@ func TestSessionStateExpirations(t *testing.T) {
 	if !session.ValidationPeriodExpired() {
 		t.Errorf("expcted lifetime period to be expired")
 	}
+
+	if session.IsWithinGracePeriod(1 * time.Minute) {
+		t.Errorf("expected session to be outside of grace period")
+	}
+
+	if !session.IsWithinGracePeriod(3 * time.Minute) {
+		t.Errorf("expected session to be inside of grace period")
+	}
 }

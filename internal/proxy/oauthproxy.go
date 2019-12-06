@@ -359,7 +359,7 @@ func (p *OAuthProxy) ErrorPage(rw http.ResponseWriter, req *http.Request, code i
 	p.templates.ExecuteTemplate(rw, "error.html", t)
 }
 
-// IsWhitelistedRequest cheks that proxy host exists and checks the SkipAuthRegex
+// IsWhitelistedRequest checks that proxy host exists and checks the SkipAuthRegex
 func (p *OAuthProxy) IsWhitelistedRequest(req *http.Request) bool {
 	if p.skipAuthPreflight && req.Method == "OPTIONS" {
 		return true
@@ -373,6 +373,28 @@ func (p *OAuthProxy) IsWhitelistedRequest(req *http.Request) bool {
 	}
 
 	return false
+}
+
+// runValidatorsWithGracePeriod runs all validators and upon finding errors, checks to see if the
+// auth provider is explicity denying authentication or if it's merely unavailable. If it's unavailable,
+// we check whether the session is within the grace period or not to determine whether to allow the request
+// at this point.
+func (p *OAuthProxy) runValidatorsWithGracePeriod(session *sessions.SessionState) (err error) {
+	logger := log.NewLogEntry()
+	errors := options.RunValidators(p.Validators, session)
+	if len(errors) == len(p.Validators) {
+		for _, err := range errors {
+			// Check to see if the auth provider is explicity denying authentication, or if it is merely unavailable.
+			if err == providers.ErrAuthProviderUnavailable && session.IsWithinGracePeriod(p.provider.Data().GracePeriodTTL) {
+				return err
+			}
+		}
+		allowedGroups := p.upstreamConfig.AllowedGroups
+		logger.WithUser(session.Email).WithAllowedGroups(allowedGroups).Info(
+			"no longer authorized after validation period: %q", errors)
+		return ErrUserNotAuthorized
+	}
+	return nil
 }
 
 func (p *OAuthProxy) isXHR(req *http.Request) bool {
@@ -693,8 +715,6 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 	remoteAddr := getRemoteAddr(req)
 	tags := []string{"action:authenticate"}
 
-	allowedGroups := p.upstreamConfig.AllowedGroups
-
 	// Clear the session cookie if anything goes wrong.
 	defer func() {
 		if err != nil {
@@ -705,7 +725,7 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 	session, err := p.sessionStore.LoadSession(req)
 	if err != nil {
 		// We loaded a cookie but it wasn't valid, clear it, and reject the request
-		logger.Error(err, "error authenticating user")
+		logger.Error(err, "invalid session loaded")
 		return err
 	}
 
@@ -728,20 +748,35 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 	} else if session.RefreshPeriodExpired() {
 		// Refresh period is the period in which the access token is valid. This is ultimately
 		// controlled by the upstream provider and tends to be around 1 hour.
-		ok, err := p.provider.RefreshSession(session, allowedGroups)
+		// If it has expired we:
+		// - run email domain, email address, and email group validations against the session (if defined).
+		// - attempt to refresh the session
+
+		ok, err := p.provider.RefreshSession(session)
 		// We failed to refresh the session successfully
 		// clear the cookie and reject the request
 		if err != nil {
 			logger.WithUser(session.Email).Error(err, "refreshing session failed")
 			return err
 		}
-
 		if !ok {
 			// User is not authorized after refresh
 			// clear the cookie and reject the request
 			logger.WithUser(session.Email).Info(
 				"not authorized after refreshing session")
 			return ErrUserNotAuthorized
+		}
+
+		err = p.runValidatorsWithGracePeriod(session)
+		if err != nil {
+			switch err {
+			case providers.ErrAuthProviderUnavailable:
+				tags = append(tags, "action:refresh_session", "error:validation_failed")
+				p.StatsdClient.Incr("provider_error_fallback", tags, 1.0)
+				session.RefreshDeadline = sessions.ExtendDeadline(p.provider.Data().SessionValidTTL)
+			default:
+				return ErrUserNotAuthorized
+			}
 		}
 
 		err = p.sessionStore.SaveSession(rw, req, session)
@@ -757,9 +792,11 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 	} else if session.ValidationPeriodExpired() {
 		// Validation period has expired, this is the shortest interval we use to
 		// check for valid requests. This should be set to something like a minute.
-		// This calls up the provider chain to validate this user is still active
-		// and hasn't been de-authorized.
-		ok := p.provider.ValidateSessionState(session, allowedGroups)
+		// In this case we:
+		// - run any defined email domain, email address, and email group validators against the session
+		// - call up the provider chain to validate this user is still active and hasn't been de-authorized.
+
+		ok := p.provider.ValidateSessionToken(session)
 		if !ok {
 			// This user is now no longer authorized, or we failed to
 			// validate the user.
@@ -767,6 +804,18 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 			logger.WithUser(session.Email).Error(
 				err, "no longer authorized after validation period")
 			return ErrUserNotAuthorized
+		}
+
+		err = p.runValidatorsWithGracePeriod(session)
+		if err != nil {
+			switch err {
+			case providers.ErrAuthProviderUnavailable:
+				tags = append(tags, "action:refresh_session", "error:validation_failed")
+				p.StatsdClient.Incr("provider_error_fallback", tags, 1.0)
+				session.ValidDeadline = sessions.ExtendDeadline(p.provider.Data().SessionValidTTL)
+			default:
+				return ErrUserNotAuthorized
+			}
 		}
 
 		err = p.sessionStore.SaveSession(rw, req, session)
@@ -778,25 +827,6 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 			logger.WithUser(session.Email).Error(
 				err, "could not save validated session")
 			return err
-		}
-	}
-
-	// We revalidate group membership whenever the session is refreshed or revalidated
-	// just above in the call to ValidateSessionState and RefreshSession.
-	// To reduce strain on upstream identity providers we only revalidate email domains and
-	// addresses on each request here.
-	for _, v := range p.Validators {
-		_, EmailGroupValidator := v.(options.EmailGroupValidator)
-
-		if !EmailGroupValidator {
-			err := v.Validate(session)
-			if err != nil {
-				tags = append(tags, "error:validation_failed")
-				p.StatsdClient.Incr("application_error", tags, 1.0)
-				logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(
-					fmt.Sprintf("permission denied: unauthorized: %q", err))
-				return ErrUserNotAuthorized
-			}
 		}
 	}
 
