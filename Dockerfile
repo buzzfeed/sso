@@ -12,8 +12,8 @@ ENV GO111MODULE=on
 WORKDIR /go/src/github.com/buzzfeed/sso
 
 COPY . .
-RUN cd cmd/sso-auth && go build -o /bin/sso-auth
-RUN cd cmd/sso-proxy && go build -o /bin/sso-proxy
+RUN cd cmd/sso-auth && go build -mod=readonly -o /bin/sso-auth
+RUN cd cmd/sso-proxy && go build -mod=readonly -o /bin/sso-proxy
 
 # =============================================================================
 # final stage
