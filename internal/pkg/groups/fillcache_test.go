@@ -14,34 +14,27 @@ func testFillFunc(members MemberSet, fillError error) func(string) (MemberSet, e
 
 func TestFillCacheUpdate(t *testing.T) {
 	testCases := []struct {
-		name          string
-		members       MemberSet
-		fillError     error
-		updated       bool
-		expectedError bool
+		name      string
+		members   MemberSet
+		fillError error
+		updated   bool
 	}{
 		{
-			name:    "update to empty cache, no fill errors",
+			name:    "successful update to empty cache",
 			members: MemberSet{"a": {}, "b": {}, "c": {}},
 			updated: true,
 		},
 		{
-			name:          "update with fill function error",
-			fillError:     fmt.Errorf("fill error"),
-			expectedError: true,
+			name:      "unsuccessful update to cache",
+			fillError: fmt.Errorf("fill error"),
+			updated:   false,
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			fillCache := NewFillCache(testFillFunc(tc.members, tc.fillError), time.Hour)
 			defer fillCache.Stop()
-			ok, err := fillCache.Update("groupKey")
-			if err == nil && tc.expectedError {
-				t.Errorf("expected error but err was nil")
-			}
-			if err != nil && !tc.expectedError {
-				t.Errorf("unexpected error %s", err)
-			}
+			ok := fillCache.Update("groupKey")
 			if tc.updated != ok {
 				t.Errorf("expected updated to be %v but was %v", tc.updated, ok)
 			}
@@ -71,9 +64,20 @@ func TestRefreshLoop(t *testing.T) {
 			if tc.refreshLoopGroups != nil {
 				fillCache.refreshLoopGroups = tc.refreshLoopGroups
 			}
+
 			started := fillCache.RefreshLoop("group1")
+
 			if tc.expectedStarted != started {
 				t.Errorf("expected started to be %v but was %v", tc.expectedStarted, started)
+			}
+
+			if tc.expectedStarted {
+				// wait briefly to allow the cache to be updated
+				time.Sleep(50 * time.Millisecond)
+				_, ok := fillCache.Get("group1")
+				if !ok {
+					t.Errorf("expected the group cache to be updated immediately")
+				}
 			}
 
 		})

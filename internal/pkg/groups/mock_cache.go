@@ -5,7 +5,6 @@ type MockCache struct {
 	ListMembershipsFunc func(string) (MemberSet, bool)
 	Exists              bool
 	Updated             bool
-	UpdateError         error
 	Refreshed           bool
 }
 
@@ -15,8 +14,8 @@ func (mc *MockCache) Get(group string) (MemberSet, bool) {
 }
 
 // Update updates the cache
-func (mc *MockCache) Update(string) (bool, error) {
-	return mc.Updated, mc.UpdateError
+func (mc *MockCache) Update(string) bool {
+	return mc.Updated
 }
 
 // RefreshLoop returns a boolean of if the refresh loop is refreshed
