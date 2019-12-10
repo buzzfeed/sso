@@ -38,7 +38,7 @@ var signingKeyHeader = "kid"
 // RequestSigner exposes an interface for digitally signing requests using an RSA private key.
 // See comments for the Sign() method below, for more on how this signature is constructed.
 type RequestSigner struct {
-	hasher       hash.Hash
+	newHasher    func() hash.Hash
 	signingKey   crypto.Signer
 	publicKeyStr string
 	publicKeyID  string
@@ -79,7 +79,7 @@ func NewRequestSigner(signingKeyPemStr string) (*RequestSigner, error) {
 	keyHash = hasher.Sum(keyHash)
 
 	return &RequestSigner{
-		hasher:       sha256.New(),
+		newHasher:    func() hash.Hash { return sha256.New() },
 		signingKey:   privateKey,
 		publicKeyStr: string(publicKeyPEM),
 		publicKeyID:  hex.EncodeToString(keyHash),
@@ -168,9 +168,10 @@ func (signer RequestSigner) Sign(req *http.Request) error {
 
 	// Generate hash of the document buffer.
 	var documentHash []byte
-	signer.hasher.Reset()
-	_, _ = signer.hasher.Write([]byte(repr))
-	documentHash = signer.hasher.Sum(documentHash)
+	hasher := signer.newHasher()
+	hasher.Reset()
+	_, _ = hasher.Write([]byte(repr))
+	documentHash = hasher.Sum(documentHash)
 
 	// Sign the documentHash with the signing key.
 	signatureBytes, err := signer.signingKey.Sign(rand.Reader, documentHash, crypto.SHA256)
