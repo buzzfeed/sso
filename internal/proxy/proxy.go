@@ -6,20 +6,21 @@ import (
 
 	"github.com/buzzfeed/sso/internal/pkg/hostmux"
 	"github.com/buzzfeed/sso/internal/pkg/options"
+	"github.com/datadog/datadog-go/statsd"
 )
 
 type SSOProxy struct {
 	http.Handler
 }
 
-func New(opts *Options) (*SSOProxy, error) {
+func New(config Configuration, statsdClient *statsd.Client) (*SSOProxy, error) {
 	optFuncs := []func(*OAuthProxy) error{}
 
 	var requestSigner *RequestSigner
 	var err error
 
-	if opts.RequestSigningKey != "" {
-		requestSigner, err = NewRequestSigner(opts.RequestSigningKey)
+	if config.RequestSignerConfig.Key != "" {
+		requestSigner, err = NewRequestSigner(config.RequestSignerConfig.Key)
 		if err != nil {
 			return nil, err
 		}
@@ -27,8 +28,14 @@ func New(opts *Options) (*SSOProxy, error) {
 	}
 
 	hostRouter := hostmux.NewRouter()
-	for _, upstreamConfig := range opts.upstreamConfigs {
-		provider, err := newProvider(opts, upstreamConfig)
+	for _, upstreamConfig := range config.UpstreamConfigs.upstreamConfigs {
+		provider, err := newProvider(
+			config.ClientConfig,
+			config.ProviderConfig,
+			config.SessionConfig,
+			config.UpstreamConfigs,
+			statsdClient,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -53,13 +60,14 @@ func New(opts *Options) (*SSOProxy, error) {
 
 		optFuncs = append(optFuncs,
 			SetProvider(provider),
-			SetCookieStore(opts),
+			SetCookieStore(config.SessionConfig.CookieConfig),
 			SetUpstreamConfig(upstreamConfig),
 			SetProxyHandler(handler),
+			SetStatsdClient(statsdClient),
 			SetValidators(validators),
 		)
 
-		oauthproxy, err := NewOAuthProxy(opts, optFuncs...)
+		oauthproxy, err := NewOAuthProxy(config.SessionConfig, optFuncs...)
 		if err != nil {
 			return nil, err
 		}

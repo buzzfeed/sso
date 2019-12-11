@@ -11,8 +11,8 @@ import (
 )
 
 // newStatsdClient creates and returns a statsd client on a host and port that is namespaced to 'sso_proxy'
-func newStatsdClient(opts *Options) (*statsd.Client, error) {
-	client, err := statsd.New(net.JoinHostPort(opts.StatsdHost, strconv.Itoa(opts.StatsdPort)))
+func NewStatsdClient(host string, port int) (*statsd.Client, error) {
+	client, err := statsd.New(net.JoinHostPort(host, strconv.Itoa(port)))
 	if err != nil {
 		return nil, err
 	}

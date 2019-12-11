@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/datadog/datadog-go/statsd"
 	"github.com/mccutchen/go-httpbin/httpbin"
 
 	"github.com/buzzfeed/sso/internal/pkg/aead"
@@ -41,13 +42,6 @@ func setCSRFStore(s sessions.CSRFStore) func(*OAuthProxy) error {
 func setSessionStore(s sessions.SessionStore) func(*OAuthProxy) error {
 	return func(p *OAuthProxy) error {
 		p.sessionStore = s
-		return nil
-	}
-}
-
-func setSkipAuthPreflight(skip bool) func(*OAuthProxy) error {
-	return func(p *OAuthProxy) error {
-		p.skipAuthPreflight = skip
 		return nil
 	}
 }
@@ -96,7 +90,7 @@ func testHTTPBin(t *testing.T) (*url.URL, func()) {
 func testNewOAuthProxy(t *testing.T, optFuncs ...func(*OAuthProxy) error) (*OAuthProxy, func()) {
 	backendURL, close := testHTTPBin(t)
 
-	opts := NewOptions()
+	config := DefaultProxyConfig()
 	providerURL, _ := url.Parse("http://localhost/")
 	provider := providers.NewTestProvider(providerURL, "")
 
@@ -124,6 +118,8 @@ func testNewOAuthProxy(t *testing.T, optFuncs ...func(*OAuthProxy) error) (*OAut
 		t.Fatalf("unexpected error creating upstream reverse proxy: %v", err)
 	}
 
+	statsdClient, _ := statsd.New("127.0.0.1:8125")
+
 	standardOptFuncs := []func(*OAuthProxy) error{
 		SetValidators([]options.Validator{options.NewMockValidator(true)}),
 		SetProvider(provider),
@@ -133,6 +129,7 @@ func testNewOAuthProxy(t *testing.T, optFuncs ...func(*OAuthProxy) error) (*OAut
 		SetRequestSigner(requestSigner),
 		setCSRFStore(&sessions.MockCSRFStore{}),
 		setCookieCipher(&aead.MockCipher{}),
+		SetStatsdClient(statsdClient),
 	}
 
 	if requestSigner == nil {
@@ -141,7 +138,7 @@ func testNewOAuthProxy(t *testing.T, optFuncs ...func(*OAuthProxy) error) (*OAut
 
 	standardOptFuncs = append(standardOptFuncs, optFuncs...)
 
-	proxy, err := NewOAuthProxy(opts, standardOptFuncs...)
+	proxy, err := NewOAuthProxy(config.SessionConfig, standardOptFuncs...)
 	testutil.Assert(t, err == nil, "could not create upstream reverse proxy: %v", err)
 
 	if requestSigner == nil {
@@ -200,6 +197,32 @@ func TestFavicon(t *testing.T) {
 	proxy.Handler().ServeHTTP(rw, req)
 
 	testutil.Equal(t, http.StatusNotFound, rw.Code)
+}
+
+func TestSetCookieStore(t *testing.T) {
+	config := DefaultProxyConfig()
+	secret := "W0KcDGnkIxqgDuue/Xx5BejqD7QFX0TTtiubse9tfwA="
+	config.SessionConfig.CookieConfig.Secret = secret
+	err := config.SessionConfig.CookieConfig.Validate()
+	if err != nil {
+		t.Errorf("error validating cookieconfig: %s", err)
+	}
+
+	proxy, close := testNewOAuthProxy(t, SetCookieStore(config.SessionConfig.CookieConfig))
+	defer close()
+
+	_, ok := proxy.sessionStore.(*sessions.CookieStore)
+	if !ok {
+		t.Error("Unexpected object type")
+	}
+	_, ok = proxy.csrfStore.(*sessions.CookieStore)
+	if !ok {
+		t.Error("Unexpected object type")
+	}
+	_, ok = proxy.cookieCipher.(*aead.MiscreantCipher)
+	if !ok {
+		t.Error("Unexpected object type")
+	}
 }
 
 func TestAuthOnlyEndpoint(t *testing.T) {
@@ -309,13 +332,13 @@ func TestSkipAuthRequest(t *testing.T) {
 			})
 
 			config := &UpstreamConfig{
+				SkipAuthPreflight: true,
 				SkipAuthCompiledRegex: []*regexp.Regexp{
 					regexp.MustCompile(`^\/allow$`),
 				},
 			}
 
 			proxy, close := testNewOAuthProxy(t,
-				setSkipAuthPreflight(true),
 				SetProxyHandler(backend),
 				SetUpstreamConfig(config),
 				setSessionStore(&sessions.MockSessionStore{LoadError: http.ErrNoCookie}),
@@ -341,13 +364,13 @@ func TestEncodedPath(t *testing.T) {
 		})
 
 		config := &UpstreamConfig{
+			SkipAuthPreflight: true,
 			SkipAuthCompiledRegex: []*regexp.Regexp{
 				regexp.MustCompile(`^\/allow/.*$`),
 			},
 		}
 
 		proxy, close := testNewOAuthProxy(t,
-			setSkipAuthPreflight(true),
 			SetProxyHandler(backend),
 			SetUpstreamConfig(config),
 			setSessionStore(&sessions.MockSessionStore{LoadError: http.ErrNoCookie}),
@@ -367,9 +390,11 @@ func TestEncodedPath(t *testing.T) {
 
 func TestHeadersSentToUpstreams(t *testing.T) {
 	testCases := []struct {
-		name                 string
-		otherCookies         []*http.Cookie
-		expectedCookieHeader string
+		name                      string
+		otherCookies              []*http.Cookie
+		expectedCookieHeader      string
+		passAccessToken           bool
+		additionalExpectedHeaders map[string]string
 	}{
 		{
 			name:                 "only cookie is _sso_proxy cookie",
@@ -383,11 +408,24 @@ func TestHeadersSentToUpstreams(t *testing.T) {
 			},
 			expectedCookieHeader: "something=else",
 		},
+		{
+			name:            "pass access token set to true",
+			passAccessToken: true,
+			additionalExpectedHeaders: map[string]string{
+				"X-Forwarded-Access-Token": "my_access_token",
+			},
+		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			proxy, close := testNewOAuthProxy(t)
+			backendURL, close := testHTTPBin(t)
+			upstreamConfig := &UpstreamConfig{
+				Route: &SimpleRoute{
+					ToURL: backendURL,
+				},
+				PassAccessToken: tc.passAccessToken,
+			}
+			proxy, close := testNewOAuthProxy(t, SetUpstreamConfig(upstreamConfig))
 			defer close()
 
 			rw := httptest.NewRecorder()
@@ -420,7 +458,14 @@ func TestHeadersSentToUpstreams(t *testing.T) {
 				"X-Forwarded-Groups": strings.Join(session.Groups, ","),
 				"Cookie":             tc.expectedCookieHeader,
 			}
-
+			for key, val := range tc.additionalExpectedHeaders {
+				// don't overwrite standard expected headers. we might *need* to overwrite and test them at some point
+				// but right now, we don't and so we can actively combat against that behaviour
+				if _, ok := expectedHeaders[key]; ok {
+					continue
+				}
+				expectedHeaders[key] = val
+			}
 			for key, val := range expectedHeaders {
 				if resp.Headers.Get(key) != val {
 					t.Errorf("expected header %s=%q, got %s=%q", key, val, key, resp.Headers.Get(key))
