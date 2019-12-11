@@ -55,6 +55,8 @@ type UpstreamConfig struct {
 	AllowedEmailDomains   []string
 	AllowedEmailAddresses []string
 	TLSSkipVerify         bool
+	SkipAuthPreflight     bool
+	PassAccessToken       bool
 	PreserveHost          bool
 	HMACAuth              hmacauth.HmacAuth
 	Timeout               time.Duration
@@ -97,6 +99,8 @@ type OptionsConfig struct {
 	AllowedEmailDomains   []string          `yaml:"allowed_email_domains"`
 	AllowedEmailAddresses []string          `yaml:"allowed_email_addresses"`
 	TLSSkipVerify         bool              `yaml:"tls_skip_verify"`
+	SkipAuthPreflight     bool              `yaml:"skip_auth_preflight"`
+	PassAccessToken       bool              `yaml:"pass_access_token"`
 	PreserveHost          bool              `yaml:"preserve_host"`
 	Timeout               time.Duration     `yaml:"timeout"`
 	ResetDeadline         time.Duration     `yaml:"reset_deadline"`

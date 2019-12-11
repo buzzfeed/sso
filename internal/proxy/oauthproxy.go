@@ -63,9 +63,6 @@ type OAuthProxy struct {
 	redirectURL  *url.URL // the url to receive requests at
 	templates    *template.Template
 
-	skipAuthPreflight bool
-	passAccessToken   bool
-
 	StatsdClient *statsd.Client
 
 	requestSigner   *RequestSigner
@@ -80,93 +77,6 @@ type OAuthProxy struct {
 	sessionStore   sessions.SessionStore
 }
 
-// SetCookieStore sets the session and csrf stores as a functional option
-func SetCookieStore(opts *Options) func(*OAuthProxy) error {
-	return func(op *OAuthProxy) error {
-		cookieStore, err := sessions.NewCookieStore(opts.CookieName,
-			sessions.CreateMiscreantCookieCipher(opts.decodedCookieSecret),
-			func(c *sessions.CookieStore) error {
-				c.CookieDomain = opts.CookieDomain
-				c.CookieHTTPOnly = opts.CookieHTTPOnly
-				c.CookieExpire = opts.CookieExpire
-				c.CookieSecure = opts.CookieSecure
-				return nil
-			})
-
-		if err != nil {
-			return err
-		}
-
-		op.csrfStore = cookieStore
-		op.sessionStore = cookieStore
-		op.cookieCipher = cookieStore.CookieCipher
-		return nil
-	}
-}
-
-// SetRequestSigner sets the request signer  as a functional option
-// SetRequestSigner sets a request signer
-func SetRequestSigner(signer *RequestSigner) func(*OAuthProxy) error {
-	logger := log.NewLogEntry()
-	return func(op *OAuthProxy) error {
-		if signer == nil {
-			logger.Warn("Running OAuthProxy without signing key. Requests will not be signed.")
-			return nil
-		}
-
-		// Configure the RequestSigner (used to sign requests with `Sso-Signature` header).
-		// Also build the `certs` static JSON-string which will be served from a public endpoint.
-		// The key published at this endpoint allows upstreams to decrypt the `Sso-Signature`
-		// header, and validate the integrity and authenticity of a request.
-
-		certs := make(map[string]string)
-		id, key := signer.PublicKey()
-		certs[id] = key
-
-		certsAsStr, err := json.MarshalIndent(certs, "", "  ")
-		if err != nil {
-			return fmt.Errorf("could not marshal public certs as JSON: %s", err)
-		}
-
-		op.requestSigner = signer
-		op.publicCertsJSON = certsAsStr
-
-		return nil
-	}
-}
-
-// SetUpstreamConfig sets the upstream config as a functional option
-func SetUpstreamConfig(upstreamConfig *UpstreamConfig) func(*OAuthProxy) error {
-	return func(op *OAuthProxy) error {
-		op.upstreamConfig = upstreamConfig
-		return nil
-	}
-}
-
-// SetProxyHandler sets the proxy handler as a functional option
-func SetProxyHandler(handler http.Handler) func(*OAuthProxy) error {
-	return func(op *OAuthProxy) error {
-		op.handler = handler
-		return nil
-	}
-}
-
-// SetValidator sets the email validator as a functional option
-func SetValidators(validators []options.Validator) func(*OAuthProxy) error {
-	return func(op *OAuthProxy) error {
-		op.Validators = validators
-		return nil
-	}
-}
-
-// SetProvider sets the provider as a functional option
-func SetProvider(provider providers.Provider) func(*OAuthProxy) error {
-	return func(op *OAuthProxy) error {
-		op.provider = provider
-		return nil
-	}
-}
-
 // StateParameter holds the redirect id along with the session id.
 type StateParameter struct {
 	SessionID   string `json:"session_id"`
@@ -174,17 +84,13 @@ type StateParameter struct {
 }
 
 // NewOAuthProxy creates a new OAuthProxy struct.
-func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthProxy, error) {
+func NewOAuthProxy(sc SessionConfig, optFuncs ...func(*OAuthProxy) error) (*OAuthProxy, error) {
 	p := &OAuthProxy{
-		cookieSecure: opts.CookieSecure,
-		StatsdClient: opts.StatsdClient,
+		cookieSecure: sc.CookieConfig.Secure,
 		Validators:   []options.Validator{},
 
 		redirectURL: &url.URL{Path: "/oauth2/callback"},
 		templates:   getTemplates(),
-
-		skipAuthPreflight: opts.SkipAuthPreflight,
-		passAccessToken:   opts.PassAccessToken,
 	}
 
 	for _, optFunc := range optFuncs {
@@ -364,7 +270,7 @@ func (p *OAuthProxy) ErrorPage(rw http.ResponseWriter, req *http.Request, code i
 
 // IsWhitelistedRequest cheks that proxy host exists and checks the SkipAuthRegex
 func (p *OAuthProxy) IsWhitelistedRequest(req *http.Request) bool {
-	if p.skipAuthPreflight && req.Method == "OPTIONS" {
+	if p.upstreamConfig.SkipAuthPreflight && req.Method == "OPTIONS" {
 		return true
 	}
 
@@ -835,7 +741,7 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 
 	req.Header.Set("X-Forwarded-User", session.User)
 
-	if p.passAccessToken && session.AccessToken != "" {
+	if p.upstreamConfig.PassAccessToken && session.AccessToken != "" {
 		req.Header.Set("X-Forwarded-Access-Token", session.AccessToken)
 	}
 

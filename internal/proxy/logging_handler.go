@@ -88,10 +88,10 @@ type loggingHandler struct {
 }
 
 // NewLoggingHandler returns a new loggingHandler that wraps a handler, statsd client, and writer.
-func NewLoggingHandler(out io.Writer, h http.Handler, v bool, StatsdClient *statsd.Client) http.Handler {
+func NewLoggingHandler(out io.Writer, h http.Handler, lc LoggingConfig, StatsdClient *statsd.Client) http.Handler {
 	return loggingHandler{writer: out,
 		handler:      h,
-		enabled:      v,
+		enabled:      lc.Enable,
 		StatsdClient: StatsdClient,
 	}
 }

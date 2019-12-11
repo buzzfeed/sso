@@ -6,8 +6,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/kelseyhightower/envconfig"
-
 	"github.com/buzzfeed/sso/internal/pkg/httpserver"
 	"github.com/buzzfeed/sso/internal/pkg/logging"
 	"github.com/buzzfeed/sso/internal/proxy"
@@ -21,26 +19,42 @@ func init() {
 func main() {
 	logger := logging.NewLogEntry()
 
-	opts := proxy.NewOptions()
-	err := envconfig.Process("", opts)
+	config, err := proxy.LoadConfig()
 	if err != nil {
-		logger.Error(err, "error parsing env vars into options")
+		logger.Error(err, "error loading in config from env vars")
 		os.Exit(1)
 	}
 
-	err = opts.Validate()
+	err = config.Validate()
 	if err != nil {
-		logger.Error(err, "error validating options")
+		logger.Error(err, "error validating config")
+		os.Exit(1)
+	}
+
+	sc := config.MetricsConfig.StatsdConfig
+	statsdClient, err := proxy.NewStatsdClient(sc.Host, sc.Port)
+	if err != nil {
+		logger.Error(err, "error creating statsd client")
 		os.Exit(1)
 	}
 
 	// we setup a runtime collector to emit stats
 	go func() {
-		c := collector.New(opts.StatsdClient, 30*time.Second)
+		c := collector.New(statsdClient, 30*time.Second)
 		c.Run()
 	}()
 
-	ssoProxy, err := proxy.New(opts)
+	err = proxy.SetUpstreamConfigs(
+		&config.UpstreamConfigs,
+		config.SessionConfig.CookieConfig,
+		config.ServerConfig,
+	)
+	if err != nil {
+		logger.Error(err, "error setting upstream configs")
+		os.Exit(1)
+	}
+
+	ssoProxy, err := proxy.New(config, statsdClient)
 	if err != nil {
 		logger.Error(err, "error creating sso proxy")
 		os.Exit(1)
@@ -48,18 +62,18 @@ func main() {
 
 	loggingHandler := proxy.NewLoggingHandler(os.Stdout,
 		ssoProxy,
-		opts.RequestLogging,
-		opts.StatsdClient,
+		config.LoggingConfig,
+		statsdClient,
 	)
 
 	s := &http.Server{
-		Addr:         fmt.Sprintf(":%d", opts.Port),
-		ReadTimeout:  opts.TCPReadTimeout,
-		WriteTimeout: opts.TCPWriteTimeout,
+		Addr:         fmt.Sprintf(":%d", config.ServerConfig.Port),
+		ReadTimeout:  config.ServerConfig.TimeoutConfig.Read,
+		WriteTimeout: config.ServerConfig.TimeoutConfig.Write,
 		Handler:      loggingHandler,
 	}
 
-	if err := httpserver.Run(s, opts.ShutdownTimeout, logger); err != nil {
+	if err := httpserver.Run(s, config.ServerConfig.TimeoutConfig.Shutdown, logger); err != nil {
 		logger.WithError(err).Fatal("error running server")
 	}
 }

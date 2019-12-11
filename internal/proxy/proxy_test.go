@@ -21,8 +21,15 @@ func randSeq(n int) string {
 }
 
 func TestPingHandler(t *testing.T) {
-	opts := NewOptions()
-	sso, err := New(opts)
+	config := DefaultProxyConfig()
+	statsdClient, err := NewStatsdClient(
+		config.MetricsConfig.StatsdConfig.Host,
+		config.MetricsConfig.StatsdConfig.Port)
+	if err != nil {
+		t.Fatalf("unexpected error creating statsd client: %v", err)
+	}
+
+	sso, err := New(config, statsdClient)
 	if err != nil {
 		t.Fatalf("unexpected err starting sso: %v", err)
 	}
