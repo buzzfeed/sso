@@ -748,8 +748,8 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 		// Refresh period is the period in which the access token is valid. This is ultimately
 		// controlled by the upstream provider and tends to be around 1 hour.
 		// If it has expired we:
-		// - run email domain, email address, and email group validations against the session (if defined).
 		// - attempt to refresh the session
+		// - run email domain, email address, and email group validations against the session (if defined).
 
 		ok, err := p.provider.RefreshSession(session)
 		// We failed to refresh the session successfully
@@ -792,8 +792,8 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 		// Validation period has expired, this is the shortest interval we use to
 		// check for valid requests. This should be set to something like a minute.
 		// In this case we:
-		// - run any defined email domain, email address, and email group validators against the session
 		// - call up the provider chain to validate this user is still active and hasn't been de-authorized.
+		// - run any defined email domain, email address, and email group validators against the session
 
 		ok := p.provider.ValidateSessionToken(session)
 		if !ok {
