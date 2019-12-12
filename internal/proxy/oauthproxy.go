@@ -809,7 +809,7 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 		if err != nil {
 			switch err {
 			case providers.ErrAuthProviderUnavailable:
-				tags = append(tags, "action:refresh_session", "error:validation_failed")
+				tags = append(tags, "action:validate_session", "error:validation_failed")
 				p.StatsdClient.Incr("provider_error_fallback", tags, 1.0)
 				session.ValidDeadline = sessions.ExtendDeadline(p.provider.Data().SessionValidTTL)
 			default:
