@@ -377,8 +377,7 @@ func (p *OAuthProxy) IsWhitelistedRequest(req *http.Request) bool {
 
 // runValidatorsWithGracePeriod runs all validators and upon finding errors, checks to see if the
 // auth provider is explicity denying authentication or if it's merely unavailable. If it's unavailable,
-// we check whether the session is within the grace period or not to determine whether to allow the request
-// at this point.
+// we check whether the session is within the grace period or not to determine the specific error we return.
 func (p *OAuthProxy) runValidatorsWithGracePeriod(session *sessions.SessionState) (err error) {
 	logger := log.NewLogEntry()
 	errors := options.RunValidators(p.Validators, session)
@@ -390,8 +389,8 @@ func (p *OAuthProxy) runValidatorsWithGracePeriod(session *sessions.SessionState
 			}
 		}
 		allowedGroups := p.upstreamConfig.AllowedGroups
-		logger.WithUser(session.Email).WithAllowedGroups(allowedGroups).Info(
-			"no longer authorized after validation period: %q", errors)
+		logger.WithUser(session.Email).WithAllowedGroups(allowedGroups).Error(errors,
+			"no longer authorized after validation period")
 		return ErrUserNotAuthorized
 	}
 	return nil

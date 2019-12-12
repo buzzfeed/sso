@@ -124,7 +124,7 @@ func testNewOAuthProxy(t *testing.T, optFuncs ...func(*OAuthProxy) error) (*OAut
 	}
 
 	standardOptFuncs := []func(*OAuthProxy) error{
-		SetValidators([]options.Validator{options.NewMockValidator(true)}),
+		SetValidators([]options.Validator{options.NewMockValidator(true, nil)}),
 		SetProvider(provider),
 		setSessionStore(&sessions.MockSessionStore{Session: testSession()}),
 		SetUpstreamConfig(upstreamConfig),
@@ -203,27 +203,28 @@ func TestFavicon(t *testing.T) {
 
 func TestAuthOnlyEndpoint(t *testing.T) {
 	testCases := []struct {
-		name         string
-		validEmail   bool
-		sessionStore *sessions.MockSessionStore
-		expectedBody string
-		expectedCode int
+		name            string
+		validatorResult bool
+		validatorErr    error
+		sessionStore    *sessions.MockSessionStore
+		expectedBody    string
+		expectedCode    int
 	}{
 		{
 			name: "accepted",
 			sessionStore: &sessions.MockSessionStore{
 				Session: testSession(),
 			},
-			validEmail:   true,
-			expectedBody: "",
-			expectedCode: http.StatusAccepted,
+			validatorResult: true,
+			expectedBody:    "",
+			expectedCode:    http.StatusAccepted,
 		},
 		{
-			name:         "unauthorized on no cookie set",
-			expectedBody: "unauthorized request\n",
-			sessionStore: &sessions.MockSessionStore{},
-			validEmail:   true,
-			expectedCode: http.StatusUnauthorized,
+			name:            "unauthorized on no cookie set",
+			expectedBody:    "unauthorized request\n",
+			sessionStore:    &sessions.MockSessionStore{},
+			validatorResult: true,
+			expectedCode:    http.StatusUnauthorized,
 		},
 		{
 			name: "unauthorized on expiration",
@@ -232,17 +233,156 @@ func TestAuthOnlyEndpoint(t *testing.T) {
 					LifetimeDeadline: time.Now().Add(-1 * time.Hour),
 				},
 			},
-			validEmail:   true,
+			// it should error before running the validator
+			validatorResult: true,
+			expectedBody:    "unauthorized request\n",
+			expectedCode:    http.StatusUnauthorized,
+		},
+		{
+			name: "authorized: refresh period expired, validations pass",
+			sessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					//refresh period expired, but within grace period
+					LifetimeDeadline: time.Now().Add(1 * time.Hour),
+					RefreshDeadline:  time.Now().Add(-1 * time.Hour),
+				},
+			},
+			//provider unavailable instead of hard valiation fail
+			validatorResult: true,
+			expectedBody:    "",
+			expectedCode:    http.StatusAccepted,
+		},
+		{
+			name: "authorized: refresh period expired, idp unavailable, within grace period",
+			sessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					//refresh period expired, but within grace period
+					LifetimeDeadline: time.Now().Add(1 * time.Hour),
+					RefreshDeadline:  time.Now().Add(-1 * time.Hour),
+					GracePeriodStart: time.Now().Add(1 * time.Hour),
+				},
+			},
+			//provider unavailable instead of hard valiation fail
+			validatorErr: providers.ErrAuthProviderUnavailable,
+			expectedBody: "",
+			expectedCode: http.StatusAccepted,
+		},
+		{
+			name: "unauthorized: refresh period expired, idp unavailable, outside of grace period",
+			sessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					//refresh period expired, but within grace period
+					LifetimeDeadline: time.Now().Add(1 * time.Hour),
+					RefreshDeadline:  time.Now().Add(-1 * time.Hour),
+					GracePeriodStart: time.Now().Add(-1 * time.Hour),
+				},
+			},
+			//provider unavailable instead of hard valiation fail
+			validatorErr: providers.ErrAuthProviderUnavailable,
 			expectedBody: "unauthorized request\n",
 			expectedCode: http.StatusUnauthorized,
 		},
 		{
-			name: "unauthorized on email validation failure",
+			name: "unauthorized: refresh period expired, idp available, outside of grace period",
 			sessionStore: &sessions.MockSessionStore{
-				Session: testSession(),
+				Session: &sessions.SessionState{
+					//refresh period expired, but within grace period
+					LifetimeDeadline: time.Now().Add(1 * time.Hour),
+					RefreshDeadline:  time.Now().Add(-1 * time.Hour),
+					GracePeriodStart: time.Now().Add(-1 * time.Hour),
+				},
 			},
+			//provider unavailable instead of hard valiation fail
+			validatorResult: false,
+			expectedBody:    "unauthorized request\n",
+			expectedCode:    http.StatusUnauthorized,
+		},
+		{
+			name: "unauthorized: refresh period expired, idp available, validator hard fail",
+			sessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					//refresh period expired, but within grace period
+					LifetimeDeadline: time.Now().Add(1 * time.Hour),
+					RefreshDeadline:  time.Now().Add(-1 * time.Hour),
+				},
+			},
+			//provider unavailable instead of hard valiation fail
+			validatorResult: false,
+			expectedBody:    "unauthorized request\n",
+			expectedCode:    http.StatusUnauthorized,
+		},
+		{
+			name: "authorized: validation period expired, validations pass",
+			sessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					//refresh period expired, but within grace period
+					LifetimeDeadline: time.Now().Add(1 * time.Hour),
+					ValidDeadline:    time.Now().Add(-1 * time.Hour),
+				},
+			},
+			//provider unavailable instead of hard valiation fail
+			validatorResult: true,
+			expectedBody:    "",
+			expectedCode:    http.StatusAccepted,
+		},
+		{
+			name: "authorized: validation period expired, idp unavailable, within grace period",
+			sessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					//refresh period expired, but within grace period
+					LifetimeDeadline: time.Now().Add(1 * time.Hour),
+					ValidDeadline:    time.Now().Add(-1 * time.Hour),
+					GracePeriodStart: time.Now().Add(1 * time.Hour),
+				},
+			},
+			//provider unavailable instead of hard valiation fail
+			validatorErr: providers.ErrAuthProviderUnavailable,
+			expectedBody: "",
+			expectedCode: http.StatusAccepted,
+		},
+		{
+			name: "unauthorized: validatoion period expired, idp unavailable, outside of grace period",
+			sessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					//refresh period expired, but within grace period
+					LifetimeDeadline: time.Now().Add(1 * time.Hour),
+					ValidDeadline:    time.Now().Add(-1 * time.Hour),
+					GracePeriodStart: time.Now().Add(-1 * time.Hour),
+				},
+			},
+			//provider unavailable instead of hard valiation fail
+			validatorErr: providers.ErrAuthProviderUnavailable,
 			expectedBody: "unauthorized request\n",
 			expectedCode: http.StatusUnauthorized,
+		},
+		{
+			name: "unauthorized: validation period expired, idp available, outside of grace period",
+			sessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					//refresh period expired, but within grace period
+					LifetimeDeadline: time.Now().Add(1 * time.Hour),
+					RefreshDeadline:  time.Now().Add(-1 * time.Hour),
+					GracePeriodStart: time.Now().Add(-1 * time.Hour),
+				},
+			},
+			//provider unavailable instead of hard valiation fail
+			validatorResult: false,
+			expectedBody:    "unauthorized request\n",
+			expectedCode:    http.StatusUnauthorized,
+		},
+		{
+			name: "unauthorized: validation period expired, idp available, validator hard fail",
+			sessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					//refresh period expired, but within grace period
+					LifetimeDeadline: time.Now().Add(1 * time.Hour),
+					ValidDeadline:    time.Now().Add(-1 * time.Hour),
+				},
+			},
+			//provider unavailable instead of hard valiation fail
+			validatorResult: false,
+			expectedBody:    "unauthorized request\n",
+			expectedCode:    http.StatusUnauthorized,
 		},
 	}
 
@@ -250,12 +390,12 @@ func TestAuthOnlyEndpoint(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			providerURL, _ := url.Parse("http://localhost/")
 			tp := providers.NewTestProvider(providerURL, "")
-			tp.RefreshSessionFunc = func(*sessions.SessionState, []string) (bool, error) { return true, nil }
-			tp.ValidateSessionFunc = func(*sessions.SessionState, []string) bool { return true }
+			tp.RefreshSessionFunc = func(*sessions.SessionState) (bool, error) { return true, nil }
+			tp.ValidateSessionFunc = func(*sessions.SessionState) bool { return true }
 
 			proxy, close := testNewOAuthProxy(t,
 				setSessionStore(tc.sessionStore),
-				SetValidators([]options.Validator{options.NewMockValidator(tc.validEmail)}),
+				SetValidators([]options.Validator{options.NewMockValidator(tc.validatorResult, tc.validatorErr)}),
 				SetProvider(tp),
 			)
 			defer close()
@@ -415,8 +555,8 @@ func TestAuthenticate(t *testing.T) {
 		SessionStore        *sessions.MockSessionStore
 		ExpectedErr         error
 		CookieExpectation   int // One of: {NewCookie, ClearCookie, KeepCookie}
-		RefreshSessionFunc  func(*sessions.SessionState, []string) (bool, error)
-		ValidateSessionFunc func(*sessions.SessionState, []string) bool
+		RefreshSessionFunc  func(*sessions.SessionState) (bool, error)
+		ValidateSessionFunc func(*sessions.SessionState) bool
 	}{
 		{
 			Name: "redirect if deadlines are blank",
@@ -480,7 +620,7 @@ func TestAuthenticate(t *testing.T) {
 			},
 			ExpectedErr:        ErrRefreshFailed,
 			CookieExpectation:  ClearCookie,
-			RefreshSessionFunc: func(s *sessions.SessionState, g []string) (bool, error) { return false, ErrRefreshFailed },
+			RefreshSessionFunc: func(s *sessions.SessionState) (bool, error) { return false, ErrRefreshFailed },
 		},
 		{
 			Name: "refresh expired, user not OK, do not authenticate",
@@ -495,7 +635,7 @@ func TestAuthenticate(t *testing.T) {
 			},
 			ExpectedErr:        ErrUserNotAuthorized,
 			CookieExpectation:  ClearCookie,
-			RefreshSessionFunc: func(s *sessions.SessionState, g []string) (bool, error) { return false, nil },
+			RefreshSessionFunc: func(s *sessions.SessionState) (bool, error) { return false, nil },
 		},
 		{
 			Name: "refresh expired, user OK, authenticate",
@@ -510,7 +650,7 @@ func TestAuthenticate(t *testing.T) {
 			},
 			ExpectedErr:        nil,
 			CookieExpectation:  NewCookie,
-			RefreshSessionFunc: func(s *sessions.SessionState, g []string) (bool, error) { return true, nil },
+			RefreshSessionFunc: func(s *sessions.SessionState) (bool, error) { return true, nil },
 		},
 		{
 			Name: "refresh expired, refresh and user OK, error saving session",
@@ -526,7 +666,7 @@ func TestAuthenticate(t *testing.T) {
 			},
 			ExpectedErr:        SaveCookieFailed,
 			CookieExpectation:  ClearCookie,
-			RefreshSessionFunc: func(s *sessions.SessionState, g []string) (bool, error) { return true, nil },
+			RefreshSessionFunc: func(s *sessions.SessionState) (bool, error) { return true, nil },
 		},
 		{
 			Name: "validation expired, user not OK, do not authenticate",
@@ -541,7 +681,7 @@ func TestAuthenticate(t *testing.T) {
 			},
 			ExpectedErr:         ErrUserNotAuthorized,
 			CookieExpectation:   ClearCookie,
-			ValidateSessionFunc: func(s *sessions.SessionState, g []string) bool { return false },
+			ValidateSessionFunc: func(s *sessions.SessionState) bool { return false },
 		},
 		{
 			Name: "validation expired, user OK, authenticate",
@@ -556,7 +696,7 @@ func TestAuthenticate(t *testing.T) {
 			},
 			ExpectedErr:         nil,
 			CookieExpectation:   NewCookie,
-			ValidateSessionFunc: func(s *sessions.SessionState, g []string) bool { return true },
+			ValidateSessionFunc: func(s *sessions.SessionState) bool { return true },
 		},
 		{
 			Name: "wrong identity provider, user OK, do not authenticate",
@@ -620,8 +760,8 @@ func TestAuthenticationUXFlows(t *testing.T) {
 		Name string
 
 		SessionStore        *sessions.MockSessionStore
-		RefreshSessionFunc  func(*sessions.SessionState, []string) (bool, error)
-		ValidateSessionFunc func(*sessions.SessionState, []string) bool
+		RefreshSessionFunc  func(*sessions.SessionState) (bool, error)
+		ValidateSessionFunc func(*sessions.SessionState) bool
 
 		ExpectStatusCode int
 	}{
@@ -680,7 +820,7 @@ func TestAuthenticationUXFlows(t *testing.T) {
 					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
 				},
 			},
-			RefreshSessionFunc: func(s *sessions.SessionState, g []string) (bool, error) { return false, ErrRefreshFailed },
+			RefreshSessionFunc: func(s *sessions.SessionState) (bool, error) { return false, ErrRefreshFailed },
 			ExpectStatusCode:   http.StatusInternalServerError,
 		},
 		{
@@ -694,7 +834,7 @@ func TestAuthenticationUXFlows(t *testing.T) {
 					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
 				},
 			},
-			RefreshSessionFunc: func(s *sessions.SessionState, g []string) (bool, error) { return false, nil },
+			RefreshSessionFunc: func(s *sessions.SessionState) (bool, error) { return false, nil },
 			ExpectStatusCode:   http.StatusForbidden,
 		},
 		{
@@ -708,7 +848,7 @@ func TestAuthenticationUXFlows(t *testing.T) {
 					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
 				},
 			},
-			RefreshSessionFunc: func(s *sessions.SessionState, g []string) (bool, error) { return true, nil },
+			RefreshSessionFunc: func(s *sessions.SessionState) (bool, error) { return true, nil },
 			ExpectStatusCode:   http.StatusOK,
 		},
 		{
@@ -723,7 +863,7 @@ func TestAuthenticationUXFlows(t *testing.T) {
 				},
 				SaveError: SaveCookieFailed,
 			},
-			RefreshSessionFunc: func(s *sessions.SessionState, g []string) (bool, error) { return true, nil },
+			RefreshSessionFunc: func(s *sessions.SessionState) (bool, error) { return true, nil },
 			ExpectStatusCode:   http.StatusInternalServerError,
 		},
 		{
@@ -737,7 +877,7 @@ func TestAuthenticationUXFlows(t *testing.T) {
 					ValidDeadline:    time.Now().Add(time.Duration(-1) * time.Minute),
 				},
 			},
-			ValidateSessionFunc: func(s *sessions.SessionState, g []string) bool { return false },
+			ValidateSessionFunc: func(s *sessions.SessionState) bool { return false },
 			ExpectStatusCode:    http.StatusForbidden,
 		},
 		{
@@ -751,7 +891,7 @@ func TestAuthenticationUXFlows(t *testing.T) {
 					ValidDeadline:    time.Now().Add(time.Duration(-1) * time.Minute),
 				},
 			},
-			ValidateSessionFunc: func(s *sessions.SessionState, g []string) bool { return true },
+			ValidateSessionFunc: func(s *sessions.SessionState) bool { return true },
 			ExpectStatusCode:    http.StatusOK,
 		},
 		{
