@@ -58,10 +58,10 @@ func TestSignInMessage(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			buf := &bytes.Buffer{}
 			ctx := struct {
-				ProviderName string
+				ProviderSlug string
 				EmailDomains []string
 			}{
-				ProviderName: "Google",
+				ProviderSlug: "Google",
 				EmailDomains: tc.emailDomains,
 			}
 			templates.ExecuteTemplate(buf, "sign_in_message.html", ctx)
