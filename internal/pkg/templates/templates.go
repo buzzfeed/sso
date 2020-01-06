@@ -34,13 +34,13 @@ Secured by <b>SSO</b>{{end}}`))
 	t = template.Must(t.Parse(`{{define "sign_in_message.html"}}
   {{if eq (len .EmailDomains) 1}}
       {{if eq (index .EmailDomains 0) "@*"}}
-          <p>You may sign in with any {{.ProviderName}} account.</p>
+          <p>You may sign in with any {{.ProviderSlug}} account.</p>
       {{else}}
-          <p>You may sign in with your <b>{{index .EmailDomains 0}}</b> {{.ProviderName}} account.</p>
+          <p>You may sign in with your <b>{{index .EmailDomains 0}}</b> {{.ProviderSlug}} account.</p>
       {{end}}
   {{else if gt (len .EmailDomains) 1}}
       <p>
-          You may sign in with any of these {{.ProviderName}} accounts:<br>
+          You may sign in with any of these {{.ProviderSlug}} accounts:<br>
           {{range $i, $e := .EmailDomains}}{{if $i}}, {{end}}<b>{{$e}}</b>{{end}}
       </p>
   {{end}}
@@ -64,9 +64,15 @@ Secured by <b>SSO</b>{{end}}`))
 
             {{template "sign_in_message.html" .}}
 
-            <form method="GET" action="start">
-                <input type="hidden" name="redirect_uri" value="{{.Redirect}}">
-                <button type="submit" class="btn">Sign in with {{.ProviderName}}</button>
+            <form method="GET" action="{{.Action}}">
+                <input type="hidden" name="redirect_uri" value="{{.SignInParams.RedirectURL}}">
+                <input type="hidden" name="scope" value="{{.SignInParams.Scope}}">
+                <input type="hidden" name="client_id" value="{{.SignInParams.ClientID}}">
+                <input type="hidden" name="response_type" value="{{.SignInParams.ResponseType}}">
+                <input type="hidden" name="state" value="{{.SignInParams.State}}">
+                <input type="hidden" name="ts" value="{{.SignInParams.TimeStamp}}">
+                <input type="hidden" name="sig" value="{{.SignInParams.Signature}}">
+                <button type="submit" class="btn">Sign in with {{.ProviderSlug}}</button>
             </form>
         </div>
 
@@ -108,19 +114,16 @@ Secured by <b>SSO</b>{{end}}`))
 </head>
 <body>
     <div class="container">
-    	{{ if .Message }}
-    	   <div class="message">{{.Message}}</div>
-    	{{ end}}
     	<div class="content">
             <header>
                 <h1>Sign out of <b>{{.Destination}}</b></h1>
             </header>
 
             <p>You're currently signed in as <b>{{.Email}}</b>. This will also sign you out of other internal apps.</p>
-            <form method="POST" action="sign_out">
-              <input type="hidden" name="redirect_uri" value="{{.Redirect}}">
-              <input type="hidden" name="sig" value="{{.Signature}}">
-              <input type="hidden" name="ts" value="{{.Timestamp}}">
+            <form method="POST" action="{{.Action}}">
+              <input type="hidden" name="redirect_uri" value="{{.SignOutParams.RedirectURL}}">
+              <input type="hidden" name="sig" value="{{.SignOutParams.Signature}}">
+              <input type="hidden" name="ts" value="{{.SignOutParams.TimeStamp}}">
               <button type="submit">Sign out</button>
             </form>
     	</div>
