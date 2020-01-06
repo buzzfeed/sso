@@ -459,6 +459,18 @@ func TestSignOut(t *testing.T) {
 			Method: "POST",
 		},
 		{
+			Name:               "clear session and redirect if unexpected error occurs loading session",
+			ExpectedStatusCode: http.StatusFound,
+			SuccessfulRevoke:   true,
+			mockSessionStore: &sessions.MockSessionStore{
+				LoadError: sessions.ErrInvalidSession,
+			},
+			paramsMap: map[string]string{
+				"redirect_uri": "http://service.example.com",
+			},
+			Method: "POST",
+		},
+		{
 			Name:               "sign out returns error if revoke fails",
 			ExpectedStatusCode: http.StatusInternalServerError,
 			mockSessionStore: &sessions.MockSessionStore{
@@ -474,7 +486,7 @@ func TestSignOut(t *testing.T) {
 			Method:      "POST",
 		},
 		{
-			Name:               "successful revoke and redirect on GET",
+			Name:               "successful revoke and redirect on POST",
 			ExpectedStatusCode: http.StatusFound,
 			SuccessfulRevoke:   true,
 			mockSessionStore: &sessions.MockSessionStore{
@@ -1458,6 +1470,7 @@ func TestOAuthStart(t *testing.T) {
 		Name               string
 		ProxyRedirectURI   string
 		ExpectedStatusCode int
+		InvalidSignature   bool
 	}{
 		{
 			Name:               "reject requests without a redirect",
@@ -1471,6 +1484,12 @@ func TestOAuthStart(t *testing.T) {
 		{
 			Name:               "reject requests with a malicious proxy",
 			ProxyRedirectURI:   "https://proxy.evil.com/path/to/badness",
+			ExpectedStatusCode: http.StatusBadRequest,
+		},
+		{
+			Name:               "reject requests with invalid signature",
+			ProxyRedirectURI:   "https://proxy.example.com/oauth/callback",
+			InvalidSignature:   true,
 			ExpectedStatusCode: http.StatusBadRequest,
 		},
 		{
@@ -1494,8 +1513,13 @@ func TestOAuthStart(t *testing.T) {
 			params := url.Values{}
 			if tc.ProxyRedirectURI != "" {
 				// NOTE: redirect signatures tested in middleware_test.go
+				sig := []byte("")
 				now := time.Now()
-				sig := redirectURLSignature(tc.ProxyRedirectURI, now, config.ClientConfigs["proxy"].Secret)
+				if tc.InvalidSignature {
+					sig = redirectURLSignature(tc.ProxyRedirectURI, now, "badSecret")
+				} else {
+					sig = redirectURLSignature(tc.ProxyRedirectURI, now, config.ClientConfigs["proxy"].Secret)
+				}
 				b64sig := base64.URLEncoding.EncodeToString(sig)
 				params.Add("redirect_uri", tc.ProxyRedirectURI)
 				params.Add("sig", b64sig)
