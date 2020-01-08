@@ -1,4 +1,4 @@
-package options
+package validators
 
 import (
 	"testing"

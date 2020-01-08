@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/buzzfeed/sso/internal/pkg/hostmux"
-	"github.com/buzzfeed/sso/internal/pkg/options"
+	"github.com/buzzfeed/sso/internal/pkg/validators"
 )
 
 type SSOProxy struct {
@@ -38,17 +38,17 @@ func New(opts *Options) (*SSOProxy, error) {
 			return nil, err
 		}
 
-		validators := []options.Validator{}
+		validators := []validators.Validator{}
 		if len(upstreamConfig.AllowedEmailAddresses) != 0 {
-			validators = append(validators, options.NewEmailAddressValidator(upstreamConfig.AllowedEmailAddresses))
+			validators = append(validators, validators.NewEmailAddressValidator(upstreamConfig.AllowedEmailAddresses))
 		}
 
 		if len(upstreamConfig.AllowedEmailDomains) != 0 {
-			validators = append(validators, options.NewEmailDomainValidator(upstreamConfig.AllowedEmailDomains))
+			validators = append(validators, validators.NewEmailDomainValidator(upstreamConfig.AllowedEmailDomains))
 		}
 
 		if len(upstreamConfig.AllowedGroups) != 0 {
-			validators = append(validators, options.NewEmailGroupValidator(provider, upstreamConfig.AllowedGroups))
+			validators = append(validators, validators.NewEmailGroupValidator(provider, upstreamConfig.AllowedGroups))
 		}
 
 		optFuncs = append(optFuncs,

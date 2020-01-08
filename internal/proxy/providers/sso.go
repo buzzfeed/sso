@@ -234,9 +234,9 @@ func (p *SSOProvider) UserGroups(email string, groups []string, accessToken stri
 	return jsonResponse.Groups, nil
 }
 
-// RefreshSession takes a SessionState and refreshes the session access token,
+// RefreshSessionToken takes a SessionState and refreshes the session access token,
 // returns `true` on success, and `false` on error
-func (p *SSOProvider) RefreshSession(s *sessions.SessionState) (bool, error) {
+func (p *SSOProvider) RefreshSessionToken(s *sessions.SessionState) (bool, error) {
 	logger := log.NewLogEntry()
 
 	if s.RefreshToken == "" {

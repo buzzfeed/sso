@@ -13,8 +13,8 @@ import (
 
 	"github.com/buzzfeed/sso/internal/pkg/aead"
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
-	"github.com/buzzfeed/sso/internal/pkg/options"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
+	"github.com/buzzfeed/sso/internal/pkg/validators"
 	"github.com/buzzfeed/sso/internal/proxy/providers"
 
 	"github.com/datadog/datadog-go/statsd"
@@ -57,7 +57,7 @@ const statusInvalidHost = 421
 // OAuthProxy stores all the information associated with proxying the request.
 type OAuthProxy struct {
 	cookieSecure bool
-	Validators   []options.Validator
+	Validators   []validators.Validator
 	redirectURL  *url.URL // the url to receive requests at
 	templates    *template.Template
 
@@ -150,7 +150,7 @@ func SetProxyHandler(handler http.Handler) func(*OAuthProxy) error {
 }
 
 // SetValidator sets the email validator as a functional option
-func SetValidators(validators []options.Validator) func(*OAuthProxy) error {
+func SetValidators(validators []validators.Validator) func(*OAuthProxy) error {
 	return func(op *OAuthProxy) error {
 		op.Validators = validators
 		return nil
@@ -176,7 +176,7 @@ func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthPr
 	p := &OAuthProxy{
 		cookieSecure: opts.CookieSecure,
 		StatsdClient: opts.StatsdClient,
-		Validators:   []options.Validator{},
+		Validators:   []validators.Validator{},
 
 		redirectURL: &url.URL{Path: "/oauth2/callback"},
 		templates:   getTemplates(),
@@ -380,7 +380,7 @@ func (p *OAuthProxy) IsWhitelistedRequest(req *http.Request) bool {
 // we check whether the session is within the grace period or not to determine the specific error we return.
 func (p *OAuthProxy) runValidatorsWithGracePeriod(session *sessions.SessionState) (err error) {
 	logger := log.NewLogEntry()
-	errors := options.RunValidators(p.Validators, session)
+	errors := validators.RunValidators(p.Validators, session)
 	if len(errors) == len(p.Validators) {
 		for _, err := range errors {
 			// Check to see if the auth provider is explicity denying authentication, or if it is merely unavailable.
@@ -590,7 +590,7 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 	//
 	// set cookie, or deny
 
-	errors := options.RunValidators(p.Validators, session)
+	errors := validators.RunValidators(p.Validators, session)
 	if len(errors) == len(p.Validators) {
 		tags = append(tags, "error:validation_failed")
 		p.StatsdClient.Incr("application_error", tags, 1.0)

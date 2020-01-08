@@ -14,9 +14,9 @@ type Provider interface {
 	ValidateGroup(string, []string, string) ([]string, bool, error)
 	UserGroups(string, []string, string) ([]string, error)
 	ValidateSessionToken(*sessions.SessionState) bool
+	RefreshSessionToken(*sessions.SessionState) (bool, error)
 	GetSignInURL(redirectURL *url.URL, finalRedirect string) *url.URL
 	GetSignOutURL(redirectURL *url.URL) *url.URL
-	RefreshSession(*sessions.SessionState) (bool, error)
 }
 
 // New returns a new sso Provider

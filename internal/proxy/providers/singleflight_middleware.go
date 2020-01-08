@@ -112,11 +112,11 @@ func (p *SingleFlightProvider) ValidateSessionToken(s *sessions.SessionState) bo
 	return valid
 }
 
-// RefreshSession takes in a SessionState and
+// RefreshSessionToken takes in a SessionState and
 // returns false if the session is not refreshed and true if it is.
-func (p *SingleFlightProvider) RefreshSession(s *sessions.SessionState) (bool, error) {
-	response, err := p.do("RefreshSession", s.RefreshToken, func() (interface{}, error) {
-		return p.provider.RefreshSession(s)
+func (p *SingleFlightProvider) RefreshSessionToken(s *sessions.SessionState) (bool, error) {
+	response, err := p.do("RefreshSessionToken", s.RefreshToken, func() (interface{}, error) {
+		return p.provider.RefreshSessionToken(s)
 	})
 	if err != nil {
 		return false, err

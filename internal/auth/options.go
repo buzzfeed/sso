@@ -9,8 +9,8 @@ import (
 	"github.com/buzzfeed/sso/internal/auth/providers"
 	"github.com/buzzfeed/sso/internal/pkg/aead"
 	"github.com/buzzfeed/sso/internal/pkg/groups"
-	"github.com/buzzfeed/sso/internal/pkg/options"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
+	"github.com/buzzfeed/sso/internal/pkg/validators"
 
 	"github.com/datadog/datadog-go/statsd"
 )
@@ -97,7 +97,7 @@ func SetRedirectURL(serverConfig ServerConfig, slug string) func(*Authenticator)
 }
 
 // SetValidator sets the email validator
-func SetValidators(validators []options.Validator) func(*Authenticator) error {
+func SetValidators(validators []validators.Validator) func(*Authenticator) error {
 	return func(a *Authenticator) error {
 		a.Validators = validators
 		return nil

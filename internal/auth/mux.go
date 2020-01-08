@@ -6,7 +6,7 @@ import (
 
 	"github.com/buzzfeed/sso/internal/pkg/hostmux"
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
-	"github.com/buzzfeed/sso/internal/pkg/options"
+	"github.com/buzzfeed/sso/internal/pkg/validators"
 
 	"github.com/datadog/datadog-go/statsd"
 )
@@ -18,11 +18,11 @@ type AuthenticatorMux struct {
 
 func NewAuthenticatorMux(config Configuration, statsdClient *statsd.Client) (*AuthenticatorMux, error) {
 	logger := log.NewLogEntry()
-	validators := []options.Validator{}
+	validators := []validators.Validator{}
 	if len(config.AuthorizeConfig.EmailConfig.Addresses) != 0 {
-		validators = append(validators, options.NewEmailAddressValidator(config.AuthorizeConfig.EmailConfig.Addresses))
+		validators = append(validators, validators.NewEmailAddressValidator(config.AuthorizeConfig.EmailConfig.Addresses))
 	} else {
-		validators = append(validators, options.NewEmailDomainValidator(config.AuthorizeConfig.EmailConfig.Domains))
+		validators = append(validators, validators.NewEmailDomainValidator(config.AuthorizeConfig.EmailConfig.Domains))
 	}
 
 	authenticators := []*Authenticator{}

@@ -20,9 +20,9 @@ import (
 	"github.com/mccutchen/go-httpbin/httpbin"
 
 	"github.com/buzzfeed/sso/internal/pkg/aead"
-	"github.com/buzzfeed/sso/internal/pkg/options"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	"github.com/buzzfeed/sso/internal/pkg/testutil"
+	"github.com/buzzfeed/sso/internal/pkg/validators"
 	"github.com/buzzfeed/sso/internal/proxy/providers"
 )
 
@@ -124,7 +124,7 @@ func testNewOAuthProxy(t *testing.T, optFuncs ...func(*OAuthProxy) error) (*OAut
 	}
 
 	standardOptFuncs := []func(*OAuthProxy) error{
-		SetValidators([]options.Validator{options.NewMockValidator(true, nil)}),
+		SetValidators([]validators.Validator{validators.NewMockValidator(true, nil)}),
 		SetProvider(provider),
 		setSessionStore(&sessions.MockSessionStore{Session: testSession()}),
 		SetUpstreamConfig(upstreamConfig),
@@ -390,12 +390,12 @@ func TestAuthOnlyEndpoint(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			providerURL, _ := url.Parse("http://localhost/")
 			tp := providers.NewTestProvider(providerURL, "")
-			tp.RefreshSessionFunc = func(*sessions.SessionState) (bool, error) { return true, nil }
-			tp.ValidateSessionFunc = func(*sessions.SessionState) bool { return true }
+			tp.RefreshSessionTokenFunc = func(*sessions.SessionState) (bool, error) { return true, nil }
+			tp.ValidateSessionTokenFunc = func(*sessions.SessionState) bool { return true }
 
 			proxy, close := testNewOAuthProxy(t,
 				setSessionStore(tc.sessionStore),
-				SetValidators([]options.Validator{options.NewMockValidator(tc.validatorResult, tc.validatorErr)}),
+				SetValidators([]validators.Validator{validators.NewMockValidator(tc.validatorResult, tc.validatorErr)}),
 				SetProvider(tp),
 			)
 			defer close()
@@ -552,11 +552,11 @@ func TestAuthenticate(t *testing.T) {
 	testCases := []struct {
 		Name string
 
-		SessionStore        *sessions.MockSessionStore
-		ExpectedErr         error
-		CookieExpectation   int // One of: {NewCookie, ClearCookie, KeepCookie}
-		RefreshSessionFunc  func(*sessions.SessionState) (bool, error)
-		ValidateSessionFunc func(*sessions.SessionState) bool
+		SessionStore             *sessions.MockSessionStore
+		ExpectedErr              error
+		CookieExpectation        int // One of: {NewCookie, ClearCookie, KeepCookie}
+		RefreshSessionTokenFunc  func(*sessions.SessionState) (bool, error)
+		ValidateSessionTokenFunc func(*sessions.SessionState) bool
 	}{
 		{
 			Name: "redirect if deadlines are blank",
@@ -618,9 +618,9 @@ func TestAuthenticate(t *testing.T) {
 					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
 				},
 			},
-			ExpectedErr:        ErrRefreshFailed,
-			CookieExpectation:  ClearCookie,
-			RefreshSessionFunc: func(s *sessions.SessionState) (bool, error) { return false, ErrRefreshFailed },
+			ExpectedErr:             ErrRefreshFailed,
+			CookieExpectation:       ClearCookie,
+			RefreshSessionTokenFunc: func(s *sessions.SessionState) (bool, error) { return false, ErrRefreshFailed },
 		},
 		{
 			Name: "refresh expired, user not OK, do not authenticate",
@@ -633,9 +633,9 @@ func TestAuthenticate(t *testing.T) {
 					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
 				},
 			},
-			ExpectedErr:        ErrUserNotAuthorized,
-			CookieExpectation:  ClearCookie,
-			RefreshSessionFunc: func(s *sessions.SessionState) (bool, error) { return false, nil },
+			ExpectedErr:             ErrUserNotAuthorized,
+			CookieExpectation:       ClearCookie,
+			RefreshSessionTokenFunc: func(s *sessions.SessionState) (bool, error) { return false, nil },
 		},
 		{
 			Name: "refresh expired, user OK, authenticate",
@@ -648,9 +648,9 @@ func TestAuthenticate(t *testing.T) {
 					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
 				},
 			},
-			ExpectedErr:        nil,
-			CookieExpectation:  NewCookie,
-			RefreshSessionFunc: func(s *sessions.SessionState) (bool, error) { return true, nil },
+			ExpectedErr:             nil,
+			CookieExpectation:       NewCookie,
+			RefreshSessionTokenFunc: func(s *sessions.SessionState) (bool, error) { return true, nil },
 		},
 		{
 			Name: "refresh expired, refresh and user OK, error saving session",
@@ -664,9 +664,9 @@ func TestAuthenticate(t *testing.T) {
 				},
 				SaveError: SaveCookieFailed,
 			},
-			ExpectedErr:        SaveCookieFailed,
-			CookieExpectation:  ClearCookie,
-			RefreshSessionFunc: func(s *sessions.SessionState) (bool, error) { return true, nil },
+			ExpectedErr:             SaveCookieFailed,
+			CookieExpectation:       ClearCookie,
+			RefreshSessionTokenFunc: func(s *sessions.SessionState) (bool, error) { return true, nil },
 		},
 		{
 			Name: "validation expired, user not OK, do not authenticate",
@@ -679,9 +679,9 @@ func TestAuthenticate(t *testing.T) {
 					ValidDeadline:    time.Now().Add(time.Duration(-1) * time.Minute),
 				},
 			},
-			ExpectedErr:         ErrUserNotAuthorized,
-			CookieExpectation:   ClearCookie,
-			ValidateSessionFunc: func(s *sessions.SessionState) bool { return false },
+			ExpectedErr:              ErrUserNotAuthorized,
+			CookieExpectation:        ClearCookie,
+			ValidateSessionTokenFunc: func(s *sessions.SessionState) bool { return false },
 		},
 		{
 			Name: "validation expired, user OK, authenticate",
@@ -694,9 +694,9 @@ func TestAuthenticate(t *testing.T) {
 					ValidDeadline:    time.Now().Add(time.Duration(-1) * time.Minute),
 				},
 			},
-			ExpectedErr:         nil,
-			CookieExpectation:   NewCookie,
-			ValidateSessionFunc: func(s *sessions.SessionState) bool { return true },
+			ExpectedErr:              nil,
+			CookieExpectation:        NewCookie,
+			ValidateSessionTokenFunc: func(s *sessions.SessionState) bool { return true },
 		},
 		{
 			Name: "wrong identity provider, user OK, do not authenticate",
@@ -718,8 +718,8 @@ func TestAuthenticate(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 			providerURL, _ := url.Parse("http://localhost/")
 			tp := providers.NewTestProvider(providerURL, "")
-			tp.RefreshSessionFunc = tc.RefreshSessionFunc
-			tp.ValidateSessionFunc = tc.ValidateSessionFunc
+			tp.RefreshSessionTokenFunc = tc.RefreshSessionTokenFunc
+			tp.ValidateSessionTokenFunc = tc.ValidateSessionTokenFunc
 
 			proxy, close := testNewOAuthProxy(t,
 				SetProvider(tp),
@@ -759,9 +759,9 @@ func TestAuthenticationUXFlows(t *testing.T) {
 	testCases := []struct {
 		Name string
 
-		SessionStore        *sessions.MockSessionStore
-		RefreshSessionFunc  func(*sessions.SessionState) (bool, error)
-		ValidateSessionFunc func(*sessions.SessionState) bool
+		SessionStore             *sessions.MockSessionStore
+		RefreshSessionTokenFunc  func(*sessions.SessionState) (bool, error)
+		ValidateSessionTokenFunc func(*sessions.SessionState) bool
 
 		ExpectStatusCode int
 	}{
@@ -820,8 +820,8 @@ func TestAuthenticationUXFlows(t *testing.T) {
 					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
 				},
 			},
-			RefreshSessionFunc: func(s *sessions.SessionState) (bool, error) { return false, ErrRefreshFailed },
-			ExpectStatusCode:   http.StatusInternalServerError,
+			RefreshSessionTokenFunc: func(s *sessions.SessionState) (bool, error) { return false, ErrRefreshFailed },
+			ExpectStatusCode:        http.StatusInternalServerError,
 		},
 		{
 			Name: "refresh expired, user not OK, deny",
@@ -834,8 +834,8 @@ func TestAuthenticationUXFlows(t *testing.T) {
 					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
 				},
 			},
-			RefreshSessionFunc: func(s *sessions.SessionState) (bool, error) { return false, nil },
-			ExpectStatusCode:   http.StatusForbidden,
+			RefreshSessionTokenFunc: func(s *sessions.SessionState) (bool, error) { return false, nil },
+			ExpectStatusCode:        http.StatusForbidden,
 		},
 		{
 			Name: "refresh expired, user OK, expect ok",
@@ -848,8 +848,8 @@ func TestAuthenticationUXFlows(t *testing.T) {
 					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
 				},
 			},
-			RefreshSessionFunc: func(s *sessions.SessionState) (bool, error) { return true, nil },
-			ExpectStatusCode:   http.StatusOK,
+			RefreshSessionTokenFunc: func(s *sessions.SessionState) (bool, error) { return true, nil },
+			ExpectStatusCode:        http.StatusOK,
 		},
 		{
 			Name: "refresh expired, refresh and user OK, error saving session, show error",
@@ -863,8 +863,8 @@ func TestAuthenticationUXFlows(t *testing.T) {
 				},
 				SaveError: SaveCookieFailed,
 			},
-			RefreshSessionFunc: func(s *sessions.SessionState) (bool, error) { return true, nil },
-			ExpectStatusCode:   http.StatusInternalServerError,
+			RefreshSessionTokenFunc: func(s *sessions.SessionState) (bool, error) { return true, nil },
+			ExpectStatusCode:        http.StatusInternalServerError,
 		},
 		{
 			Name: "validation expired, user not OK, deny",
@@ -877,8 +877,8 @@ func TestAuthenticationUXFlows(t *testing.T) {
 					ValidDeadline:    time.Now().Add(time.Duration(-1) * time.Minute),
 				},
 			},
-			ValidateSessionFunc: func(s *sessions.SessionState) bool { return false },
-			ExpectStatusCode:    http.StatusForbidden,
+			ValidateSessionTokenFunc: func(s *sessions.SessionState) bool { return false },
+			ExpectStatusCode:         http.StatusForbidden,
 		},
 		{
 			Name: "validation expired, user OK, expect ok",
@@ -891,8 +891,8 @@ func TestAuthenticationUXFlows(t *testing.T) {
 					ValidDeadline:    time.Now().Add(time.Duration(-1) * time.Minute),
 				},
 			},
-			ValidateSessionFunc: func(s *sessions.SessionState) bool { return true },
-			ExpectStatusCode:    http.StatusOK,
+			ValidateSessionTokenFunc: func(s *sessions.SessionState) bool { return true },
+			ExpectStatusCode:         http.StatusOK,
 		},
 		{
 			Name: "wrong identity provider, redirect to sign-in",
@@ -913,8 +913,8 @@ func TestAuthenticationUXFlows(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 			providerURL, _ := url.Parse("http://localhost/")
 			tp := providers.NewTestProvider(providerURL, "")
-			tp.RefreshSessionFunc = tc.RefreshSessionFunc
-			tp.ValidateSessionFunc = tc.ValidateSessionFunc
+			tp.RefreshSessionTokenFunc = tc.RefreshSessionTokenFunc
+			tp.ValidateSessionTokenFunc = tc.ValidateSessionTokenFunc
 
 			proxy, close := testNewOAuthProxy(t,
 				SetProvider(tp),

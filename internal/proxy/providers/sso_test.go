@@ -359,7 +359,7 @@ func TestSSOProviderValidateSessionToken(t *testing.T) {
 	}
 }
 
-func TestSSOProviderRefreshSession(t *testing.T) {
+func TestSSOProviderRefreshSessionToken(t *testing.T) {
 	testCases := []struct {
 		Name            string
 		SessionState    *sessions.SessionState
@@ -458,7 +458,7 @@ func TestSSOProviderRefreshSession(t *testing.T) {
 			defer refreshServer.Close()
 
 			// run the endpoint
-			actualRefresh, err := p.RefreshSession(tc.SessionState)
+			actualRefresh, err := p.RefreshSessionToken(tc.SessionState)
 			if tc.ExpectedRefresh != actualRefresh {
 				t.Fatalf("got unexpected refresh behavior. want=%v got=%v", tc.ExpectedRefresh, actualRefresh)
 			}

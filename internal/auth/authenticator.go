@@ -12,16 +12,16 @@ import (
 	"github.com/buzzfeed/sso/internal/auth/providers"
 	"github.com/buzzfeed/sso/internal/pkg/aead"
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
-	"github.com/buzzfeed/sso/internal/pkg/options"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	"github.com/buzzfeed/sso/internal/pkg/templates"
+	"github.com/buzzfeed/sso/internal/pkg/validators"
 
 	"github.com/datadog/datadog-go/statsd"
 )
 
 // Authenticator stores all the information associated with proxying the request.
 type Authenticator struct {
-	Validators       []options.Validator
+	Validators       []validators.Validator
 	EmailDomains     []string
 	ProxyRootDomains []string
 	Host             string
@@ -226,7 +226,7 @@ func (p *Authenticator) authenticate(rw http.ResponseWriter, req *http.Request) 
 		}
 	}
 
-	errors := options.RunValidators(p.Validators, session)
+	errors := validators.RunValidators(p.Validators, session)
 	if len(errors) == len(p.Validators) {
 		logger.WithUser(session.Email).Info(
 			fmt.Sprintf("permission denied: unauthorized: %q", errors))
@@ -582,7 +582,7 @@ func (p *Authenticator) getOAuthCallback(rw http.ResponseWriter, req *http.Reque
 	// - for p.Validator see validator.go#newValidatorImpl for more info
 	// - for p.provider.ValidateGroup see providers/google.go#ValidateGroup for more info
 
-	errors := options.RunValidators(p.Validators, session)
+	errors := validators.RunValidators(p.Validators, session)
 	if len(errors) == len(p.Validators) {
 		tags := append(tags, "error:invalid_email")
 		p.StatsdClient.Incr("application_error", tags, 1.0)
