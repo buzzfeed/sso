@@ -209,15 +209,10 @@ func (p *Authenticator) authenticate(rw http.ResponseWriter, req *http.Request) 
 	return session, nil
 }
 
-// SignIn handles the /sign_in endpoint. It attempts to authenticate the user, and if the user is not authenticated, it renders
-// a sign in page.
+// SignIn handles the /sign_in endpoint. It attempts to authenticate the user, and if the user is not authenticated,
+// it starts the authentication process.
+// If the user is authenticated, we redirect back to the proxy application at the `redirect_uri`, with a temporary token.
 func (p *Authenticator) SignIn(rw http.ResponseWriter, req *http.Request) {
-	// We attempt to authenticate the user. If they cannot be authenticated, we render a sign-in
-	// page.
-	//
-	// If the user is authenticated, we redirect back to the proxy application
-	// at the `redirect_uri`, with a temporary token.
-	//
 	// TODO: It is possible for a user to visit this page without a redirect destination.
 	// Should we allow the user to authenticate? If not, what should be the proposed workflow?
 
@@ -394,37 +389,50 @@ func (p *Authenticator) SignOut(rw http.ResponseWriter, req *http.Request) {
 }
 
 // OAuthStart starts the authentication process by redirecting to the provider. It provides a
-// `redirectURI`, allowing the provider to redirect back to the sso proxy after authentication.
+// `redirectURI`, allowing the provider to redirect back to sso_auth after authentication.
 func (p *Authenticator) OAuthStart(rw http.ResponseWriter, req *http.Request) {
 	tags := []string{"action:start"}
 
 	nonce := fmt.Sprintf("%x", aead.GenerateKey())
 	p.csrfStore.SetCSRF(rw, req, nonce)
 
-	// Here we validate the redirect that is nested within the redirect_uri.
-	// `authRedirectURL` points to step D, `proxyRedirectURL` points to step E.
+	// Here we validate the redirects and signatures that are nested within the request. Each lettered step in the below diagram
+	// represents a step in the request flow.
 	//
-	//    A*       B             C               D              E
-	// /start -> Google -> auth /callback -> /sign_in -> proxy /callback
+	// `authRedirectURL` points to step C, `proxyRedirectURL` points to step E.
 	//
 	// * you are here
+	//
+	//        A
+	// sso_auth:/sign_in -> user already authenticated?
+	//                        |
+	//                        |             *            B                  C                    D                                         E
+	//                        -> no -> (OAuthStart) Google/Okta -> sso_auth:/callback -> sso_auth:/sign_in -> (now authenticated) sso_proxy:/callback
+	//                        |
+	//                        |                 F
+	//                        -> yes -> sso_proxy:/callback
 
 	proxyRedirectURL, err := url.Parse(req.URL.Query().Get("redirect_uri"))
 	if err != nil || !validRedirectURI(proxyRedirectURL.String(), p.ProxyRootDomains) {
 		tags = append(tags, "error:invalid_redirect_parameter")
 		p.StatsdClient.Incr("application_error", tags, 1.0)
-		p.ErrorResponse(rw, req, "Invalid redirect parameter", http.StatusBadRequest)
+		p.ErrorResponse(rw, req, "Invalid proxy redirect parameter", http.StatusBadRequest)
 		return
 	}
+
 	proxyRedirectSig := req.URL.Query().Get("sig")
 	ts := req.URL.Query().Get("ts")
 	if !validSignature(proxyRedirectURL.String(), proxyRedirectSig, ts, p.ProxyClientSecret) {
 		p.ErrorResponse(rw, req, "Invalid redirect parameter", http.StatusBadRequest)
 		return
 	}
-	redirectURI := p.GetRedirectURI(req.Host)
+
 	state := base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%v:%v", nonce, req.URL.String())))
-	signInURL := p.provider.GetSignInURL(redirectURI, state)
+
+	authRedirectURL := p.GetRedirectURI(req.Host)
+	//TODO: do we want to validate this redirect URI again, even though a little redundant?
+	signInURL := p.provider.GetSignInURL(authRedirectURL, state)
+
 	http.Redirect(rw, req, signInURL, http.StatusFound)
 }
 

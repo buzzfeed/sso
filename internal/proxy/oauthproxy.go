@@ -551,7 +551,6 @@ func (p *OAuthProxy) OAuthStart(rw http.ResponseWriter, req *http.Request, tags 
 		p.ErrorPage(rw, req, http.StatusInternalServerError, "Internal Error", err.Error())
 		return
 	}
-	logger.Info("redirecting to sign in page")
 	p.SignInPage(rw, req, encryptedState)
 }
 
