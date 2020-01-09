@@ -38,17 +38,17 @@ func New(opts *Options) (*SSOProxy, error) {
 			return nil, err
 		}
 
-		validators := []validators.Validator{}
+		v := []validators.Validator{}
 		if len(upstreamConfig.AllowedEmailAddresses) != 0 {
-			validators = append(validators, validators.NewEmailAddressValidator(upstreamConfig.AllowedEmailAddresses))
+			v = append(v, validators.NewEmailAddressValidator(upstreamConfig.AllowedEmailAddresses))
 		}
 
 		if len(upstreamConfig.AllowedEmailDomains) != 0 {
-			validators = append(validators, validators.NewEmailDomainValidator(upstreamConfig.AllowedEmailDomains))
+			v = append(v, validators.NewEmailDomainValidator(upstreamConfig.AllowedEmailDomains))
 		}
 
 		if len(upstreamConfig.AllowedGroups) != 0 {
-			validators = append(validators, validators.NewEmailGroupValidator(provider, upstreamConfig.AllowedGroups))
+			v = append(v, validators.NewEmailGroupValidator(provider, upstreamConfig.AllowedGroups))
 		}
 
 		optFuncs = append(optFuncs,
@@ -56,7 +56,7 @@ func New(opts *Options) (*SSOProxy, error) {
 			SetCookieStore(opts),
 			SetUpstreamConfig(upstreamConfig),
 			SetProxyHandler(handler),
-			SetValidators(validators),
+			SetValidators(v),
 		)
 
 		oauthproxy, err := NewOAuthProxy(opts, optFuncs...)

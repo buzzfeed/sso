@@ -48,7 +48,7 @@ func NewTestProvider(providerURL *url.URL, emailAddress string) *TestProvider {
 
 // ValidateSessionState mocks the ValidateSessionState function
 func (tp *TestProvider) ValidateSessionToken(s *sessions.SessionState) bool {
-	return tp.ValidateSessionFunc(s)
+	return tp.ValidateSessionTokenFunc(s)
 }
 
 // Redeem mocks the provider Redeem function

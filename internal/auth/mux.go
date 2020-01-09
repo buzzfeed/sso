@@ -18,11 +18,11 @@ type AuthenticatorMux struct {
 
 func NewAuthenticatorMux(config Configuration, statsdClient *statsd.Client) (*AuthenticatorMux, error) {
 	logger := log.NewLogEntry()
-	validators := []validators.Validator{}
+	v := []validators.Validator{}
 	if len(config.AuthorizeConfig.EmailConfig.Addresses) != 0 {
-		validators = append(validators, validators.NewEmailAddressValidator(config.AuthorizeConfig.EmailConfig.Addresses))
+		v = append(v, validators.NewEmailAddressValidator(config.AuthorizeConfig.EmailConfig.Addresses))
 	} else {
-		validators = append(validators, validators.NewEmailDomainValidator(config.AuthorizeConfig.EmailConfig.Domains))
+		v = append(v, validators.NewEmailDomainValidator(config.AuthorizeConfig.EmailConfig.Domains))
 	}
 
 	authenticators := []*Authenticator{}
@@ -37,7 +37,7 @@ func NewAuthenticatorMux(config Configuration, statsdClient *statsd.Client) (*Au
 
 		idpSlug := idp.Data().ProviderSlug
 		authenticator, err := NewAuthenticator(config,
-			SetValidators(validators),
+			SetValidators(v),
 			SetProvider(idp),
 			SetCookieStore(config.SessionConfig, idpSlug),
 			SetStatsdClient(statsdClient),
