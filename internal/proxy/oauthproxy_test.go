@@ -73,9 +73,10 @@ func testSession() *sessions.SessionState {
 	theFuture := time.Now().AddDate(100, 100, 100)
 
 	return &sessions.SessionState{
-		Email:       "michael.bland@gsa.gov",
-		AccessToken: "my_access_token",
-		Groups:      []string{"foo", "bar"},
+		Email:              "michael.bland@gsa.gov",
+		AccessToken:        "my_access_token",
+		Groups:             []string{"foo", "bar"},
+		AuthorizedUpstream: "localhost",
 
 		RefreshDeadline:  theFuture,
 		LifetimeDeadline: theFuture,
@@ -243,11 +244,11 @@ func TestAuthOnlyEndpoint(t *testing.T) {
 			sessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
 					//refresh period expired, but within grace period
-					LifetimeDeadline: time.Now().Add(1 * time.Hour),
-					RefreshDeadline:  time.Now().Add(-1 * time.Hour),
+					LifetimeDeadline:   time.Now().Add(1 * time.Hour),
+					RefreshDeadline:    time.Now().Add(-1 * time.Hour),
+					AuthorizedUpstream: "localhost",
 				},
 			},
-			//provider unavailable instead of hard valiation fail
 			validatorResult: true,
 			expectedBody:    "",
 			expectedCode:    http.StatusAccepted,
@@ -257,9 +258,10 @@ func TestAuthOnlyEndpoint(t *testing.T) {
 			sessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
 					//refresh period expired, but within grace period
-					LifetimeDeadline: time.Now().Add(1 * time.Hour),
-					RefreshDeadline:  time.Now().Add(-1 * time.Hour),
-					GracePeriodStart: time.Now().Add(1 * time.Hour),
+					LifetimeDeadline:   time.Now().Add(1 * time.Hour),
+					RefreshDeadline:    time.Now().Add(-1 * time.Hour),
+					GracePeriodStart:   time.Now().Add(1 * time.Hour),
+					AuthorizedUpstream: "localhost",
 				},
 			},
 			//provider unavailable instead of hard valiation fail
@@ -292,7 +294,6 @@ func TestAuthOnlyEndpoint(t *testing.T) {
 					GracePeriodStart: time.Now().Add(-1 * time.Hour),
 				},
 			},
-			//provider unavailable instead of hard valiation fail
 			validatorResult: false,
 			expectedBody:    "unauthorized request\n",
 			expectedCode:    http.StatusUnauthorized,
@@ -306,7 +307,6 @@ func TestAuthOnlyEndpoint(t *testing.T) {
 					RefreshDeadline:  time.Now().Add(-1 * time.Hour),
 				},
 			},
-			//provider unavailable instead of hard valiation fail
 			validatorResult: false,
 			expectedBody:    "unauthorized request\n",
 			expectedCode:    http.StatusUnauthorized,
@@ -316,11 +316,11 @@ func TestAuthOnlyEndpoint(t *testing.T) {
 			sessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
 					//refresh period expired, but within grace period
-					LifetimeDeadline: time.Now().Add(1 * time.Hour),
-					ValidDeadline:    time.Now().Add(-1 * time.Hour),
+					LifetimeDeadline:   time.Now().Add(1 * time.Hour),
+					ValidDeadline:      time.Now().Add(-1 * time.Hour),
+					AuthorizedUpstream: "localhost",
 				},
 			},
-			//provider unavailable instead of hard valiation fail
 			validatorResult: true,
 			expectedBody:    "",
 			expectedCode:    http.StatusAccepted,
@@ -330,9 +330,10 @@ func TestAuthOnlyEndpoint(t *testing.T) {
 			sessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
 					//refresh period expired, but within grace period
-					LifetimeDeadline: time.Now().Add(1 * time.Hour),
-					ValidDeadline:    time.Now().Add(-1 * time.Hour),
-					GracePeriodStart: time.Now().Add(1 * time.Hour),
+					LifetimeDeadline:   time.Now().Add(1 * time.Hour),
+					ValidDeadline:      time.Now().Add(-1 * time.Hour),
+					GracePeriodStart:   time.Now().Add(1 * time.Hour),
+					AuthorizedUpstream: "localhost",
 				},
 			},
 			//provider unavailable instead of hard valiation fail
@@ -365,7 +366,6 @@ func TestAuthOnlyEndpoint(t *testing.T) {
 					GracePeriodStart: time.Now().Add(-1 * time.Hour),
 				},
 			},
-			//provider unavailable instead of hard valiation fail
 			validatorResult: false,
 			expectedBody:    "unauthorized request\n",
 			expectedCode:    http.StatusUnauthorized,
@@ -379,7 +379,6 @@ func TestAuthOnlyEndpoint(t *testing.T) {
 					ValidDeadline:    time.Now().Add(-1 * time.Hour),
 				},
 			},
-			//provider unavailable instead of hard valiation fail
 			validatorResult: false,
 			expectedBody:    "unauthorized request\n",
 			expectedCode:    http.StatusUnauthorized,
@@ -563,8 +562,9 @@ func TestAuthenticate(t *testing.T) {
 			SessionStore: &sessions.MockSessionStore{
 
 				Session: &sessions.SessionState{
-					Email:       "email1@example.com",
-					AccessToken: "my_access_token",
+					Email:              "email1@example.com",
+					AuthorizedUpstream: "localhost",
+					AccessToken:        "my_access_token",
 				},
 			},
 			ExpectedErr:       ErrLifetimeExpired,
@@ -583,11 +583,12 @@ func TestAuthenticate(t *testing.T) {
 			Name: "authenticate successfully",
 			SessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
-					Email:            "email1@example.com",
-					AccessToken:      "my_access_token",
-					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
-					RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
-					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+					Email:              "email1@example.com",
+					AuthorizedUpstream: "localhost",
+					AccessToken:        "my_access_token",
+					LifetimeDeadline:   time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:    time.Now().Add(time.Duration(1) * time.Hour),
+					ValidDeadline:      time.Now().Add(time.Duration(1) * time.Minute),
 				},
 			},
 			ExpectedErr:       nil,
@@ -597,11 +598,12 @@ func TestAuthenticate(t *testing.T) {
 			Name: "lifetime expired, do not authenticate",
 			SessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
-					Email:            "email1@example.com",
-					AccessToken:      "my_access_token",
-					LifetimeDeadline: time.Now().Add(time.Duration(-24) * time.Hour),
-					RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
-					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+					Email:              "email1@example.com",
+					AuthorizedUpstream: "localhost",
+					AccessToken:        "my_access_token",
+					LifetimeDeadline:   time.Now().Add(time.Duration(-24) * time.Hour),
+					RefreshDeadline:    time.Now().Add(time.Duration(1) * time.Hour),
+					ValidDeadline:      time.Now().Add(time.Duration(1) * time.Minute),
 				},
 			},
 			ExpectedErr:       ErrLifetimeExpired,
@@ -611,11 +613,12 @@ func TestAuthenticate(t *testing.T) {
 			Name: "refresh expired, refresh fails, do not authenticate",
 			SessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
-					Email:            "email1@example.com",
-					AccessToken:      "my_access_token",
-					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
-					RefreshDeadline:  time.Now().Add(time.Duration(-1) * time.Hour),
-					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+					Email:              "email1@example.com",
+					AuthorizedUpstream: "localhost",
+					AccessToken:        "my_access_token",
+					LifetimeDeadline:   time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:    time.Now().Add(time.Duration(-1) * time.Hour),
+					ValidDeadline:      time.Now().Add(time.Duration(1) * time.Minute),
 				},
 			},
 			ExpectedErr:             ErrRefreshFailed,
@@ -626,11 +629,12 @@ func TestAuthenticate(t *testing.T) {
 			Name: "refresh expired, user not OK, do not authenticate",
 			SessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
-					Email:            "email1@example.com",
-					AccessToken:      "my_access_token",
-					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
-					RefreshDeadline:  time.Now().Add(time.Duration(-1) * time.Hour),
-					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+					Email:              "email1@example.com",
+					AuthorizedUpstream: "localhost",
+					AccessToken:        "my_access_token",
+					LifetimeDeadline:   time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:    time.Now().Add(time.Duration(-1) * time.Hour),
+					ValidDeadline:      time.Now().Add(time.Duration(1) * time.Minute),
 				},
 			},
 			ExpectedErr:             ErrUserNotAuthorized,
@@ -641,11 +645,12 @@ func TestAuthenticate(t *testing.T) {
 			Name: "refresh expired, user OK, authenticate",
 			SessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
-					Email:            "email1@example.com",
-					AccessToken:      "my_access_token",
-					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
-					RefreshDeadline:  time.Now().Add(time.Duration(-1) * time.Hour),
-					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+					Email:              "email1@example.com",
+					AuthorizedUpstream: "localhost",
+					AccessToken:        "my_access_token",
+					LifetimeDeadline:   time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:    time.Now().Add(time.Duration(-1) * time.Hour),
+					ValidDeadline:      time.Now().Add(time.Duration(1) * time.Minute),
 				},
 			},
 			ExpectedErr:             nil,
@@ -656,11 +661,12 @@ func TestAuthenticate(t *testing.T) {
 			Name: "refresh expired, refresh and user OK, error saving session",
 			SessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
-					Email:            "email1@example.com",
-					AccessToken:      "my_access_token",
-					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
-					RefreshDeadline:  time.Now().Add(time.Duration(-1) * time.Hour),
-					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+					Email:              "email1@example.com",
+					AuthorizedUpstream: "localhost",
+					AccessToken:        "my_access_token",
+					LifetimeDeadline:   time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:    time.Now().Add(time.Duration(-1) * time.Hour),
+					ValidDeadline:      time.Now().Add(time.Duration(1) * time.Minute),
 				},
 				SaveError: SaveCookieFailed,
 			},
@@ -672,11 +678,12 @@ func TestAuthenticate(t *testing.T) {
 			Name: "validation expired, user not OK, do not authenticate",
 			SessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
-					Email:            "email1@example.com",
-					AccessToken:      "my_access_token",
-					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
-					RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
-					ValidDeadline:    time.Now().Add(time.Duration(-1) * time.Minute),
+					Email:              "email1@example.com",
+					AuthorizedUpstream: "localhost",
+					AccessToken:        "my_access_token",
+					LifetimeDeadline:   time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:    time.Now().Add(time.Duration(1) * time.Hour),
+					ValidDeadline:      time.Now().Add(time.Duration(-1) * time.Minute),
 				},
 			},
 			ExpectedErr:              ErrUserNotAuthorized,
@@ -687,11 +694,12 @@ func TestAuthenticate(t *testing.T) {
 			Name: "validation expired, user OK, authenticate",
 			SessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
-					Email:            "email1@example.com",
-					AccessToken:      "my_access_token",
-					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
-					RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
-					ValidDeadline:    time.Now().Add(time.Duration(-1) * time.Minute),
+					Email:              "email1@example.com",
+					AuthorizedUpstream: "localhost",
+					AccessToken:        "my_access_token",
+					LifetimeDeadline:   time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:    time.Now().Add(time.Duration(1) * time.Hour),
+					ValidDeadline:      time.Now().Add(time.Duration(-1) * time.Minute),
 				},
 			},
 			ExpectedErr:              nil,
@@ -702,15 +710,31 @@ func TestAuthenticate(t *testing.T) {
 			Name: "wrong identity provider, user OK, do not authenticate",
 			SessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
-					ProviderSlug:     "example",
-					Email:            "email1@example.com",
-					AccessToken:      "my_access_token",
-					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
-					RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
-					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+					ProviderSlug:       "example",
+					Email:              "email1@example.com",
+					AuthorizedUpstream: "localhost",
+					AccessToken:        "my_access_token",
+					LifetimeDeadline:   time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:    time.Now().Add(time.Duration(1) * time.Hour),
+					ValidDeadline:      time.Now().Add(time.Duration(1) * time.Minute),
 				},
 			},
 			ExpectedErr:       ErrWrongIdentityProvider,
+			CookieExpectation: ClearCookie,
+		},
+		{
+			Name: "authorized against different upstream, user OK, do not authenticate",
+			SessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					AuthorizedUpstream: "foo",
+					Email:              "email1@example.com",
+					AccessToken:        "my_access_token",
+					LifetimeDeadline:   time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:    time.Now().Add(time.Duration(1) * time.Hour),
+					ValidDeadline:      time.Now().Add(time.Duration(1) * time.Minute),
+				},
+			},
+			ExpectedErr:       ErrUserNotAuthorized,
 			CookieExpectation: ClearCookie,
 		},
 	}
@@ -769,8 +793,9 @@ func TestAuthenticationUXFlows(t *testing.T) {
 			Name: "missing deadlines, redirect to sign-in",
 			SessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
-					Email:       "email1@example.com",
-					AccessToken: "my_access_token",
+					Email:              "email1@example.com",
+					AccessToken:        "my_access_token",
+					AuthorizedUpstream: "localhost",
 				},
 			},
 			ExpectStatusCode: http.StatusFound,
@@ -787,11 +812,12 @@ func TestAuthenticationUXFlows(t *testing.T) {
 			Name: "authenticate successfully, expect ok",
 			SessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
-					Email:            "email1@example.com",
-					AccessToken:      "my_access_token",
-					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
-					RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
-					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+					Email:              "email1@example.com",
+					AccessToken:        "my_access_token",
+					AuthorizedUpstream: "localhost",
+					LifetimeDeadline:   time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:    time.Now().Add(time.Duration(1) * time.Hour),
+					ValidDeadline:      time.Now().Add(time.Duration(1) * time.Minute),
 				},
 			},
 			ExpectStatusCode: http.StatusOK,
@@ -800,11 +826,12 @@ func TestAuthenticationUXFlows(t *testing.T) {
 			Name: "lifetime expired, redirect to sign-in",
 			SessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
-					Email:            "email1@example.com",
-					AccessToken:      "my_access_token",
-					LifetimeDeadline: time.Now().Add(time.Duration(-24) * time.Hour),
-					RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
-					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+					Email:              "email1@example.com",
+					AccessToken:        "my_access_token",
+					AuthorizedUpstream: "localhost",
+					LifetimeDeadline:   time.Now().Add(time.Duration(-24) * time.Hour),
+					RefreshDeadline:    time.Now().Add(time.Duration(1) * time.Hour),
+					ValidDeadline:      time.Now().Add(time.Duration(1) * time.Minute),
 				},
 			},
 			ExpectStatusCode: http.StatusFound,
@@ -813,11 +840,12 @@ func TestAuthenticationUXFlows(t *testing.T) {
 			Name: "refresh expired, refresh fails, show error",
 			SessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
-					Email:            "email1@example.com",
-					AccessToken:      "my_access_token",
-					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
-					RefreshDeadline:  time.Now().Add(time.Duration(-1) * time.Hour),
-					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+					Email:              "email1@example.com",
+					AccessToken:        "my_access_token",
+					AuthorizedUpstream: "localhost",
+					LifetimeDeadline:   time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:    time.Now().Add(time.Duration(-1) * time.Hour),
+					ValidDeadline:      time.Now().Add(time.Duration(1) * time.Minute),
 				},
 			},
 			RefreshSessionTokenFunc: func(s *sessions.SessionState) (bool, error) { return false, ErrRefreshFailed },
@@ -827,11 +855,12 @@ func TestAuthenticationUXFlows(t *testing.T) {
 			Name: "refresh expired, user not OK, deny",
 			SessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
-					Email:            "email1@example.com",
-					AccessToken:      "my_access_token",
-					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
-					RefreshDeadline:  time.Now().Add(time.Duration(-1) * time.Hour),
-					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+					Email:              "email1@example.com",
+					AccessToken:        "my_access_token",
+					AuthorizedUpstream: "localhost",
+					LifetimeDeadline:   time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:    time.Now().Add(time.Duration(-1) * time.Hour),
+					ValidDeadline:      time.Now().Add(time.Duration(1) * time.Minute),
 				},
 			},
 			RefreshSessionTokenFunc: func(s *sessions.SessionState) (bool, error) { return false, nil },
@@ -841,11 +870,12 @@ func TestAuthenticationUXFlows(t *testing.T) {
 			Name: "refresh expired, user OK, expect ok",
 			SessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
-					Email:            "email1@example.com",
-					AccessToken:      "my_access_token",
-					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
-					RefreshDeadline:  time.Now().Add(time.Duration(-1) * time.Hour),
-					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+					Email:              "email1@example.com",
+					AccessToken:        "my_access_token",
+					AuthorizedUpstream: "localhost",
+					LifetimeDeadline:   time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:    time.Now().Add(time.Duration(-1) * time.Hour),
+					ValidDeadline:      time.Now().Add(time.Duration(1) * time.Minute),
 				},
 			},
 			RefreshSessionTokenFunc: func(s *sessions.SessionState) (bool, error) { return true, nil },
@@ -855,11 +885,12 @@ func TestAuthenticationUXFlows(t *testing.T) {
 			Name: "refresh expired, refresh and user OK, error saving session, show error",
 			SessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
-					Email:            "email1@example.com",
-					AccessToken:      "my_access_token",
-					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
-					RefreshDeadline:  time.Now().Add(time.Duration(-1) * time.Hour),
-					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+					Email:              "email1@example.com",
+					AccessToken:        "my_access_token",
+					AuthorizedUpstream: "localhost",
+					LifetimeDeadline:   time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:    time.Now().Add(time.Duration(-1) * time.Hour),
+					ValidDeadline:      time.Now().Add(time.Duration(1) * time.Minute),
 				},
 				SaveError: SaveCookieFailed,
 			},
@@ -870,11 +901,12 @@ func TestAuthenticationUXFlows(t *testing.T) {
 			Name: "validation expired, user not OK, deny",
 			SessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
-					Email:            "email1@example.com",
-					AccessToken:      "my_access_token",
-					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
-					RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
-					ValidDeadline:    time.Now().Add(time.Duration(-1) * time.Minute),
+					Email:              "email1@example.com",
+					AccessToken:        "my_access_token",
+					AuthorizedUpstream: "localhost",
+					LifetimeDeadline:   time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:    time.Now().Add(time.Duration(1) * time.Hour),
+					ValidDeadline:      time.Now().Add(time.Duration(-1) * time.Minute),
 				},
 			},
 			ValidateSessionTokenFunc: func(s *sessions.SessionState) bool { return false },
@@ -884,11 +916,12 @@ func TestAuthenticationUXFlows(t *testing.T) {
 			Name: "validation expired, user OK, expect ok",
 			SessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
-					Email:            "email1@example.com",
-					AccessToken:      "my_access_token",
-					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
-					RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
-					ValidDeadline:    time.Now().Add(time.Duration(-1) * time.Minute),
+					Email:              "email1@example.com",
+					AccessToken:        "my_access_token",
+					AuthorizedUpstream: "localhost",
+					LifetimeDeadline:   time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:    time.Now().Add(time.Duration(1) * time.Hour),
+					ValidDeadline:      time.Now().Add(time.Duration(-1) * time.Minute),
 				},
 			},
 			ValidateSessionTokenFunc: func(s *sessions.SessionState) bool { return true },
@@ -898,12 +931,13 @@ func TestAuthenticationUXFlows(t *testing.T) {
 			Name: "wrong identity provider, redirect to sign-in",
 			SessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
-					ProviderSlug:     "example",
-					Email:            "email1@example.com",
-					AccessToken:      "my_access_token",
-					LifetimeDeadline: time.Now().Add(time.Duration(24) * time.Hour),
-					RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
-					ValidDeadline:    time.Now().Add(time.Duration(1) * time.Minute),
+					ProviderSlug:       "example",
+					Email:              "email1@example.com",
+					AccessToken:        "my_access_token",
+					AuthorizedUpstream: "localhost",
+					LifetimeDeadline:   time.Now().Add(time.Duration(24) * time.Hour),
+					RefreshDeadline:    time.Now().Add(time.Duration(1) * time.Hour),
+					ValidDeadline:      time.Now().Add(time.Duration(1) * time.Minute),
 				},
 			},
 			ExpectStatusCode: http.StatusFound,
@@ -949,7 +983,8 @@ func TestProxyXHRErrorHandling(t *testing.T) {
 		{
 			Name: "expired session should redirect on normal request (GET)",
 			Session: &sessions.SessionState{
-				LifetimeDeadline: time.Now().Add(time.Duration(-24) * time.Hour),
+				LifetimeDeadline:   time.Now().Add(time.Duration(-24) * time.Hour),
+				AuthorizedUpstream: "localhost",
 			},
 			Method:       "GET",
 			ExpectedCode: http.StatusFound,
@@ -957,7 +992,8 @@ func TestProxyXHRErrorHandling(t *testing.T) {
 		{
 			Name: "expired session should proxy preflight request (OPTIONS)",
 			Session: &sessions.SessionState{
-				LifetimeDeadline: time.Now().Add(time.Duration(-24) * time.Hour),
+				LifetimeDeadline:   time.Now().Add(time.Duration(-24) * time.Hour),
+				AuthorizedUpstream: "localhost",
 			},
 			Method:       "OPTIONS",
 			ExpectedCode: http.StatusFound,
@@ -965,7 +1001,8 @@ func TestProxyXHRErrorHandling(t *testing.T) {
 		{
 			Name: "expired session should return error code when XMLHttpRequest",
 			Session: &sessions.SessionState{
-				LifetimeDeadline: time.Now().Add(time.Duration(-24) * time.Hour),
+				LifetimeDeadline:   time.Now().Add(time.Duration(-24) * time.Hour),
+				AuthorizedUpstream: "localhost",
 			},
 			Method: "GET",
 			Header: map[string]string{
@@ -985,9 +1022,10 @@ func TestProxyXHRErrorHandling(t *testing.T) {
 		{
 			Name: "valid session should proxy as normal when XMLHttpRequest",
 			Session: &sessions.SessionState{
-				LifetimeDeadline: time.Now().Add(time.Duration(1) * time.Hour),
-				RefreshDeadline:  time.Now().Add(time.Duration(1) * time.Hour),
-				ValidDeadline:    time.Now().Add(time.Duration(1) * time.Hour),
+				LifetimeDeadline:   time.Now().Add(time.Duration(1) * time.Hour),
+				RefreshDeadline:    time.Now().Add(time.Duration(1) * time.Hour),
+				ValidDeadline:      time.Now().Add(time.Duration(1) * time.Hour),
+				AuthorizedUpstream: "localhost",
 			},
 			Method: "GET",
 			Header: map[string]string{

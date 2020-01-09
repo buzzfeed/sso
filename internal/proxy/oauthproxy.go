@@ -610,6 +610,9 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 	logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).WithInGroups(session.Groups).Info(
 		fmt.Sprintf("oauth callback: user validated "))
 
+	//TODO: is there any verification we want to do on this?
+	session.AuthorizedUpstream = req.Host
+
 	// We store the session in a cookie and redirect the user back to the application
 	err = p.sessionStore.SaveSession(rw, req, session)
 	if err != nil {
@@ -737,6 +740,15 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 		return ErrWrongIdentityProvider
 	}
 
+	// check that the user has been authorized against the requested upstream
+	// this is primarily to combat against a user authorizing with one upstream and attempting to use
+	// the session cookie for a different upstream.
+	if req.Host != session.AuthorizedUpstream {
+		logger.WithUser(session.Email).Error(
+			"session authorized against different upstream; rejecting access")
+		return ErrUserNotAuthorized
+	}
+
 	// Lifetime period is the entire duration in which the session is valid.
 	// This should be set to something like 14 to 30 days.
 	if session.LifetimePeriodExpired() {
@@ -751,7 +763,7 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 		// - attempt to refresh the session
 		// - run email domain, email address, and email group validations against the session (if defined).
 
-		ok, err := p.provider.RefreshSession(session)
+		ok, err := p.provider.RefreshSessionToken(session)
 		// We failed to refresh the session successfully
 		// clear the cookie and reject the request
 		if err != nil {

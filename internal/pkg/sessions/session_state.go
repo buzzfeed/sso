@@ -25,9 +25,10 @@ type SessionState struct {
 	ValidDeadline    time.Time `json:"valid_deadline"`
 	GracePeriodStart time.Time `json:"grace_period_start"`
 
-	Email  string   `json:"email"`
-	User   string   `json:"user"`
-	Groups []string `json:"groups"`
+	Email              string   `json:"email"`
+	User               string   `json:"user"`
+	Groups             []string `json:"groups"`
+	AuthorizedUpstream string   `json:"authorized_upstream"`
 }
 
 // LifetimePeriodExpired returns true if the lifetime has expired
