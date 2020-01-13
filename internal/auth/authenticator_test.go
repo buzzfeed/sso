@@ -121,6 +121,13 @@ type errResponse struct {
 }
 
 func TestSignIn(t *testing.T) {
+
+	const (
+		SaveCookie = iota
+		ClearCookie
+		KeepCookie
+	)
+
 	testCases := []struct {
 		name                  string
 		paramsMap             map[string]string
@@ -132,6 +139,7 @@ func TestSignIn(t *testing.T) {
 		validEmail            bool
 		expectedCode          int
 		expectedErrorResponse *errResponse
+		cookieExpectation     int // One of: {SaveCookie, ClearCookie, KeepCookie}
 	}{
 		{
 			name: "another error that isn't no cookie",
@@ -143,6 +151,7 @@ func TestSignIn(t *testing.T) {
 			},
 			expectedCode:          http.StatusInternalServerError,
 			expectedErrorResponse: &errResponse{"another error"},
+			cookieExpectation:     ClearCookie,
 		},
 		{
 			name: "refresh period expired, provider error",
@@ -160,6 +169,7 @@ func TestSignIn(t *testing.T) {
 			},
 			expectedCode:          http.StatusInternalServerError,
 			expectedErrorResponse: &errResponse{"provider error"},
+			cookieExpectation:     ClearCookie,
 		},
 		{
 			name: "refresh period expired, not refreshed - unauthorized user",
@@ -175,6 +185,7 @@ func TestSignIn(t *testing.T) {
 			refreshResponse:       providerRefreshResponse{},
 			expectedCode:          http.StatusUnauthorized,
 			expectedErrorResponse: &errResponse{ErrUserNotAuthorized.Error()},
+			cookieExpectation:     ClearCookie,
 		},
 		{
 			name: "refresh period expired, refresh ok, save session error",
@@ -193,6 +204,7 @@ func TestSignIn(t *testing.T) {
 			},
 			expectedCode:          http.StatusInternalServerError,
 			expectedErrorResponse: &errResponse{"save error"},
+			cookieExpectation:     ClearCookie,
 		},
 		{
 			name: "refresh period expired, successful refresh, invalid email",
@@ -210,6 +222,7 @@ func TestSignIn(t *testing.T) {
 			},
 			expectedCode:          http.StatusUnauthorized,
 			expectedErrorResponse: &errResponse{ErrUserNotAuthorized.Error()},
+			cookieExpectation:     KeepCookie,
 		},
 		{
 			name: "valid session state, save session error",
@@ -226,6 +239,7 @@ func TestSignIn(t *testing.T) {
 			providerValidToken:    true,
 			expectedCode:          http.StatusInternalServerError,
 			expectedErrorResponse: &errResponse{"save error"},
+			cookieExpectation:     ClearCookie,
 		},
 		{
 			name: "invalid session state, invalid email",
@@ -240,6 +254,7 @@ func TestSignIn(t *testing.T) {
 			},
 			expectedCode:          http.StatusUnauthorized,
 			expectedErrorResponse: &errResponse{ErrUserNotAuthorized.Error()},
+			cookieExpectation:     ClearCookie,
 		},
 		{
 			name: "refresh period expired, successful refresh, no state in params",
@@ -258,6 +273,7 @@ func TestSignIn(t *testing.T) {
 			validEmail:            true,
 			expectedCode:          http.StatusForbidden,
 			expectedErrorResponse: &errResponse{"no state parameter supplied"},
+			cookieExpectation:     KeepCookie,
 		},
 		{
 			name: "refresh period expired, successful refresh, no redirect in params",
@@ -279,6 +295,7 @@ func TestSignIn(t *testing.T) {
 			validEmail:            true,
 			expectedCode:          http.StatusForbidden,
 			expectedErrorResponse: &errResponse{"no redirect_uri parameter supplied"},
+			cookieExpectation:     KeepCookie,
 		},
 		{
 			name: "refresh period expired, successful refresh, malformed redirect in params",
@@ -301,6 +318,7 @@ func TestSignIn(t *testing.T) {
 			validEmail:            true,
 			expectedCode:          http.StatusBadRequest,
 			expectedErrorResponse: &errResponse{"malformed redirect_uri parameter passed"},
+			cookieExpectation:     KeepCookie,
 		},
 		{
 			name: "refresh period expired, unsuccessful marshal",
@@ -326,6 +344,7 @@ func TestSignIn(t *testing.T) {
 			validEmail:            true,
 			expectedCode:          http.StatusInternalServerError,
 			expectedErrorResponse: &errResponse{"error marshal"},
+			cookieExpectation:     KeepCookie,
 		},
 		{
 			name: "refresh period expired, successful refresh",
@@ -348,8 +367,9 @@ func TestSignIn(t *testing.T) {
 			mockAuthCodeCipher: &aead.MockCipher{
 				MarshalString: "abcdefg",
 			},
-			validEmail:   true,
-			expectedCode: http.StatusFound,
+			validEmail:        true,
+			expectedCode:      http.StatusFound,
+			cookieExpectation: SaveCookie,
 		},
 		{
 			name: "valid session state, successful save",
@@ -371,8 +391,8 @@ func TestSignIn(t *testing.T) {
 			mockAuthCodeCipher: &aead.MockCipher{
 				MarshalString: "abcdefg",
 			},
-
-			expectedCode: http.StatusFound,
+			expectedCode:      http.StatusFound,
+			cookieExpectation: SaveCookie,
 		},
 	}
 
@@ -419,8 +439,15 @@ func TestSignIn(t *testing.T) {
 				testutil.Ok(t, err)
 				testutil.Equal(t, tc.expectedErrorResponse, actualErrorResponse)
 			}
-			// TODO: add a cleared session cookie check for errored stuff
 
+			switch tc.cookieExpectation {
+			case SaveCookie:
+				testutil.NotEqual(t, tc.mockSessionStore.ResponseSession, "")
+			case KeepCookie:
+				testutil.NotEqual(t, tc.mockSessionStore.ResponseSession, "")
+			case ClearCookie:
+				testutil.Equal(t, tc.mockSessionStore.ResponseSession, "")
+			}
 		})
 	}
 }
@@ -543,6 +570,7 @@ func TestSignOut(t *testing.T) {
 				}
 			}
 			if tc.SuccessfulRevoke {
+				testutil.Equal(t, tc.mockSessionStore.ResponseSession, "")
 				//TODO: test the session has been cleared?
 			}
 			testutil.Ok(t, err)
