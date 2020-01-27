@@ -39,9 +39,10 @@ var SignatureHeaders = []string{
 
 // Errors
 var (
-	ErrLifetimeExpired       = errors.New("user lifetime expired")
-	ErrUserNotAuthorized     = errors.New("user not authorized")
-	ErrWrongIdentityProvider = errors.New("user authenticated with wrong identity provider")
+	ErrLifetimeExpired               = errors.New("user lifetime expired")
+	ErrUserNotAuthorized             = errors.New("user not authorized")
+	ErrWrongIdentityProvider         = errors.New("user authenticated with wrong identity provider")
+	ErrUnauthorizedUpstreamRequested = errors.New("user session authorized with different upstream")
 )
 
 type ErrOAuthProxyMisconfigured struct {
@@ -680,6 +681,11 @@ func (p *OAuthProxy) Proxy(rw http.ResponseWriter, req *http.Request) {
 			// the user has a stale sesssion.
 			p.OAuthStart(rw, req, tags)
 			return
+		case ErrUnauthorizedUpstreamRequested:
+			// The users session has been authorised for use with a different upstream than the one
+			// that is being requested. Primaririly to implement some form of grace period while this
+			// is being introduced we will trigger the start of the oauth flow.
+			p.OAuthStart(rw, req, tags)
 		case sessions.ErrInvalidSession:
 			// The user session is invalid and we can't decode it.
 			// This can happen for a variety of reasons but the most common non-malicious
@@ -748,8 +754,8 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 	// the session cookie for a different upstream.
 	if req.Host != session.AuthorizedUpstream {
 		logger.WithProxyHost(req.Host).WithAuthorizedUpstream(session.AuthorizedUpstream).WithUser(session.Email).Error(
-			"session authorized against different upstream; rejecting access")
-		return ErrUserNotAuthorized
+			"session authorized against different upstream; restarting authentication")
+		return ErrUnauthorizedUpstreamRequested
 	}
 
 	// Lifetime period is the entire duration in which the session is valid.

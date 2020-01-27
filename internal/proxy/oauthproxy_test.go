@@ -734,7 +734,7 @@ func TestAuthenticate(t *testing.T) {
 					ValidDeadline:      time.Now().Add(time.Duration(1) * time.Minute),
 				},
 			},
-			ExpectedErr:       ErrUserNotAuthorized,
+			ExpectedErr:       ErrUnauthorizedUpstreamRequested,
 			CookieExpectation: ClearCookie,
 		},
 	}
