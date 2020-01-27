@@ -388,8 +388,7 @@ func (p *OAuthProxy) runValidatorsWithGracePeriod(session *sessions.SessionState
 				return err
 			}
 		}
-		allowedGroups := p.upstreamConfig.AllowedGroups
-		logger.WithUser(session.Email).WithAllowedGroups(allowedGroups).Error(errors,
+		logger.WithUser(session.Email).Error(errors,
 			"no longer authorized after validation period")
 		return ErrUserNotAuthorized
 	}
@@ -610,7 +609,11 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 	logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).WithInGroups(session.Groups).Info(
 		fmt.Sprintf("oauth callback: user validated "))
 
-	//TODO: is there any verification we want to do on this?
+	// We add the request host into the session to allow us to validate that each request has
+	// been authorized for the upstream it's requesting.
+	// e.g. if a request is authenticated while trying to reach 'foo' upstream, it should not
+	// automatically be seen as authorized with 'bar' upstream. Each upstream may set different
+	// validators, so the request should be reauthenticated.
 	session.AuthorizedUpstream = req.Host
 
 	// We store the session in a cookie and redirect the user back to the application
@@ -807,6 +810,8 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 		// - call up the provider chain to validate this user is still active and hasn't been de-authorized.
 		// - run any defined email domain, email address, and email group validators against the session
 
+		//TODO: change this to match the RefreshSessionToken
+		// (https://github.com/buzzfeed/sso/pull/275#discussion_r366448883)
 		ok := p.provider.ValidateSessionToken(session)
 		if !ok {
 			// This user is now no longer authorized, or we failed to
