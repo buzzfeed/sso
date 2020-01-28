@@ -678,8 +678,9 @@ func (p *OAuthProxy) Proxy(rw http.ResponseWriter, req *http.Request) {
 			return
 		case ErrUnauthorizedUpstreamRequested:
 			// The users session has been authorised for use with a different upstream than the one
-			// that is being requested. Primaririly to implement some form of grace period while this
-			// is being introduced we will trigger the start of the oauth flow.
+			// that is being requested, so we trigger the start of the oauth flow.
+			// This exists primarily to implement some form of grace period while this additional session
+			// check is being introduced.
 			p.OAuthStart(rw, req, tags)
 		case sessions.ErrInvalidSession:
 			// The user session is invalid and we can't decode it.
