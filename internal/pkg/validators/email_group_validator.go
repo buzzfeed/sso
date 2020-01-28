@@ -3,6 +3,7 @@ package validators
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	"github.com/buzzfeed/sso/internal/proxy/providers"
@@ -51,5 +52,5 @@ func (v EmailGroupValidator) validate(session *sessions.SessionState) error {
 		return nil
 	}
 
-	return fmt.Errorf("%v. Allowed Groups: %q", ErrGroupMembership, v.AllowedGroups)
+	return fmt.Errorf("%v - Allowed Groups: %q", ErrGroupMembership, strings.Join(v.AllowedGroups, ", "))
 }

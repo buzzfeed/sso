@@ -595,13 +595,13 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 		tags = append(tags, "error:validation_failed")
 		p.StatsdClient.Incr("application_error", tags, 1.0)
 		logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(
-			fmt.Sprintf("permission denied: unauthorized: %q", errors))
+			fmt.Sprintf("permission denied: unauthorized: %s", errors))
 
 		formattedErrors := make([]string, 0, len(errors))
 		for _, err := range errors {
 			formattedErrors = append(formattedErrors, err.Error())
 		}
-		errorMsg := fmt.Sprintf("We ran into some issues while validating your account: \"%s\"",
+		errorMsg := fmt.Sprintf("We ran into some issues while validating your account: %s",
 			strings.Join(formattedErrors, ", "))
 		p.ErrorPage(rw, req, http.StatusForbidden, "Permission Denied", errorMsg)
 		return
