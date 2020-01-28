@@ -811,7 +811,7 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 		// - call up the provider chain to validate this user is still active and hasn't been de-authorized.
 		// - run any defined email domain, email address, and email group validators against the session
 
-		//TODO: change this to match the RefreshSessionToken
+		//TODO: change this to match the RefreshSessionToken method
 		// (https://github.com/buzzfeed/sso/pull/275#discussion_r366448883)
 		ok := p.provider.ValidateSessionToken(session)
 		if !ok {
