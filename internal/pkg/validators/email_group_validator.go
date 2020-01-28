@@ -52,5 +52,5 @@ func (v EmailGroupValidator) validate(session *sessions.SessionState) error {
 		return nil
 	}
 
-	return fmt.Errorf("%v - Allowed Groups: %q", ErrGroupMembership, strings.Join(v.AllowedGroups, ", "))
+	return fmt.Errorf("%v - Allowed Groups: %s", ErrGroupMembership, strings.Join(v.AllowedGroups, ", "))
 }
