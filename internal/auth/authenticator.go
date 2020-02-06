@@ -227,7 +227,7 @@ func (p *Authenticator) authenticate(rw http.ResponseWriter, req *http.Request) 
 	}
 
 	errors := options.RunValidators(p.Validators, session)
-	if len(errors) == len(p.Validators) {
+	if len(errors) != 0 {
 		logger.WithUser(session.Email).Info(
 			fmt.Sprintf("permission denied: unauthorized: %q", errors))
 		return nil, ErrUserNotAuthorized
@@ -583,7 +583,7 @@ func (p *Authenticator) getOAuthCallback(rw http.ResponseWriter, req *http.Reque
 	// - for p.provider.ValidateGroup see providers/google.go#ValidateGroup for more info
 
 	errors := options.RunValidators(p.Validators, session)
-	if len(errors) == len(p.Validators) {
+	if len(errors) != 0 {
 		tags := append(tags, "error:invalid_email")
 		p.StatsdClient.Incr("application_error", tags, 1.0)
 		logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(

@@ -570,7 +570,7 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 	// set cookie, or deny
 
 	errors := options.RunValidators(p.Validators, session)
-	if len(errors) == len(p.Validators) {
+	if len(errors) != 0 {
 		tags = append(tags, "error:validation_failed")
 		p.StatsdClient.Incr("application_error", tags, 1.0)
 		logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(
