@@ -29,14 +29,38 @@ func TestFillCacheUpdate(t *testing.T) {
 			fillError: fmt.Errorf("fill error"),
 			updated:   false,
 		},
+		{
+			name:      "group removed if it can't be found",
+			members:   MemberSet{"a": {}, "b": {}},
+			fillError: ErrGroupNotFound,
+			updated:   false,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			fillCache := NewFillCache(testFillFunc(tc.members, tc.fillError), time.Hour)
 			defer fillCache.Stop()
+
+			// ("group removed if it can't be found")
+			// In order to test a group is removed from the cache if it can't be found, we first
+			// fill the cache and check the group is present. Further down, we then check for it's
+			// existence again after updating the cache.
+			if tc.fillError == ErrGroupNotFound {
+				fillCache.cache["groupKey"] = tc.members
+				if _, ok := fillCache.Get("groupKey"); !ok {
+					t.Errorf("cache should contain group")
+				}
+			}
+
 			ok := fillCache.Update("groupKey")
 			if tc.updated != ok {
 				t.Errorf("expected updated to be %v but was %v", tc.updated, ok)
+			}
+
+			if tc.fillError == ErrGroupNotFound {
+				if val, ok := fillCache.Get("groupKey"); ok {
+					t.Errorf("expected group to not be in cache, but found %q", val)
+				}
 			}
 		})
 	}
