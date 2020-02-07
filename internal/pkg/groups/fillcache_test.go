@@ -43,7 +43,7 @@ func TestFillCacheUpdate(t *testing.T) {
 
 			// ("group removed if it can't be found")
 			// In order to test a group is removed from the cache if it can't be found, we first
-			// fill the cache and check the group is present. Further down, we then check for it's
+			// fill the cache and check the group is present. Further down, we then check for its
 			// existence again after updating the cache.
 			if tc.fillError == ErrGroupNotFound {
 				fillCache.cache["groupKey"] = tc.members
