@@ -44,7 +44,7 @@ func TestFillCacheUpdate(t *testing.T) {
 
 			// ("group removed if it can't be found")
 			// In order to test a group is removed from the cache if it can't be found, we
-			// fill the cache, check the group is present, then update the cache before checking
+			// fill the cache, check the key is present, then update the cache before checking
 			// the key has been removed
 			if tc.fillError == ErrGroupNotFound {
 				temporaryCacheKey := "groupKeyB"
@@ -67,12 +67,12 @@ func TestFillCacheUpdate(t *testing.T) {
 			}
 
 			ok := fillCache.Update(cacheKey)
-			if tc.updated != ok {
+			if ok != tc.updated {
 				t.Errorf("expected updated to be %v but was %v", tc.updated, ok)
 			}
 
 			// as well as checking the key is actually in the cache when it should be, this also tests that
-			// unrelated groups aren't deleted when another group can't be found within the "group removed if it can't be found" test
+			// unrelated groups aren't deleted within the "group removed if it can't be found" test
 			if tc.updated == true || tc.fillError == ErrGroupNotFound {
 				_, ok = fillCache.Get(cacheKey)
 				if ok != tc.updated {
