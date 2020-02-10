@@ -40,28 +40,46 @@ func TestFillCacheUpdate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			fillCache := NewFillCache(testFillFunc(tc.members, tc.fillError), time.Hour)
 			defer fillCache.Stop()
+			cacheKey := "groupKeyA"
 
 			// ("group removed if it can't be found")
-			// In order to test a group is removed from the cache if it can't be found, we first
-			// fill the cache and check the group is present. Further down, we then check for its
-			// existence again after updating the cache.
+			// In order to test a group is removed from the cache if it can't be found, we
+			// fill the cache, check the group is present, then update the cache before checking
+			// the key has been removed
 			if tc.fillError == ErrGroupNotFound {
-				fillCache.cache["groupKey"] = tc.members
-				if _, ok := fillCache.Get("groupKey"); !ok {
-					t.Errorf("cache should contain group")
+				temporaryCacheKey := "groupKeyB"
+				// add two cache keys, one of which should be deleted, one should not
+				fillCache.cache[cacheKey] = tc.members
+				fillCache.cache[temporaryCacheKey] = tc.members
+
+				if _, ok := fillCache.Get(temporaryCacheKey); !ok {
+					t.Errorf("cache should contain %q, but it does not", temporaryCacheKey)
+				}
+
+				// this should error with `ErrGroupNotFound`, causing the key to be removed
+				if ok := fillCache.Update(temporaryCacheKey); ok != tc.updated {
+					t.Errorf("expected updated to be %v but was %v", tc.updated, ok)
+				}
+
+				if val, ok := fillCache.Get(temporaryCacheKey); ok {
+					t.Errorf("expected group to not be present in cache, but found %q", val)
 				}
 			}
 
-			ok := fillCache.Update("groupKey")
+			ok := fillCache.Update(cacheKey)
 			if tc.updated != ok {
 				t.Errorf("expected updated to be %v but was %v", tc.updated, ok)
 			}
 
-			if tc.fillError == ErrGroupNotFound {
-				if val, ok := fillCache.Get("groupKey"); ok {
-					t.Errorf("expected group to not be in cache, but found %q", val)
+			// as well as checking the key is actually in the cache when it should be, this also tests that
+			// unrelated groups aren't deleted when another group can't be found within the "group removed if it can't be found" test
+			if tc.updated == true || tc.fillError == ErrGroupNotFound {
+				_, ok = fillCache.Get(cacheKey)
+				if ok != tc.updated {
+					t.Errorf("cache should contain %q, but it does not", cacheKey)
 				}
 			}
+
 		})
 	}
 }
