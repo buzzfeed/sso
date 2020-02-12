@@ -408,35 +408,60 @@ func (p *SSOProvider) ValidateSessionState(s *sessions.SessionState, allowedGrou
 	return true
 }
 
+type SignInParams struct {
+	RedirectURL  string
+	Scope        string
+	ClientID     string
+	ResponseType string
+	State        string
+	TimeStamp    string
+	Signature    string
+}
+
 // GetSignInURL with typical oauth parameters
-func (p *SSOProvider) GetSignInURL(redirectURL *url.URL, state string) *url.URL {
+func (p *SSOProvider) GetSignInURL(redirectURL *url.URL, state string) (*url.URL, SignInParams) {
+
 	a := *p.Data().SignInURL
 	now := time.Now()
 	rawRedirect := redirectURL.String()
-	params, _ := url.ParseQuery(a.RawQuery)
-	params.Set("redirect_uri", rawRedirect)
-	params.Add("scope", p.Scope)
-	params.Set("client_id", p.ClientID)
-	params.Set("response_type", "code")
-	params.Add("state", state)
-	params.Set("ts", fmt.Sprint(now.Unix()))
-	params.Set("sig", p.signRedirectURL(rawRedirect, now))
-	a.RawQuery = params.Encode()
-	return &a
+
+	//TODO: With this, we overwrite any previously set scope or state params
+	// because we are no longer appending with `.Add`. Need to check this out
+	signInParams := SignInParams{
+		RedirectURL:  rawRedirect,
+		Scope:        p.Scope,
+		ClientID:     p.ClientID,
+		ResponseType: "code",
+		State:        state,
+		TimeStamp:    fmt.Sprint(now.Unix()),
+		Signature:    p.signRedirectURL(rawRedirect, now),
+	}
+
+	return &a, signInParams
+}
+
+type SignOutParams struct {
+	RedirectURL string
+	TimeStamp   string
+	Signature   string
 }
 
 // GetSignOutURL creates and returns the sign out URL, given a redirectURL
-func (p *SSOProvider) GetSignOutURL(redirectURL *url.URL) *url.URL {
+func (p *SSOProvider) GetSignOutURL(redirectURL *url.URL) (*url.URL, SignOutParams) {
 	a := *p.Data().SignOutURL
 
 	now := time.Now()
 	rawRedirect := redirectURL.String()
-	params, _ := url.ParseQuery(a.RawQuery)
-	params.Add("redirect_uri", rawRedirect)
-	params.Set("ts", fmt.Sprint(now.Unix()))
-	params.Set("sig", p.signRedirectURL(rawRedirect, now))
-	a.RawQuery = params.Encode()
-	return &a
+
+	//TODO: With this, we overwrite any previously set redirect params
+	// because we are no longer appending with `.Add`. Need to check this out.
+	signOutParams := SignOutParams{
+		RedirectURL: rawRedirect,
+		TimeStamp:   fmt.Sprint(now.Unix()),
+		Signature:   p.signRedirectURL(rawRedirect, now),
+	}
+
+	return &a, signOutParams
 }
 
 // signRedirectURL signs the redirect url string, given a timestamp, and returns it

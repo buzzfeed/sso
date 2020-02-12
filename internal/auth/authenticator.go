@@ -134,36 +134,6 @@ type signInResp struct {
 	Version      string
 }
 
-// SignInPage directs the user to the sign in page
-func (p *Authenticator) SignInPage(rw http.ResponseWriter, req *http.Request, code int) {
-	rw.WriteHeader(code)
-
-	// We construct this URL based on the known callback URL that we send to Google.
-	// We don't want to rely on req.Host, as that can be attacked via Host header injection
-	// This ends up looking like:
-	// https://sso-auth.example.com/sign_in?client_id=...&redirect_uri=...
-	path := strings.TrimPrefix(req.URL.Path, "/")
-	redirectURL := p.redirectURL.ResolveReference(
-		&url.URL{
-			Path:     path,
-			RawQuery: req.URL.RawQuery,
-		},
-	)
-
-	// validateRedirectURI middleware already ensures that this is a valid URL
-	destinationURL, _ := url.Parse(redirectURL.Query().Get("redirect_uri"))
-
-	t := signInResp{
-		ProviderName: p.provider.Data().ProviderName,
-		ProviderSlug: p.provider.Data().ProviderSlug,
-		EmailDomains: p.EmailDomains,
-		Redirect:     redirectURL.String(),
-		Destination:  destinationURL.Host,
-		Version:      VERSION,
-	}
-	p.templates.ExecuteTemplate(rw, "sign_in.html", t)
-}
-
 func (p *Authenticator) authenticate(rw http.ResponseWriter, req *http.Request) (*sessions.SessionState, error) {
 	logger := log.NewLogEntry()
 	remoteAddr := getRemoteAddr(req)
@@ -239,15 +209,10 @@ func (p *Authenticator) authenticate(rw http.ResponseWriter, req *http.Request) 
 	return session, nil
 }
 
-// SignIn handles the /sign_in endpoint. It attempts to authenticate the user, and if the user is not authenticated, it renders
-// a sign in page.
+// SignIn handles the /sign_in endpoint. It attempts to authenticate the user, and if the user is not authenticated,
+// it starts the authentication process.
+// If the user is authenticated, we redirect back to the proxy application at the `redirect_uri`, with a temporary token.
 func (p *Authenticator) SignIn(rw http.ResponseWriter, req *http.Request) {
-	// We attempt to authenticate the user. If they cannot be authenticated, we render a sign-in
-	// page.
-	//
-	// If the user is authenticated, we redirect back to the proxy application
-	// at the `redirect_uri`, with a temporary token.
-	//
 	// TODO: It is possible for a user to visit this page without a redirect destination.
 	// Should we allow the user to authenticate? If not, what should be the proposed workflow?
 
@@ -257,6 +222,22 @@ func (p *Authenticator) SignIn(rw http.ResponseWriter, req *http.Request) {
 		"action:sign_in",
 		fmt.Sprintf("proxy_host:%s", proxyHost),
 	}
+
+	// We construct this URL based on the known callback URL that we send to Google.
+	// We don't want to rely on req.Host, as that can be attacked via Host header injection
+	// This ends up looking like:
+	// https://sso-auth.example.com/sign_in?client_id=...&redirect_uri=...
+	//
+	// The validateRedirectURI middleware ensures that this is a valid URL
+	path := strings.TrimPrefix(req.URL.Path, "/")
+	redirectURL := p.redirectURL.ResolveReference(
+		&url.URL{
+			Path:     path,
+			RawQuery: req.URL.RawQuery,
+		},
+	)
+	req.URL = redirectURL
+
 	session, err := p.authenticate(rw, req)
 	switch err {
 	case nil:
@@ -264,13 +245,13 @@ func (p *Authenticator) SignIn(rw http.ResponseWriter, req *http.Request) {
 		// with the necessary state
 		p.ProxyOAuthRedirect(rw, req, session, tags)
 	case http.ErrNoCookie:
-		p.SignInPage(rw, req, http.StatusOK)
+		p.OAuthStart(rw, req)
 	case providers.ErrTokenRevoked:
 		p.sessionStore.ClearSession(rw, req)
-		p.SignInPage(rw, req, http.StatusOK)
+		p.OAuthStart(rw, req)
 	case sessions.ErrLifetimeExpired, sessions.ErrInvalidSession:
 		p.sessionStore.ClearSession(rw, req)
-		p.SignInPage(rw, req, http.StatusOK)
+		p.OAuthStart(rw, req)
 	default:
 		tags = append(tags, "error:sign_in_error")
 		p.StatsdClient.Incr("application_error", tags, 1.0)
@@ -373,17 +354,13 @@ func (p *Authenticator) SignOut(rw http.ResponseWriter, req *http.Request) {
 		fmt.Sprintf("proxy_host:%s", proxyHost),
 	}
 
-	if req.Method == "GET" {
-		p.SignOutPage(rw, req, "")
-		return
-	}
-
 	session, err := p.sessionStore.LoadSession(req)
 	switch err {
 	case nil:
+		// no error - we were able to load the session. continue onwards.
 		break
-	// if there's no cookie in the session we can just redirect
 	case http.ErrNoCookie:
+		// if there's no session, we can just redirect back.
 		http.Redirect(rw, req, redirectURI, http.StatusFound)
 		return
 	default:
@@ -399,96 +376,63 @@ func (p *Authenticator) SignOut(rw http.ResponseWriter, req *http.Request) {
 		tags = append(tags, "error:revoke_session")
 		p.StatsdClient.Incr("provider_error", tags, 1.0)
 		logger.Error(err, "error revoking session")
-		p.SignOutPage(rw, req, "An error occurred during sign out. Please try again.")
+		//TODO: This used to return a sign out page with an error.
+		//TODO: http.StatusInternalServerError or codeForError(err)
+		p.ErrorResponse(rw, req, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	// if we reach here, the session has been revoked on the identity providers end,
+	// clear our session and redirect.
 	p.sessionStore.ClearSession(rw, req)
 	http.Redirect(rw, req, redirectURI, http.StatusFound)
 }
 
-type signOutResp struct {
-	ProviderSlug string
-	Version      string
-	Redirect     string
-	Signature    string
-	Timestamp    string
-	Message      string
-	Destination  string
-	Email        string
-}
-
-// SignOutPage renders a sign out page with a message
-func (p *Authenticator) SignOutPage(rw http.ResponseWriter, req *http.Request, message string) {
-	// validateRedirectURI middleware already ensures that this is a valid URL
-	redirectURI := req.Form.Get("redirect_uri")
-
-	session, err := p.sessionStore.LoadSession(req)
-	if err != nil {
-		http.Redirect(rw, req, redirectURI, http.StatusFound)
-		return
-	}
-
-	signature := req.Form.Get("sig")
-	timestamp := req.Form.Get("ts")
-	destinationURL, _ := url.Parse(redirectURI)
-
-	// An error message indicates that an internal server error occurred
-	if message != "" {
-		rw.WriteHeader(http.StatusInternalServerError)
-	}
-
-	t := signOutResp{
-		ProviderSlug: p.provider.Data().ProviderSlug,
-		Version:      VERSION,
-		Redirect:     redirectURI,
-		Signature:    signature,
-		Timestamp:    timestamp,
-		Message:      message,
-		Destination:  destinationURL.Host,
-		Email:        session.Email,
-	}
-	p.templates.ExecuteTemplate(rw, "sign_out.html", t)
-	return
-}
-
 // OAuthStart starts the authentication process by redirecting to the provider. It provides a
-// `redirectURI`, allowing the provider to redirect back to the sso proxy after authentication.
+// `redirectURI`, allowing the provider to redirect back to sso_auth after authentication.
 func (p *Authenticator) OAuthStart(rw http.ResponseWriter, req *http.Request) {
 	tags := []string{"action:start"}
 
 	nonce := fmt.Sprintf("%x", aead.GenerateKey())
 	p.csrfStore.SetCSRF(rw, req, nonce)
-	authRedirectURL, err := url.Parse(req.URL.Query().Get("redirect_uri"))
-	if err != nil || !validRedirectURI(authRedirectURL.String(), p.ProxyRootDomains) {
-		tags = append(tags, "error:invalid_redirect_parameter")
-		p.StatsdClient.Incr("application_error", tags, 1.0)
-		p.ErrorResponse(rw, req, "Invalid redirect parameter", http.StatusBadRequest)
-		return
-	}
-	// Here we validate the redirect that is nested within the redirect_uri.
-	// `authRedirectURL` points to step D, `proxyRedirectURL` points to step E.
+
+	// Here we validate the redirects and signatures that are nested within the request. Each lettered step in the below diagram
+	// represents a step in the request flow.
 	//
-	//    A*       B             C               D              E
-	// /start -> Google -> auth /callback -> /sign_in -> proxy /callback
+	// `authRedirectURL` points to step C, `proxyRedirectURL` points to step E.
 	//
 	// * you are here
-	proxyRedirectURL, err := url.Parse(authRedirectURL.Query().Get("redirect_uri"))
+	//
+	//        A
+	// sso_auth:/sign_in -> user already authenticated?
+	//                        |
+	//                        |             *            B                  C                    D                                         E
+	//                        -> no -> (OAuthStart) Google/Okta -> sso_auth:/callback -> sso_auth:/sign_in -> (now authenticated) sso_proxy:/callback
+	//                        |
+	//                        |                 F
+	//                        -> yes -> sso_proxy:/callback
+
+	proxyRedirectURL, err := url.Parse(req.URL.Query().Get("redirect_uri"))
 	if err != nil || !validRedirectURI(proxyRedirectURL.String(), p.ProxyRootDomains) {
 		tags = append(tags, "error:invalid_redirect_parameter")
 		p.StatsdClient.Incr("application_error", tags, 1.0)
-		p.ErrorResponse(rw, req, "Invalid redirect parameter", http.StatusBadRequest)
+		p.ErrorResponse(rw, req, "Invalid proxy redirect parameter", http.StatusBadRequest)
 		return
 	}
-	proxyRedirectSig := authRedirectURL.Query().Get("sig")
-	ts := authRedirectURL.Query().Get("ts")
+
+	proxyRedirectSig := req.URL.Query().Get("sig")
+	ts := req.URL.Query().Get("ts")
 	if !validSignature(proxyRedirectURL.String(), proxyRedirectSig, ts, p.ProxyClientSecret) {
 		p.ErrorResponse(rw, req, "Invalid redirect parameter", http.StatusBadRequest)
 		return
 	}
-	redirectURI := p.GetRedirectURI(req.Host)
-	state := base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%v:%v", nonce, authRedirectURL.String())))
-	signInURL := p.provider.GetSignInURL(redirectURI, state)
+
+	state := base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%v:%v", nonce, req.URL.String())))
+
+	authRedirectURL := p.GetRedirectURI(req.Host)
+	//TODO: do we want to validate this redirect URI again, even though a little redundant?
+	signInURL := p.provider.GetSignInURL(authRedirectURL, state)
+
 	http.Redirect(rw, req, signInURL, http.StatusFound)
 }
 

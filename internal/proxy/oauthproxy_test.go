@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -67,6 +68,15 @@ func setCookieSecure(cookieSecure bool) func(*OAuthProxy) error {
 		p.cookieSecure = cookieSecure
 		return nil
 	}
+}
+
+type TemplateSpy struct {
+	executeTemplate func(io.Writer, string, interface{})
+}
+
+// TODO: we can probably use the mock_template package...
+func (s TemplateSpy) ExecuteTemplate(rw io.Writer, tpl string, data interface{}) {
+	s.executeTemplate(rw, tpl, data)
 }
 
 func testSession() *sessions.SessionState {
@@ -914,6 +924,7 @@ func TestOAuthStart(t *testing.T) {
 			}
 
 			proxy, close := testNewOAuthProxy(t,
+
 				setSessionStore(&sessions.MockSessionStore{}),
 				setCSRFStore(csrfStore),
 				setCookieCipher(cookieCipher),
@@ -925,44 +936,55 @@ func TestOAuthStart(t *testing.T) {
 			if tc.isXHR {
 				req.Header.Add("X-Requested-With", "XMLHttpRequest")
 			}
+			// proxy.OAuthStart results in a html page being rendered with some data
+			// in it that we want test.
+			// We take advantage of proxy.templates being an interface and use it to
+			// test the 'state' in the struct that is used to render the html page, rather
+			// than parsing the html page itself for the state.
+			proxy.templates = &TemplateSpy{
+				executeTemplate: func(rw io.Writer, tpl string, data interface{}) {
+					signInResp, ok := data.(signInResp)
+					if !ok {
+						t.Fatalf("Invalid struct used: expected 'signInResp'")
+					}
 
+					state := signInResp.SignInParams.State
+
+					cookieParameter := &StateParameter{}
+					err = json.Unmarshal([]byte(csrfStore.ResponseCSRF), cookieParameter)
+					if err != nil {
+						t.Errorf("response csrf: %v", csrfStore.ResponseCSRF)
+						t.Fatalf("unexpected err during unmarshal: %v", err)
+					}
+
+					stateParameter := &StateParameter{}
+					err = json.Unmarshal([]byte(state), stateParameter)
+					if err != nil {
+						t.Errorf("state: %v", state)
+						t.Fatalf("unexpected err during unmarshal: %v", err)
+					}
+
+					if !reflect.DeepEqual(cookieParameter, stateParameter) {
+						t.Logf("cookie parameter: %#v", cookieParameter)
+						t.Logf(" state parameter: %#v", stateParameter)
+						t.Fatalf("expected structs to be equal")
+					}
+				},
+			}
+			// Note: In this case, proxy.OAuthStart does not cause a html page
+			// to be rendered due to us replacing proxy.templates above.
 			proxy.OAuthStart(rw, req, []string{})
 			res := rw.Result()
 
 			if res.StatusCode != tc.expectedStatusCode {
-				t.Fatalf("unexpected status code response")
+				t.Logf("expected status code: %q", tc.expectedStatusCode)
+				t.Logf("                 got: %q", res.StatusCode)
+				t.Fatalf("unexpected status code returned")
 			}
 
+			//TODO: what's the intended course of action here?
 			if tc.expectedStatusCode != http.StatusFound {
 				return
-			}
-
-			location, err := res.Location()
-			if err != nil {
-				t.Fatalf("expected req to succeeded err:%v", err)
-			}
-
-			state := location.Query().Get("state")
-
-			cookieParameter := &StateParameter{}
-			err = json.Unmarshal([]byte(csrfStore.ResponseCSRF), cookieParameter)
-			if err != nil {
-				t.Errorf("response csrf: %v", csrfStore.ResponseCSRF)
-				t.Fatalf("unexpected err during unmarshal: %v", err)
-			}
-
-			stateParameter := &StateParameter{}
-			err = json.Unmarshal([]byte(state), stateParameter)
-			if err != nil {
-				t.Errorf("location: %v", location)
-				t.Errorf("state: %v", state)
-				t.Fatalf("unexpected err during unmarshal: %v", err)
-			}
-
-			if !reflect.DeepEqual(cookieParameter, stateParameter) {
-				t.Logf("cookie parameter: %#v", cookieParameter)
-				t.Logf(" state parameter: %#v", stateParameter)
-				t.Fatalf("expected structs to be equal")
 			}
 		})
 	}
@@ -1076,8 +1098,24 @@ func TestSecurityHeaders(t *testing.T) {
 				body, err := ioutil.ReadAll(resp.Body)
 				defer resp.Body.Close()
 				testutil.Assert(t, err == nil, "could not read http response body: %v", err)
-				if string(body) != tc.path {
-					t.Errorf("expected body = %q, got %q", tc.path, string(body))
+
+				actualBody := string(body)
+				expectedBody := tc.path
+				// if the request is not authenticated (it has no proxy session),
+				// we expect a sign in page to be rendered.
+				if !tc.authenticated {
+					expectedBody = "Sign in with"
+					if !strings.Contains(actualBody, expectedBody) {
+						t.Logf("expected body to contain: %q", expectedBody)
+						t.Logf("          got: %q", actualBody)
+						t.Errorf("received invalid body")
+					}
+				} else {
+					if actualBody != expectedBody {
+						t.Logf("expected body: %q", expectedBody)
+						t.Logf("          got: %q", actualBody)
+						t.Errorf("received invalid body")
+					}
 				}
 			}
 
@@ -1154,16 +1192,15 @@ func TestHeaderOverrides(t *testing.T) {
 
 func TestHTTPSRedirect(t *testing.T) {
 	testCases := []struct {
-		name                 string
-		url                  string
-		host                 string
-		cookieSecure         bool
-		authenticated        bool
-		requestHeaders       map[string]string
-		expectedCode         int
-		expectedLocation     string // must match entire Location header
-		expectedLocationHost string // just match hostname of Location header
-		expectSTS            bool   // should we get a Strict-Transport-Security header?
+		name             string
+		url              string
+		host             string
+		cookieSecure     bool
+		authenticated    bool
+		requestHeaders   map[string]string
+		expectedCode     int
+		expectedLocation string // must match entire Location header
+		expectSTS        bool   // should we get a Strict-Transport-Security header?
 	}{
 		{
 			name:          "no https redirect with http and cookie_secure=false and authenticated=true",
@@ -1174,13 +1211,20 @@ func TestHTTPSRedirect(t *testing.T) {
 			expectSTS:     false,
 		},
 		{
-			name:                 "no https redirect with http cookie_secure=false and authenticated=false",
-			url:                  "http://localhost/",
-			cookieSecure:         false,
-			authenticated:        false,
-			expectedCode:         http.StatusFound,
-			expectedLocationHost: "localhost",
-			expectSTS:            false,
+			name:          "no https redirect with http cookie_secure=false and authenticated=false",
+			url:           "http://localhost/",
+			cookieSecure:  false,
+			authenticated: false,
+			expectedCode:  http.StatusFound,
+			expectSTS:     false,
+		},
+		{
+			name:          "no https redirect with https and cookie_secure=false and authenticated=false",
+			url:           "https://localhost/",
+			cookieSecure:  false,
+			authenticated: false,
+			expectedCode:  http.StatusFound,
+			expectSTS:     false,
 		},
 		{
 			name:          "no https redirect with https and cookie_secure=false and authenticated=true",
@@ -1190,16 +1234,7 @@ func TestHTTPSRedirect(t *testing.T) {
 			expectedCode:  http.StatusOK,
 			expectSTS:     false,
 		},
-		{
-			name:                 "no https redirect with https and cookie_secure=false and authenticated=false",
-			url:                  "https://localhost/",
-			cookieSecure:         false,
-			authenticated:        false,
-			expectedCode:         http.StatusFound,
-			expectedLocationHost: "localhost",
-			expectSTS:            false,
-		},
-		{
+		{ //TODO
 			name:             "https redirect with cookie_secure=true and authenticated=false",
 			url:              "http://localhost/",
 			cookieSecure:     true,
@@ -1294,15 +1329,21 @@ func TestHTTPSRedirect(t *testing.T) {
 			}
 
 			location := rw.Header().Get("Location")
-			locationURL, err := url.Parse(location)
-			if err != nil {
-				t.Errorf("error parsing location %q: %s", location, err)
-			}
-			if tc.expectedLocation != "" && location != tc.expectedLocation {
+			if location != tc.expectedLocation {
 				t.Errorf("expected Location=%q, got Location=%q", tc.expectedLocation, location)
 			}
-			if tc.expectedLocationHost != "" && locationURL.Hostname() != tc.expectedLocationHost {
-				t.Errorf("expected location host = %q, got %q", tc.expectedLocationHost, locationURL.Hostname())
+
+			// if we do not require https, and there is no session we expect a sign in page to be
+			// rendered
+			if !tc.cookieSecure && !tc.authenticated {
+				expectedBody := "Sign in with"
+				actualBody, err := ioutil.ReadAll(rw.Body)
+				testutil.Assert(t, err == nil, "could not read http response body: %v", err)
+				if !strings.Contains(string(actualBody), expectedBody) {
+					t.Logf("expected body to contain: %q", expectedBody)
+					t.Logf("          got: %q", string(actualBody))
+					t.Errorf("received invalid body")
+				}
 			}
 
 			stsKey := http.CanonicalHeaderKey("Strict-Transport-Security")
@@ -1316,6 +1357,130 @@ func TestHTTPSRedirect(t *testing.T) {
 				_, found := rw.HeaderMap[stsKey]
 				if found {
 					t.Errorf("%s header should not be present, got %q", stsKey, rw.Header().Get(stsKey))
+				}
+			}
+		})
+	}
+}
+
+func TestSignOutPage(t *testing.T) {
+	testCases := []struct {
+		Name                string
+		ExpectedStatusCode  int
+		cookieSecure        bool
+		mockSessionStore    *sessions.MockSessionStore
+		RevokeError         error
+		expectedSignOutResp signOutResp
+		expectedLocation    string
+	}{
+		{
+			Name: "successful rendered sign out html page",
+			mockSessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					Email:           "test@example.com",
+					RefreshDeadline: time.Now().Add(time.Hour),
+					AccessToken:     "accessToken",
+					RefreshToken:    "refreshToken",
+				},
+			},
+			ExpectedStatusCode: http.StatusOK,
+		},
+		{
+			Name: "successful sign out response",
+			mockSessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					Email:           "test@example.com",
+					RefreshDeadline: time.Now().Add(time.Hour),
+					AccessToken:     "accessToken",
+					RefreshToken:    "refreshToken",
+				},
+			},
+			ExpectedStatusCode: http.StatusOK,
+			expectedSignOutResp: signOutResp{
+				//TODO: standardise on ProviderSlug or ProviderName?
+				ProviderSlug: "",
+				Version:      VERSION,
+				Action:       "http://localhost/oauth/sign_out",
+				Destination:  "example.com",
+				Email:        "test@example.com",
+				SignOutParams: providers.SignOutParams{
+					RedirectURL: "https://example.com/",
+				},
+			},
+		},
+		{ // TODO: Check the redirect URL is what we expect
+			Name: "redirect to sso_auth if no session exists",
+			mockSessionStore: &sessions.MockSessionStore{
+				LoadError: http.ErrNoCookie,
+			},
+			ExpectedStatusCode: http.StatusFound,
+			expectedLocation:   "http://localhost/oauth/sign_out?redirect_uri=https%3A%2F%2Fexample.com%2F&sig=&ts=",
+		},
+		//{
+		//	Name: "cookieSecure sets scheme to https, if no scheme included",
+		//},
+		//{
+		//	Name: "session is cleared before rendering template/redirecting",
+		//},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+
+			// set up the provider
+			providerURL, _ := url.Parse("http://localhost/")
+			testProvider := providers.NewTestProvider(providerURL, "")
+
+			proxy, close := testNewOAuthProxy(t,
+				SetProvider(testProvider),
+				setSessionStore(tc.mockSessionStore),
+				setCookieSecure(tc.cookieSecure),
+			)
+			defer close()
+
+			// if this particular test case tests for a specific response struct,
+			// we replace the proxy template function to avoid having to parse
+			// the html response
+			if tc.expectedSignOutResp != (signOutResp{}) {
+				proxy.templates = &TemplateSpy{
+					executeTemplate: func(rw io.Writer, tpl string, data interface{}) {
+						signOutResp, ok := data.(signOutResp)
+						if !ok {
+							t.Fatalf("Invalid struct used: expected 'signOutResp'")
+						}
+
+						testutil.Equal(t, tc.expectedSignOutResp, signOutResp)
+					},
+				}
+			}
+
+			rw := httptest.NewRecorder()
+			req := httptest.NewRequest("GET", "https://example.com/sign_out", nil)
+
+			proxy.SignOutPage(rw, req)
+
+			testutil.Equal(t, tc.ExpectedStatusCode, rw.Code)
+
+			location := rw.Header().Get("Location")
+			if location != tc.expectedLocation {
+				t.Errorf("expected Location=%q, got Location=%q", tc.expectedLocation, location)
+			}
+
+			// if this particular test case doesn't test for a specific
+			// response struct, and is not a straight redirect,
+			// then make sure that the template is returned as expected.
+			if tc.expectedSignOutResp == (signOutResp{}) && tc.ExpectedStatusCode != 302 {
+				resp := rw.Result()
+				respBytes, err := ioutil.ReadAll(resp.Body)
+				if err != nil {
+					t.Errorf("unable to properly parse response: %v", err)
+				}
+
+				expectedBody := "Sign out of <b>example.com</b>"
+				actualBody := string(respBytes)
+				if !strings.Contains(actualBody, expectedBody) {
+					t.Logf("expected body to contain: %q", expectedBody)
+					t.Logf("                     got: %q", actualBody)
+					t.Errorf("received invalid body")
 				}
 			}
 		})

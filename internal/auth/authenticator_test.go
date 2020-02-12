@@ -121,41 +121,26 @@ type errResponse struct {
 }
 
 func TestSignIn(t *testing.T) {
+
+	const (
+		SaveCookie = iota
+		ClearCookie
+		KeepCookie
+	)
+
 	testCases := []struct {
-		name                   string
-		paramsMap              map[string]string
-		mockCSRFStore          *sessions.MockCSRFStore
-		mockSessionStore       *sessions.MockSessionStore
-		mockAuthCodeCipher     *aead.MockCipher
-		refreshResponse        providerRefreshResponse
-		providerValidToken     bool
-		validEmail             bool
-		expectedSignInPage     bool
-		expectedDestinationURL string
-		expectedCode           int
-		expectedErrorResponse  *errResponse
+		name                  string
+		paramsMap             map[string]string
+		mockCSRFStore         *sessions.MockCSRFStore
+		mockSessionStore      *sessions.MockSessionStore
+		mockAuthCodeCipher    *aead.MockCipher
+		refreshResponse       providerRefreshResponse
+		providerValidToken    bool
+		validEmail            bool
+		expectedCode          int
+		expectedErrorResponse *errResponse
+		cookieExpectation     int // One of: {SaveCookie, ClearCookie, KeepCookie}
 	}{
-		{
-			name: "err no cookie calls proxy oauth redirect, no params map redirects to sign in page",
-			mockSessionStore: &sessions.MockSessionStore{
-				LoadError: http.ErrNoCookie,
-			},
-			expectedSignInPage:     true,
-			expectedDestinationURL: "",
-			expectedCode:           http.StatusOK,
-		},
-		{
-			name: "err no cookie calls proxy oauth redirect, with redirect url redirects to sign in page",
-			mockSessionStore: &sessions.MockSessionStore{
-				LoadError: http.ErrNoCookie,
-			},
-			paramsMap: map[string]string{
-				"redirect_uri": "http://foo.example.com",
-			},
-			expectedSignInPage:     true,
-			expectedDestinationURL: "foo.example.com",
-			expectedCode:           http.StatusOK,
-		},
 		{
 			name: "another error that isn't no cookie",
 			mockSessionStore: &sessions.MockSessionStore{
@@ -166,21 +151,7 @@ func TestSignIn(t *testing.T) {
 			},
 			expectedCode:          http.StatusInternalServerError,
 			expectedErrorResponse: &errResponse{"another error"},
-		},
-		{
-			name: "expired lifetime of session clears session and redirects to sign in",
-			mockSessionStore: &sessions.MockSessionStore{
-				Session: &sessions.SessionState{
-					Email:            "email",
-					AccessToken:      "accesstoken",
-					RefreshToken:     "refresh",
-					LifetimeDeadline: time.Now().Add(-time.Hour),
-					RefreshDeadline:  time.Now().Add(time.Hour),
-				},
-			},
-			expectedSignInPage:     true,
-			expectedDestinationURL: "",
-			expectedCode:           http.StatusOK,
+			cookieExpectation:     ClearCookie,
 		},
 		{
 			name: "refresh period expired, provider error",
@@ -198,6 +169,7 @@ func TestSignIn(t *testing.T) {
 			},
 			expectedCode:          http.StatusInternalServerError,
 			expectedErrorResponse: &errResponse{"provider error"},
+			cookieExpectation:     ClearCookie,
 		},
 		{
 			name: "refresh period expired, not refreshed - unauthorized user",
@@ -213,6 +185,7 @@ func TestSignIn(t *testing.T) {
 			refreshResponse:       providerRefreshResponse{},
 			expectedCode:          http.StatusUnauthorized,
 			expectedErrorResponse: &errResponse{ErrUserNotAuthorized.Error()},
+			cookieExpectation:     ClearCookie,
 		},
 		{
 			name: "refresh period expired, refresh ok, save session error",
@@ -231,6 +204,7 @@ func TestSignIn(t *testing.T) {
 			},
 			expectedCode:          http.StatusInternalServerError,
 			expectedErrorResponse: &errResponse{"save error"},
+			cookieExpectation:     ClearCookie,
 		},
 		{
 			name: "refresh period expired, successful refresh, invalid email",
@@ -248,6 +222,7 @@ func TestSignIn(t *testing.T) {
 			},
 			expectedCode:          http.StatusUnauthorized,
 			expectedErrorResponse: &errResponse{ErrUserNotAuthorized.Error()},
+			cookieExpectation:     KeepCookie,
 		},
 		{
 			name: "valid session state, save session error",
@@ -264,6 +239,7 @@ func TestSignIn(t *testing.T) {
 			providerValidToken:    true,
 			expectedCode:          http.StatusInternalServerError,
 			expectedErrorResponse: &errResponse{"save error"},
+			cookieExpectation:     ClearCookie,
 		},
 		{
 			name: "invalid session state, invalid email",
@@ -278,6 +254,7 @@ func TestSignIn(t *testing.T) {
 			},
 			expectedCode:          http.StatusUnauthorized,
 			expectedErrorResponse: &errResponse{ErrUserNotAuthorized.Error()},
+			cookieExpectation:     ClearCookie,
 		},
 		{
 			name: "refresh period expired, successful refresh, no state in params",
@@ -296,6 +273,7 @@ func TestSignIn(t *testing.T) {
 			validEmail:            true,
 			expectedCode:          http.StatusForbidden,
 			expectedErrorResponse: &errResponse{"no state parameter supplied"},
+			cookieExpectation:     KeepCookie,
 		},
 		{
 			name: "refresh period expired, successful refresh, no redirect in params",
@@ -317,6 +295,7 @@ func TestSignIn(t *testing.T) {
 			validEmail:            true,
 			expectedCode:          http.StatusForbidden,
 			expectedErrorResponse: &errResponse{"no redirect_uri parameter supplied"},
+			cookieExpectation:     KeepCookie,
 		},
 		{
 			name: "refresh period expired, successful refresh, malformed redirect in params",
@@ -339,6 +318,7 @@ func TestSignIn(t *testing.T) {
 			validEmail:            true,
 			expectedCode:          http.StatusBadRequest,
 			expectedErrorResponse: &errResponse{"malformed redirect_uri parameter passed"},
+			cookieExpectation:     KeepCookie,
 		},
 		{
 			name: "refresh period expired, unsuccessful marshal",
@@ -364,6 +344,7 @@ func TestSignIn(t *testing.T) {
 			validEmail:            true,
 			expectedCode:          http.StatusInternalServerError,
 			expectedErrorResponse: &errResponse{"error marshal"},
+			cookieExpectation:     KeepCookie,
 		},
 		{
 			name: "refresh period expired, successful refresh",
@@ -386,8 +367,9 @@ func TestSignIn(t *testing.T) {
 			mockAuthCodeCipher: &aead.MockCipher{
 				MarshalString: "abcdefg",
 			},
-			validEmail:   true,
-			expectedCode: http.StatusFound,
+			validEmail:        true,
+			expectedCode:      http.StatusFound,
+			cookieExpectation: SaveCookie,
 		},
 		{
 			name: "valid session state, successful save",
@@ -409,8 +391,8 @@ func TestSignIn(t *testing.T) {
 			mockAuthCodeCipher: &aead.MockCipher{
 				MarshalString: "abcdefg",
 			},
-
-			expectedCode: http.StatusFound,
+			expectedCode:      http.StatusFound,
+			cookieExpectation: SaveCookie,
 		},
 	}
 
@@ -420,6 +402,7 @@ func TestSignIn(t *testing.T) {
 			auth, err := NewAuthenticator(config,
 				SetValidators([]options.Validator{options.NewMockValidator(tc.validEmail)}),
 				setMockSessionStore(tc.mockSessionStore),
+				setMockCSRFStore(&sessions.MockCSRFStore{}),
 				setMockTempl(),
 				setMockRedirectURL(),
 				setMockAuthCodeCipher(tc.mockAuthCodeCipher, nil),
@@ -449,20 +432,6 @@ func TestSignIn(t *testing.T) {
 			resp := rw.Result()
 			respBytes, err := ioutil.ReadAll(resp.Body)
 			testutil.Ok(t, err)
-			if tc.expectedSignInPage {
-				expectedSignInResp := &signInResp{
-					ProviderName: provider.Data().ProviderName,
-					ProviderSlug: "test",
-					EmailDomains: auth.EmailDomains,
-					Redirect:     u.String(),
-					Destination:  tc.expectedDestinationURL,
-					Version:      VERSION,
-				}
-				actualSignInResp := &signInResp{}
-				err := json.Unmarshal(respBytes, actualSignInResp)
-				testutil.Ok(t, err)
-				testutil.Equal(t, expectedSignInResp, actualSignInResp)
-			}
 
 			if tc.expectedErrorResponse != nil {
 				actualErrorResponse := &errResponse{}
@@ -470,46 +439,30 @@ func TestSignIn(t *testing.T) {
 				testutil.Ok(t, err)
 				testutil.Equal(t, tc.expectedErrorResponse, actualErrorResponse)
 			}
-			// TODO: add a cleared session cookie check for errored stuff
 
+			switch tc.cookieExpectation {
+			case SaveCookie:
+				testutil.NotEqual(t, tc.mockSessionStore.ResponseSession, "")
+			case KeepCookie:
+				testutil.NotEqual(t, tc.mockSessionStore.ResponseSession, "")
+			case ClearCookie:
+				testutil.Equal(t, tc.mockSessionStore.ResponseSession, "")
+			}
 		})
 	}
 }
 
-func TestSignOutPage(t *testing.T) {
+func TestSignOut(t *testing.T) {
 	testCases := []struct {
-		Name                string
-		ExpectedStatusCode  int
-		paramsMap           map[string]string
-		RedirectURI         string
-		Method              string
-		mockSessionStore    *sessions.MockSessionStore
-		RevokeError         error
-		expectedSignOutResp *signOutResp
+		Name               string
+		ExpectedStatusCode int
+		paramsMap          map[string]string
+		RedirectURI        string
+		Method             string
+		mockSessionStore   *sessions.MockSessionStore
+		RevokeError        error
+		SuccessfulRevoke   bool
 	}{
-		{
-			Name: "successful sign out page",
-			paramsMap: map[string]string{
-				"redirect_uri": "http://service.example.com",
-			},
-			mockSessionStore: &sessions.MockSessionStore{
-				Session: &sessions.SessionState{
-					Email:           "test@example.com",
-					RefreshDeadline: time.Now().Add(time.Hour),
-					AccessToken:     "accessToken",
-					RefreshToken:    "refreshToken",
-				},
-			},
-			ExpectedStatusCode: http.StatusOK,
-			Method:             "GET",
-			expectedSignOutResp: &signOutResp{
-				ProviderSlug: "test",
-				Version:      VERSION,
-				Redirect:     "http://service.example.com",
-				Destination:  "service.example.com",
-				Email:        "test@example.com",
-			},
-		},
 		{
 			Name:               "redirect if no session exists on GET",
 			ExpectedStatusCode: http.StatusFound,
@@ -533,14 +486,19 @@ func TestSignOutPage(t *testing.T) {
 			Method: "POST",
 		},
 		{
-			Name:               "sign out page also used to POST",
+			Name:               "clear session and redirect if unexpected error occurs loading session",
 			ExpectedStatusCode: http.StatusFound,
-			mockSessionStore:   &sessions.MockSessionStore{},
-			RedirectURI:        "http://service.example.com",
-			Method:             "POST",
+			SuccessfulRevoke:   true,
+			mockSessionStore: &sessions.MockSessionStore{
+				LoadError: sessions.ErrInvalidSession,
+			},
+			paramsMap: map[string]string{
+				"redirect_uri": "http://service.example.com",
+			},
+			Method: "POST",
 		},
 		{
-			Name:               "sign out page shows error message if revoke fails",
+			Name:               "sign out returns error if revoke fails",
 			ExpectedStatusCode: http.StatusInternalServerError,
 			mockSessionStore: &sessions.MockSessionStore{
 				Session: &sessions.SessionState{
@@ -553,6 +511,23 @@ func TestSignOutPage(t *testing.T) {
 			RevokeError: fmt.Errorf("error revoking"),
 			RedirectURI: "http://service.example.com",
 			Method:      "POST",
+		},
+		{
+			Name:               "successful revoke and redirect on POST",
+			ExpectedStatusCode: http.StatusFound,
+			SuccessfulRevoke:   true,
+			mockSessionStore: &sessions.MockSessionStore{
+				Session: &sessions.SessionState{
+					Email:           "test@exampknafsadle.com",
+					RefreshDeadline: time.Now().Add(time.Hour),
+					AccessToken:     "accessToken",
+					RefreshToken:    "refreshToken",
+				},
+			},
+			paramsMap: map[string]string{
+				"redirect_uri": "http://service.example.com",
+			},
+			Method: "POST",
 		},
 	}
 	for _, tc := range testCases {
@@ -584,16 +559,21 @@ func TestSignOutPage(t *testing.T) {
 			p.SignOut(rw, req)
 
 			testutil.Equal(t, tc.ExpectedStatusCode, rw.Code)
+
 			resp := rw.Result()
 			respBytes, err := ioutil.ReadAll(resp.Body)
-			testutil.Ok(t, err)
-
-			if tc.expectedSignOutResp != nil {
-				actualSignOutResp := &signOutResp{}
-				err := json.Unmarshal(respBytes, actualSignOutResp)
-				testutil.Ok(t, err)
-				testutil.Equal(t, tc.expectedSignOutResp, actualSignOutResp)
+			if tc.RevokeError != nil {
+				if !strings.Contains(string(respBytes), tc.RevokeError.Error()) {
+					t.Logf("expected response to contain: %q", tc.RevokeError.Error())
+					t.Logf("                got response: %q", string(respBytes))
+					t.Error("unexpected response after revoke error")
+				}
 			}
+			if tc.SuccessfulRevoke {
+				testutil.Equal(t, tc.mockSessionStore.ResponseSession, "")
+				//TODO: test the session has been cleared?
+			}
+			testutil.Ok(t, err)
 
 		})
 	}
@@ -1516,9 +1496,9 @@ func TestGlobalHeaders(t *testing.T) {
 func TestOAuthStart(t *testing.T) {
 	testCases := []struct {
 		Name               string
-		RedirectURI        string
 		ProxyRedirectURI   string
 		ExpectedStatusCode int
+		InvalidSignature   bool
 	}{
 		{
 			Name:               "reject requests without a redirect",
@@ -1526,23 +1506,22 @@ func TestOAuthStart(t *testing.T) {
 		},
 		{
 			Name:               "reject requests with a malicious auth",
-			RedirectURI:        "https://auth.evil.com/sign_in",
-			ExpectedStatusCode: http.StatusBadRequest,
-		},
-		{
-			Name:               "reject requests without a nested redirect",
-			RedirectURI:        "https://auth.example.com/sign_in",
+			ProxyRedirectURI:   "https://auth.evil.com/sign_in",
 			ExpectedStatusCode: http.StatusBadRequest,
 		},
 		{
 			Name:               "reject requests with a malicious proxy",
-			RedirectURI:        "https://auth.example.com/sign_in",
 			ProxyRedirectURI:   "https://proxy.evil.com/path/to/badness",
 			ExpectedStatusCode: http.StatusBadRequest,
 		},
 		{
+			Name:               "reject requests with invalid signature",
+			ProxyRedirectURI:   "https://proxy.example.com/oauth/callback",
+			InvalidSignature:   true,
+			ExpectedStatusCode: http.StatusBadRequest,
+		},
+		{
 			Name:               "accept requests with good redirect_uris",
-			RedirectURI:        "https://auth.example.com/sign_in",
 			ProxyRedirectURI:   "https://proxy.example.com/oauth/callback",
 			ExpectedStatusCode: http.StatusFound,
 		},
@@ -1560,20 +1539,19 @@ func TestOAuthStart(t *testing.T) {
 			)
 
 			params := url.Values{}
-			if tc.RedirectURI != "" {
-				redirectURL, _ := url.Parse(tc.RedirectURI)
-				if tc.ProxyRedirectURI != "" {
-					// NOTE: redirect signatures tested in middleware_test.go
-					now := time.Now()
-					sig := redirectURLSignature(tc.ProxyRedirectURI, now, config.ClientConfigs["proxy"].Secret)
-					b64sig := base64.URLEncoding.EncodeToString(sig)
-					redirectParams := url.Values{}
-					redirectParams.Add("redirect_uri", tc.ProxyRedirectURI)
-					redirectParams.Add("sig", b64sig)
-					redirectParams.Add("ts", fmt.Sprint(now.Unix()))
-					redirectURL.RawQuery = redirectParams.Encode()
+			if tc.ProxyRedirectURI != "" {
+				// NOTE: redirect signatures tested in middleware_test.go
+				sig := []byte("")
+				now := time.Now()
+				if tc.InvalidSignature {
+					sig = redirectURLSignature(tc.ProxyRedirectURI, now, "badSecret")
+				} else {
+					sig = redirectURLSignature(tc.ProxyRedirectURI, now, config.ClientConfigs["proxy"].Secret)
 				}
-				params.Add("redirect_uri", redirectURL.String())
+				b64sig := base64.URLEncoding.EncodeToString(sig)
+				params.Add("redirect_uri", tc.ProxyRedirectURI)
+				params.Add("sig", b64sig)
+				params.Add("ts", fmt.Sprint(now.Unix()))
 			}
 
 			req := httptest.NewRequest("GET", "/start?"+params.Encode(), nil)
