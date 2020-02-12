@@ -63,6 +63,6 @@ func logRequestMetrics(req *http.Request, requestDuration time.Duration, status 
 	}
 
 	// TODO: eventually make rates configurable
-	StatsdClient.Timing("request", requestDuration, tags, 1.0)
+	StatsdClient.Timing("request.duration", requestDuration, tags, 1.0)
 
 }

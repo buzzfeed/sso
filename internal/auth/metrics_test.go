@@ -163,7 +163,7 @@ func TestLogRequestMetrics(t *testing.T) {
 
 			client, _, _ := newTestStatsdClient(t)
 			tagString := strings.Join(tc.expectedTags, ",")
-			expectedPacketString := fmt.Sprintf("sso_auth.request:5.000000|ms|#%s", tagString)
+			expectedPacketString := fmt.Sprintf("sso_auth.request.duration:5.000000|ms|#%s", tagString)
 			// create a request with a url
 			// check metrics
 			req := httptest.NewRequest(tc.method, tc.requestURL, nil)
