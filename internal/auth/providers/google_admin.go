@@ -7,11 +7,12 @@ import (
 	"time"
 
 	"github.com/buzzfeed/sso/internal/auth/circuit"
+	"github.com/buzzfeed/sso/internal/pkg/groups"
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
-	"google.golang.org/api/admin/directory/v1"
+	admin "google.golang.org/api/admin/directory/v1"
 	"google.golang.org/api/googleapi"
 
 	"github.com/datadog/datadog-go/statsd"
@@ -96,8 +97,8 @@ func (gs *GoogleAdminService) listMemberships(groupName string, maxDepth, curren
 					}
 					err = ErrBadRequest
 				case 404:
-					logger.WithUserGroup(groupName).Warn("could not list memberships, user group not found")
-					err = ErrGroupNotFound
+					logger.WithUserGroup(groupName).Warn("could not list memberships, user group not found; removing group from cache")
+					err = groups.ErrGroupNotFound
 				case 429:
 					err = ErrRateLimitExceeded
 				case 503:

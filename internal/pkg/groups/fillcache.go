@@ -1,6 +1,7 @@
 package groups
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -13,6 +14,8 @@ import (
 const (
 	defaultMaxJitter = 50 * time.Millisecond
 )
+
+var ErrGroupNotFound = errors.New("Group not found while running fill func")
 
 // MemberSetCache represents a cache of members of a set
 type MemberSetCache interface {
@@ -92,6 +95,10 @@ func (c *FillCache) Update(group string) bool {
 	if err == nil {
 		c.cache[group] = val
 		return true
+	}
+
+	if err == ErrGroupNotFound {
+		delete(c.cache, group)
 	}
 
 	c.StatsdClient.Incr("groups_cache.error",

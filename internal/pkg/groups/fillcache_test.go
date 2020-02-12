@@ -29,15 +29,57 @@ func TestFillCacheUpdate(t *testing.T) {
 			fillError: fmt.Errorf("fill error"),
 			updated:   false,
 		},
+		{
+			name:      "group removed if it can't be found",
+			members:   MemberSet{"a": {}, "b": {}},
+			fillError: ErrGroupNotFound,
+			updated:   false,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			fillCache := NewFillCache(testFillFunc(tc.members, tc.fillError), time.Hour)
 			defer fillCache.Stop()
-			ok := fillCache.Update("groupKey")
-			if tc.updated != ok {
+			cacheKey := "groupKeyA"
+
+			// ("group removed if it can't be found")
+			// In order to test a group is removed from the cache if it can't be found, we
+			// fill the cache, check the key is present, then update the cache before checking
+			// the key has been removed
+			if tc.fillError == ErrGroupNotFound {
+				temporaryCacheKey := "groupKeyB"
+				// add two cache keys, one of which should be deleted, one should not
+				fillCache.cache[cacheKey] = tc.members
+				fillCache.cache[temporaryCacheKey] = tc.members
+
+				if _, ok := fillCache.Get(temporaryCacheKey); !ok {
+					t.Errorf("cache should contain %q, but it does not", temporaryCacheKey)
+				}
+
+				// this should error with `ErrGroupNotFound`, causing the key to be removed
+				if ok := fillCache.Update(temporaryCacheKey); ok != tc.updated {
+					t.Errorf("expected updated to be %v but was %v", tc.updated, ok)
+				}
+
+				if val, ok := fillCache.Get(temporaryCacheKey); ok {
+					t.Errorf("expected group to not be present in cache, but found %q", val)
+				}
+			}
+
+			ok := fillCache.Update(cacheKey)
+			if ok != tc.updated {
 				t.Errorf("expected updated to be %v but was %v", tc.updated, ok)
 			}
+
+			// as well as checking the key is actually in the cache when it should be, this also tests that
+			// unrelated groups aren't deleted within the "group removed if it can't be found" test
+			if tc.updated == true || tc.fillError == ErrGroupNotFound {
+				_, ok = fillCache.Get(cacheKey)
+				if ok != tc.updated {
+					t.Errorf("cache should contain %q, but it does not", cacheKey)
+				}
+			}
+
 		})
 	}
 }
