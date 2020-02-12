@@ -204,7 +204,7 @@ func (p *GoogleProvider) googleRequest(method, endpoint string, params url.Value
 	if resp.StatusCode != http.StatusOK {
 		p.StatsdClient.Incr("provider.error", tags, 1.0)
 		logger.WithHTTPStatus(resp.StatusCode).WithEndpoint(stripToken(endpoint)).WithResponseBody(
-			respBody).Info()
+			respBody).Error("non-200 response code returned from request to Google")
 		switch resp.StatusCode {
 		case 400:
 			var response struct {
