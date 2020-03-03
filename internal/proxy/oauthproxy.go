@@ -18,6 +18,7 @@ import (
 	"github.com/buzzfeed/sso/internal/proxy/providers"
 
 	"github.com/datadog/datadog-go/statsd"
+	"github.com/gorilla/mux"
 )
 
 // HMACSignatureHeader is the header name where the signed request header is stored.
@@ -229,14 +230,15 @@ func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthPr
 
 // Handler returns a http handler for an OAuthProxy
 func (p *OAuthProxy) Handler() http.Handler {
-	mux := http.NewServeMux()
+	mux := mux.NewRouter()
+	mux.UseEncodedPath()
 	mux.HandleFunc("/favicon.ico", p.Favicon)
 	mux.HandleFunc("/robots.txt", p.RobotsTxt)
 	mux.HandleFunc("/oauth2/v1/certs", p.Certs)
 	mux.HandleFunc("/oauth2/sign_out", p.SignOut)
 	mux.HandleFunc("/oauth2/callback", p.OAuthCallback)
 	mux.HandleFunc("/oauth2/auth", p.AuthenticateOnly)
-	mux.HandleFunc("/", p.Proxy)
+	mux.PathPrefix("/").HandlerFunc(p.Proxy)
 
 	// Global middleware, which will be applied to each request in reverse
 	// order as applied here (i.e., we want to validate the host _first_ when

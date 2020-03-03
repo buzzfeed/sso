@@ -11,6 +11,8 @@ ENV GO111MODULE=on
 
 WORKDIR /go/src/github.com/buzzfeed/sso
 
+COPY ./go.mod ./go.sum ./
+RUN go mod download
 COPY . .
 RUN cd cmd/sso-auth && go build -mod=readonly -o /bin/sso-auth
 RUN cd cmd/sso-proxy && go build -mod=readonly -o /bin/sso-proxy
