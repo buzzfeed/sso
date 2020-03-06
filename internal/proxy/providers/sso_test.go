@@ -144,11 +144,11 @@ func TestSSOProviderGroups(t *testing.T) {
 		ProfileStatus    int
 	}{
 		{
-			Name:             "invalid when no group id set",
+			Name:             "valid when no group id set",
 			Email:            "michael.bland@gsa.gov",
 			Groups:           []string{},
 			ProxyGroupIds:    []string{},
-			ExpectedValid:    false,
+			ExpectedValid:    true,
 			ExpectedInGroups: []string{},
 			ExpectError:      nil,
 		},
