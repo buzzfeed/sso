@@ -331,6 +331,39 @@ func TestSkipAuthRequest(t *testing.T) {
 	}
 }
 
+func TestEncodedPath(t *testing.T) {
+	t.Run("encoded path-component is perfectly forwarded", func(t *testing.T) {
+		var seen string
+		backend := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			seen = r.RequestURI
+			w.WriteHeader(http.StatusOK)
+		})
+
+		config := &UpstreamConfig{
+			SkipAuthCompiledRegex: []*regexp.Regexp{
+				regexp.MustCompile(`^\/allow/.*$`),
+			},
+		}
+
+		proxy, close := testNewOAuthProxy(t,
+			setSkipAuthPreflight(true),
+			SetProxyHandler(backend),
+			SetUpstreamConfig(config),
+			setSessionStore(&sessions.MockSessionStore{LoadError: http.ErrNoCookie}),
+		)
+		defer close()
+
+		rw := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "https://localhost/allow/http:%2F%2Fexample.com%2F/", nil)
+
+		proxy.Handler().ServeHTTP(rw, req)
+
+		// If path-components are not perfectly-forwarded, this will be a 301 instead of a 200.
+		testutil.Equal(t, http.StatusOK, rw.Code)
+		testutil.Equal(t, "https://localhost/allow/http:%2F%2Fexample.com%2F/", seen)
+	})
+}
+
 func TestHeadersSentToUpstreams(t *testing.T) {
 	testCases := []struct {
 		name                 string

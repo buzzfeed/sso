@@ -42,6 +42,12 @@ func TestStaticFiles(t *testing.T) {
 			uri:            "http://localhost/static/../config.yml",
 			expectedStatus: http.StatusMovedPermanently,
 		},
+		{
+			// this should NOT result in a 301, since escaped-paths are propagated as-is.
+			name:           "no directory escape",
+			uri:            "http://localhost/static/https:%2F%2Fexample.com",
+			expectedStatus: http.StatusNotFound,
+		},
 	}
 
 	for _, tc := range testCases {

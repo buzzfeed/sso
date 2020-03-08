@@ -9,6 +9,7 @@ import (
 	"github.com/buzzfeed/sso/internal/pkg/options"
 
 	"github.com/datadog/datadog-go/statsd"
+	"github.com/gorilla/mux"
 )
 
 type AuthenticatorMux struct {
@@ -26,7 +27,8 @@ func NewAuthenticatorMux(config Configuration, statsdClient *statsd.Client) (*Au
 	}
 
 	authenticators := []*Authenticator{}
-	idpMux := http.NewServeMux()
+	idpMux := mux.NewRouter()
+	idpMux.UseEncodedPath()
 
 	for slug, providerConfig := range config.ProviderConfigs {
 		idp, err := newProvider(providerConfig, config.SessionConfig)
@@ -51,10 +53,8 @@ func NewAuthenticatorMux(config Configuration, statsdClient *statsd.Client) (*Au
 		authenticators = append(authenticators, authenticator)
 
 		// setup our mux with the idpslug as the first part of the path
-		idpMux.Handle(
-			fmt.Sprintf("/%s/", idpSlug),
-			http.StripPrefix(fmt.Sprintf("/%s", idpSlug), authenticator.ServeMux),
-		)
+		providerPath := fmt.Sprintf("/%s", idpSlug)
+		idpMux.PathPrefix(providerPath).Handler(http.StripPrefix(providerPath, authenticator.ServeMux))
 	}
 
 	// load static files
@@ -62,7 +62,7 @@ func NewAuthenticatorMux(config Configuration, statsdClient *statsd.Client) (*Au
 	if err != nil {
 		logger.Fatal(err)
 	}
-	idpMux.Handle("/static/", http.StripPrefix("/static/", fsHandler))
+	idpMux.PathPrefix("/static/").Handler(http.StripPrefix("/static/", fsHandler))
 	idpMux.HandleFunc("/robots.txt", RobotsTxt)
 
 	hostRouter := hostmux.NewRouter()
