@@ -25,9 +25,10 @@ type SessionState struct {
 	ValidDeadline    time.Time `json:"valid_deadline"`
 	GracePeriodStart time.Time `json:"grace_period_start"`
 
-	Email  string   `json:"email"`
-	User   string   `json:"user"`
-	Groups []string `json:"groups"`
+	Email              string   `json:"email"`
+	User               string   `json:"user"`
+	Groups             []string `json:"groups"`
+	AuthorizedUpstream string   `json:"authorized_upstream"`
 }
 
 // LifetimePeriodExpired returns true if the lifetime has expired
@@ -43,6 +44,14 @@ func (s *SessionState) RefreshPeriodExpired() bool {
 // ValidationPeriodExpired returns true if the validation period has expired
 func (s *SessionState) ValidationPeriodExpired() bool {
 	return isExpired(s.ValidDeadline)
+}
+
+// IsWithinGracePeriod returns true if the session is still within the grace period
+func (s *SessionState) IsWithinGracePeriod(gracePeriodTTL time.Duration) bool {
+	if s.GracePeriodStart.IsZero() {
+		s.GracePeriodStart = time.Now()
+	}
+	return s.GracePeriodStart.Add(gracePeriodTTL).After(time.Now())
 }
 
 func isExpired(t time.Time) bool {

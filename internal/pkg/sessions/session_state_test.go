@@ -55,20 +55,29 @@ func TestSessionStateExpirations(t *testing.T) {
 		LifetimeDeadline: time.Now().Add(-1 * time.Hour),
 		RefreshDeadline:  time.Now().Add(-1 * time.Hour),
 		ValidDeadline:    time.Now().Add(-1 * time.Minute),
+		GracePeriodStart: time.Now().Add(-2 * time.Minute),
 
 		Email: "user@domain.com",
 		User:  "user",
 	}
 
 	if !session.LifetimePeriodExpired() {
-		t.Errorf("expcted lifetime period to be expired")
+		t.Errorf("expected lifetime period to be expired")
 	}
 
 	if !session.RefreshPeriodExpired() {
-		t.Errorf("expcted lifetime period to be expired")
+		t.Errorf("expected lifetime period to be expired")
 	}
 
 	if !session.ValidationPeriodExpired() {
-		t.Errorf("expcted lifetime period to be expired")
+		t.Errorf("expected lifetime period to be expired")
+	}
+
+	if session.IsWithinGracePeriod(1 * time.Minute) {
+		t.Errorf("expected session to be outside of grace period")
+	}
+
+	if !session.IsWithinGracePeriod(3 * time.Minute) {
+		t.Errorf("expected session to be inside of grace period")
 	}
 }

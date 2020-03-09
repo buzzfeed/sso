@@ -13,8 +13,8 @@ import (
 
 	"github.com/buzzfeed/sso/internal/pkg/aead"
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
-	"github.com/buzzfeed/sso/internal/pkg/options"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
+	"github.com/buzzfeed/sso/internal/pkg/validators"
 	"github.com/buzzfeed/sso/internal/proxy/providers"
 
 	"github.com/datadog/datadog-go/statsd"
@@ -40,9 +40,10 @@ var SignatureHeaders = []string{
 
 // Errors
 var (
-	ErrLifetimeExpired       = errors.New("user lifetime expired")
-	ErrUserNotAuthorized     = errors.New("user not authorized")
-	ErrWrongIdentityProvider = errors.New("user authenticated with wrong identity provider")
+	ErrLifetimeExpired               = errors.New("user lifetime expired")
+	ErrUserNotAuthorized             = errors.New("user not authorized")
+	ErrWrongIdentityProvider         = errors.New("user authenticated with wrong identity provider")
+	ErrUnauthorizedUpstreamRequested = errors.New("user session authorized with different upstream")
 )
 
 type ErrOAuthProxyMisconfigured struct {
@@ -58,7 +59,7 @@ const statusInvalidHost = 421
 // OAuthProxy stores all the information associated with proxying the request.
 type OAuthProxy struct {
 	cookieSecure bool
-	Validators   []options.Validator
+	Validators   []validators.Validator
 	redirectURL  *url.URL // the url to receive requests at
 	templates    *template.Template
 
@@ -151,7 +152,7 @@ func SetProxyHandler(handler http.Handler) func(*OAuthProxy) error {
 }
 
 // SetValidator sets the email validator as a functional option
-func SetValidators(validators []options.Validator) func(*OAuthProxy) error {
+func SetValidators(validators []validators.Validator) func(*OAuthProxy) error {
 	return func(op *OAuthProxy) error {
 		op.Validators = validators
 		return nil
@@ -177,7 +178,7 @@ func NewOAuthProxy(opts *Options, optFuncs ...func(*OAuthProxy) error) (*OAuthPr
 	p := &OAuthProxy{
 		cookieSecure: opts.CookieSecure,
 		StatsdClient: opts.StatsdClient,
-		Validators:   []options.Validator{},
+		Validators:   []validators.Validator{},
 
 		redirectURL: &url.URL{Path: "/oauth2/callback"},
 		templates:   getTemplates(),
@@ -361,7 +362,7 @@ func (p *OAuthProxy) ErrorPage(rw http.ResponseWriter, req *http.Request, code i
 	p.templates.ExecuteTemplate(rw, "error.html", t)
 }
 
-// IsWhitelistedRequest cheks that proxy host exists and checks the SkipAuthRegex
+// IsWhitelistedRequest checks that proxy host exists and checks the SkipAuthRegex
 func (p *OAuthProxy) IsWhitelistedRequest(req *http.Request) bool {
 	if p.skipAuthPreflight && req.Method == "OPTIONS" {
 		return true
@@ -375,6 +376,26 @@ func (p *OAuthProxy) IsWhitelistedRequest(req *http.Request) bool {
 	}
 
 	return false
+}
+
+// runValidatorsWithGracePeriod runs all validators and upon finding errors, checks to see if the
+// auth provider is explicity denying authentication or if it's merely unavailable. If it's unavailable,
+// we check whether the session is within the grace period or not to determine the specific error we return.
+func (p *OAuthProxy) runValidatorsWithGracePeriod(session *sessions.SessionState) (err error) {
+	logger := log.NewLogEntry()
+	errors := validators.RunValidators(p.Validators, session)
+	if len(errors) == len(p.Validators) {
+		for _, err := range errors {
+			// Check to see if the auth provider is explicity denying authentication, or if it is merely unavailable.
+			if err == providers.ErrAuthProviderUnavailable && session.IsWithinGracePeriod(p.provider.Data().GracePeriodTTL) {
+				return err
+			}
+		}
+		logger.WithUser(session.Email).Error(errors,
+			"no longer authorized after validation period")
+		return ErrUserNotAuthorized
+	}
+	return nil
 }
 
 func (p *OAuthProxy) isXHR(req *http.Request) bool {
@@ -571,25 +592,27 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 	//
 	// set cookie, or deny
 
-	errors := options.RunValidators(p.Validators, session)
+	errors := validators.RunValidators(p.Validators, session)
 	if len(errors) == len(p.Validators) {
 		tags = append(tags, "error:validation_failed")
 		p.StatsdClient.Incr("application_error", tags, 1.0)
 		logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(
 			fmt.Sprintf("permission denied: unauthorized: %q", errors))
 
-		formattedErrors := make([]string, 0, len(errors))
-		for _, err := range errors {
-			formattedErrors = append(formattedErrors, err.Error())
-		}
-		errorMsg := fmt.Sprintf("We ran into some issues while validating your account: \"%s\"",
-			strings.Join(formattedErrors, ", "))
-		p.ErrorPage(rw, req, http.StatusForbidden, "Permission Denied", errorMsg)
+		p.ErrorPage(rw, req, http.StatusForbidden, "Permission Denied",
+			fmt.Sprintf("We ran into some issues while validating your account: %q", errors))
 		return
 	}
 
 	logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).WithInGroups(session.Groups).Info(
 		fmt.Sprintf("oauth callback: user validated "))
+
+	// We add the request host into the session to allow us to validate that each request has
+	// been authorized for the upstream it's requesting.
+	// e.g. if a request is authenticated while trying to reach 'foo' upstream, it should not
+	// automatically be seen as authorized with 'bar' upstream. Each upstream may set different
+	// validators, so the request should be reauthenticated.
+	session.AuthorizedUpstream = req.Host
 
 	// We store the session in a cookie and redirect the user back to the application
 	err = p.sessionStore.SaveSession(rw, req, session)
@@ -655,6 +678,13 @@ func (p *OAuthProxy) Proxy(rw http.ResponseWriter, req *http.Request) {
 			// the user has a stale sesssion.
 			p.OAuthStart(rw, req, tags)
 			return
+		case ErrUnauthorizedUpstreamRequested:
+			// The users session has been authorised for use with a different upstream than the one
+			// that is being requested, so we trigger the start of the oauth flow.
+			// This exists primarily to implement some form of grace period while this additional session
+			// check is being introduced.
+			p.OAuthStart(rw, req, tags)
+			return
 		case sessions.ErrInvalidSession:
 			// The user session is invalid and we can't decode it.
 			// This can happen for a variety of reasons but the most common non-malicious
@@ -695,8 +725,6 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 	remoteAddr := getRemoteAddr(req)
 	tags := []string{"action:authenticate"}
 
-	allowedGroups := p.upstreamConfig.AllowedGroups
-
 	// Clear the session cookie if anything goes wrong.
 	defer func() {
 		if err != nil {
@@ -707,7 +735,7 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 	session, err := p.sessionStore.LoadSession(req)
 	if err != nil {
 		// We loaded a cookie but it wasn't valid, clear it, and reject the request
-		logger.Error(err, "error authenticating user")
+		logger.Error(err, "invalid session loaded")
 		return err
 	}
 
@@ -720,6 +748,15 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 		return ErrWrongIdentityProvider
 	}
 
+	// check that the user has been authorized against the requested upstream
+	// this is primarily to combat against a user authorizing with one upstream and attempting to use
+	// the session cookie for a different upstream.
+	if req.Host != session.AuthorizedUpstream {
+		logger.WithProxyHost(req.Host).WithAuthorizedUpstream(session.AuthorizedUpstream).WithUser(session.Email).Warn(
+			"session authorized against different upstream; restarting authentication")
+		return ErrUnauthorizedUpstreamRequested
+	}
+
 	// Lifetime period is the entire duration in which the session is valid.
 	// This should be set to something like 14 to 30 days.
 	if session.LifetimePeriodExpired() {
@@ -730,20 +767,35 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 	} else if session.RefreshPeriodExpired() {
 		// Refresh period is the period in which the access token is valid. This is ultimately
 		// controlled by the upstream provider and tends to be around 1 hour.
-		ok, err := p.provider.RefreshSession(session, allowedGroups)
+		// If it has expired we:
+		// - attempt to refresh the session
+		// - run email domain, email address, and email group validations against the session (if defined).
+
+		ok, err := p.provider.RefreshSessionToken(session)
 		// We failed to refresh the session successfully
 		// clear the cookie and reject the request
 		if err != nil {
 			logger.WithUser(session.Email).Error(err, "refreshing session failed")
 			return err
 		}
-
 		if !ok {
 			// User is not authorized after refresh
 			// clear the cookie and reject the request
 			logger.WithUser(session.Email).Info(
 				"not authorized after refreshing session")
 			return ErrUserNotAuthorized
+		}
+
+		err = p.runValidatorsWithGracePeriod(session)
+		if err != nil {
+			switch err {
+			case providers.ErrAuthProviderUnavailable:
+				tags = append(tags, "action:refresh_session", "error:validation_failed")
+				p.StatsdClient.Incr("provider_error_fallback", tags, 1.0)
+				session.RefreshDeadline = sessions.ExtendDeadline(p.provider.Data().SessionValidTTL)
+			default:
+				return ErrUserNotAuthorized
+			}
 		}
 
 		err = p.sessionStore.SaveSession(rw, req, session)
@@ -759,9 +811,13 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 	} else if session.ValidationPeriodExpired() {
 		// Validation period has expired, this is the shortest interval we use to
 		// check for valid requests. This should be set to something like a minute.
-		// This calls up the provider chain to validate this user is still active
-		// and hasn't been de-authorized.
-		ok := p.provider.ValidateSessionState(session, allowedGroups)
+		// In this case we:
+		// - call up the provider chain to validate this user is still active and hasn't been de-authorized.
+		// - run any defined email domain, email address, and email group validators against the session
+
+		//TODO: change this to match the RefreshSessionToken method
+		// (https://github.com/buzzfeed/sso/pull/275#discussion_r366448883)
+		ok := p.provider.ValidateSessionToken(session)
 		if !ok {
 			// This user is now no longer authorized, or we failed to
 			// validate the user.
@@ -769,6 +825,18 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 			logger.WithUser(session.Email).Error(
 				err, "no longer authorized after validation period")
 			return ErrUserNotAuthorized
+		}
+
+		err = p.runValidatorsWithGracePeriod(session)
+		if err != nil {
+			switch err {
+			case providers.ErrAuthProviderUnavailable:
+				tags = append(tags, "action:validate_session", "error:validation_failed")
+				p.StatsdClient.Incr("provider_error_fallback", tags, 1.0)
+				session.ValidDeadline = sessions.ExtendDeadline(p.provider.Data().SessionValidTTL)
+			default:
+				return ErrUserNotAuthorized
+			}
 		}
 
 		err = p.sessionStore.SaveSession(rw, req, session)
@@ -780,25 +848,6 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 			logger.WithUser(session.Email).Error(
 				err, "could not save validated session")
 			return err
-		}
-	}
-
-	// We revalidate group membership whenever the session is refreshed or revalidated
-	// just above in the call to ValidateSessionState and RefreshSession.
-	// To reduce strain on upstream identity providers we only revalidate email domains and
-	// addresses on each request here.
-	for _, v := range p.Validators {
-		_, EmailGroupValidator := v.(options.EmailGroupValidator)
-
-		if !EmailGroupValidator {
-			err := v.Validate(session)
-			if err != nil {
-				tags = append(tags, "error:validation_failed")
-				p.StatsdClient.Incr("application_error", tags, 1.0)
-				logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(
-					fmt.Sprintf("permission denied: unauthorized: %q", err))
-				return ErrUserNotAuthorized
-			}
 		}
 	}
 

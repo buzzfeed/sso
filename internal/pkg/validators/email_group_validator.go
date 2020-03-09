@@ -1,7 +1,9 @@
-package options
+package validators
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	"github.com/buzzfeed/sso/internal/proxy/providers"
@@ -10,7 +12,7 @@ import (
 var (
 	_ Validator = EmailGroupValidator{}
 
-	// These error message should be formatted in such a way that is appropriate
+	// These error messages should be formatted in such a way that is appropriate
 	// for display to the end user.
 	ErrGroupMembership = errors.New("Invalid Group Membership")
 )
@@ -42,7 +44,7 @@ func (v EmailGroupValidator) Validate(session *sessions.SessionState) error {
 func (v EmailGroupValidator) validate(session *sessions.SessionState) error {
 	matchedGroups, valid, err := v.Provider.ValidateGroup(session.Email, v.AllowedGroups, session.AccessToken)
 	if err != nil {
-		return ErrValidationError
+		return err
 	}
 
 	if valid {
@@ -50,5 +52,5 @@ func (v EmailGroupValidator) validate(session *sessions.SessionState) error {
 		return nil
 	}
 
-	return ErrGroupMembership
+	return fmt.Errorf("%v - Allowed Groups: %s", ErrGroupMembership, strings.Join(v.AllowedGroups, ", "))
 }
