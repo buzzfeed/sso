@@ -319,7 +319,7 @@ func TestSSOProviderValidateSessionState(t *testing.T) {
 			ProviderResponse: http.StatusOK,
 			Groups:           []string{},
 			ProxyGroupIds:    []string{},
-			ExpectedValid:    false,
+			ExpectedValid:    true,
 		},
 		{
 			Name: "invalid when response is is not 200",
