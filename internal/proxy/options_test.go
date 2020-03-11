@@ -16,7 +16,8 @@ func testOptions() *Options {
 	o.CookieSecret = testEncodedCookieSecret
 	o.ClientID = "bazquux"
 	o.ClientSecret = "xyzzyplugh"
-	o.DefaultAllowedEmailDomains = []string{"*"}
+	o.AllowNoValidators = true
+	//o.DefaultAllowedEmailDomains = []string{"*"}
 	o.DefaultProviderSlug = "idp"
 	o.ProviderURLString = "https://www.example.com"
 	o.UpstreamConfigsFile = "testdata/upstream_configs.yml"
@@ -50,6 +51,7 @@ func TestNewOptions(t *testing.T) {
 	err := o.Validate()
 	testutil.NotEqual(t, nil, err)
 
+	//TODO: invalid setting: wildcards used in validators not tested
 	expected := errorMsg([]string{
 		"missing setting: cluster",
 		"missing setting: provider-url",
@@ -59,7 +61,7 @@ func TestNewOptions(t *testing.T) {
 		"missing setting: client-secret",
 		"missing setting: statsd-host",
 		"missing setting: statsd-port",
-		"missing setting: ALLOWED_EMAIL_DOMAINS, ALLOWED_EMAIL_ADDRESSES, ALLOWED_GROUPS default in environment or override in upstream config in the following upstreams: [testService]",
+		"missing setting: ALLOWED_EMAIL_DOMAINS, ALLOWED_EMAIL_ADDRESSES, ALLOWED_GROUPS default in environment or override in upstream config. \n\t\t\t\tIf no extra validators are required, set 'ALLOW_NO_VALIDATORS' to 'true'. Affected usptreams: [testService]",
 		"Invalid value for COOKIE_SECRET; must decode to 32 or 64 bytes, but decoded to 0 bytes",
 	})
 	testutil.Equal(t, expected, err.Error())
