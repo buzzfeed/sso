@@ -25,8 +25,6 @@ type EmailAddressValidator struct {
 // - is non-empty
 // - matches one of the originally passed in email addresses
 //   (case insensitive)
-// - if the originally passed in list of emails consists only of "*", then all emails
-//   are considered valid based on their domain.
 // If valid, nil is returned in place of an error.
 func NewEmailAddressValidator(allowedEmails []string) EmailAddressValidator {
 	var emailAddresses []string
@@ -48,10 +46,6 @@ func (v EmailAddressValidator) Validate(session *sessions.SessionState) error {
 
 	if len(v.AllowedEmails) == 0 {
 		return ErrEmailAddressDenied
-	}
-
-	if len(v.AllowedEmails) == 1 && v.AllowedEmails[0] == "*" {
-		return nil
 	}
 
 	err := v.validate(session)

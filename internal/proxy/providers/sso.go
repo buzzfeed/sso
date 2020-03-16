@@ -181,6 +181,9 @@ func (p *SSOProvider) ValidateGroup(email string, allowedGroups []string, access
 
 	logger.WithUser(email).WithAllowedGroups(allowedGroups).Info("validating groups")
 	inGroups := []string{}
+	if len(allowedGroups) == 0 {
+		return inGroups, true, nil
+	}
 
 	userGroups, err := p.UserGroups(email, allowedGroups, accessToken)
 	if err != nil {

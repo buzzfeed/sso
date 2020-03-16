@@ -64,6 +64,7 @@ type Options struct {
 	DefaultAllowedEmailDomains   []string `envconfig:"DEFAULT_ALLOWED_EMAIL_DOMAINS"`
 	DefaultAllowedEmailAddresses []string `envconfig:"DEFAULT_ALLOWED_EMAIL_ADDRESSES"`
 	DefaultAllowedGroups         []string `envconfig:"DEFAULT_ALLOWED_GROUPS"`
+	AllowNoValidators            bool     `envconfig:"ALLOW_NO_VALIDATORS" default:"false"`
 
 	ClientID     string `envconfig:"CLIENT_ID"`
 	ClientSecret string `envconfig:"CLIENT_SECRET"`
@@ -196,20 +197,42 @@ func (o *Options) Validate() error {
 	}
 
 	if o.upstreamConfigs != nil {
-		invalidUpstreams := []string{}
+		noValidatorsDefined := []string{}
+		wildcardUsed := []string{}
 		for _, uc := range o.upstreamConfigs {
 			if uc.Timeout > o.TCPWriteTimeout {
 				o.TCPWriteTimeout = uc.Timeout
 			}
 
-			if len(uc.AllowedEmailDomains) == 0 && len(uc.AllowedEmailAddresses) == 0 && len(uc.AllowedGroups) == 0 {
-				invalidUpstreams = append(invalidUpstreams, uc.Service)
+			// If we don't explicity accept 'no validators' then ensure defined validator values aren't len(0) or len(1) with a wildcard.
+			// Not accepting wildcards is a new restriction, so we largely test against this for now to raise awareness and avoid unexpected outcomes.
+			if !o.AllowNoValidators {
+				if len(uc.AllowedEmailDomains) == 0 && len(uc.AllowedEmailAddresses) == 0 && len(uc.AllowedGroups) == 0 {
+					noValidatorsDefined = append(noValidatorsDefined, uc.Service)
+				} else {
+					validatorValues := make(map[string][]string)
+					validatorValues["Addresses"] = uc.AllowedEmailAddresses
+					validatorValues["Domains"] = uc.AllowedEmailDomains
+					validatorValues["Groups"] = uc.AllowedGroups
+					for _, v := range validatorValues {
+						if len(v) != 0 && v[0] == "*" {
+							wildcardUsed = append(wildcardUsed, uc.Service)
+							break
+						}
+					}
+				}
 			}
 		}
-		if len(invalidUpstreams) != 0 {
+		if len(noValidatorsDefined) != 0 {
 			msgs = append(msgs, fmt.Sprintf(
-				"missing setting: ALLOWED_EMAIL_DOMAINS, ALLOWED_EMAIL_ADDRESSES, ALLOWED_GROUPS default in environment or override in upstream config in the following upstreams: %v",
-				invalidUpstreams))
+				`missing setting: ALLOWED_EMAIL_DOMAINS, ALLOWED_EMAIL_ADDRESSES, ALLOWED_GROUPS default in environment or override in upstream config.
+				If no extra validators are required, set 'ALLOW_NO_VALIDATORS' to 'true'. Affected usptreams: %v`,
+				noValidatorsDefined))
+		}
+		if len(wildcardUsed) != 0 {
+			msgs = append(msgs, fmt.Sprintf(
+				"invalid setting: a wildcard cannot be used within validators. If no extra validators are required, set 'ALLOW_NO_VALIDATORS' to 'true'. Affected upstreams: %v",
+				wildcardUsed))
 		}
 	}
 

@@ -95,28 +95,28 @@ func TestEmailDomainValidatorValidator(t *testing.T) {
 			expectedErr: nil,
 		},
 		{
-			name:           "single wildcard allows all",
+			name:           "single wildcard is denied",
 			allowedDomains: []string{"*"},
 			session: &sessions.SessionState{
 				Email: "foo@example.com",
 			},
-			expectedErr: nil,
+			expectedErr: ErrEmailDomainDenied,
 		},
 		{
-			name:           "single wildcard allows all",
-			allowedDomains: []string{"*"},
-			session: &sessions.SessionState{
-				Email: "bar@gmail.com",
-			},
-			expectedErr: nil,
-		},
-		{
-			name:           "wildcard is ignored if other domains are included",
+			name:           "wildcard is ignored if other domains are included are invalid",
 			allowedDomains: []string{"*", "example.com"},
 			session: &sessions.SessionState{
 				Email: "foo@gmal.com",
 			},
 			expectedErr: ErrEmailDomainDenied,
+		},
+		{
+			name:           "wildcard is ignored if other domains are included are valid",
+			allowedDomains: []string{"*", "example.com"},
+			session: &sessions.SessionState{
+				Email: "foo@example.com",
+			},
+			expectedErr: nil,
 		},
 		{
 			name:           "empty email rejected",

@@ -16,7 +16,7 @@ func testOptions() *Options {
 	o.CookieSecret = testEncodedCookieSecret
 	o.ClientID = "bazquux"
 	o.ClientSecret = "xyzzyplugh"
-	o.DefaultAllowedEmailDomains = []string{"*"}
+	o.AllowNoValidators = true
 	o.DefaultProviderSlug = "idp"
 	o.ProviderURLString = "https://www.example.com"
 	o.UpstreamConfigsFile = "testdata/upstream_configs.yml"
@@ -50,6 +50,7 @@ func TestNewOptions(t *testing.T) {
 	err := o.Validate()
 	testutil.NotEqual(t, nil, err)
 
+	//TODO: invalid setting: wildcards used in validators not tested
 	expected := errorMsg([]string{
 		"missing setting: cluster",
 		"missing setting: provider-url",
@@ -59,7 +60,7 @@ func TestNewOptions(t *testing.T) {
 		"missing setting: client-secret",
 		"missing setting: statsd-host",
 		"missing setting: statsd-port",
-		"missing setting: ALLOWED_EMAIL_DOMAINS, ALLOWED_EMAIL_ADDRESSES, ALLOWED_GROUPS default in environment or override in upstream config in the following upstreams: [testService]",
+		"missing setting: ALLOWED_EMAIL_DOMAINS, ALLOWED_EMAIL_ADDRESSES, ALLOWED_GROUPS default in environment or override in upstream config.\n\t\t\t\tIf no extra validators are required, set 'ALLOW_NO_VALIDATORS' to 'true'. Affected usptreams: [testService]",
 		"Invalid value for COOKIE_SECRET; must decode to 32 or 64 bytes, but decoded to 0 bytes",
 	})
 	testutil.Equal(t, expected, err.Error())
@@ -68,6 +69,80 @@ func TestNewOptions(t *testing.T) {
 func TestInitializedOptions(t *testing.T) {
 	o := testOptions()
 	testutil.Equal(t, nil, o.Validate())
+}
+
+func TestValidatorOptions(t *testing.T) {
+	testCases := []struct {
+		name              string
+		upstreamConfig    *UpstreamConfig
+		AllowNoValidators bool
+		expectedErrors    []string
+	}{
+		{
+			name: "no validators error",
+			upstreamConfig: &UpstreamConfig{
+				Service:               "testService",
+				AllowedEmailDomains:   []string{},
+				AllowedEmailAddresses: []string{},
+				AllowedGroups:         []string{},
+			},
+			expectedErrors: []string{
+				"missing setting: ALLOWED_EMAIL_DOMAINS, ALLOWED_EMAIL_ADDRESSES, ALLOWED_GROUPS default in environment or override in upstream config.\n\t\t\t\tIf no extra validators are required, set 'ALLOW_NO_VALIDATORS' to 'true'. Affected usptreams: [testService]",
+			},
+		},
+		{
+			name: "wildcard error",
+			upstreamConfig: &UpstreamConfig{
+				Service:               "testService",
+				AllowedEmailDomains:   []string{"*"},
+				AllowedEmailAddresses: []string{"*"},
+				AllowedGroups:         []string{"*"},
+			},
+			expectedErrors: []string{
+				"invalid setting: a wildcard cannot be used within validators. If no extra validators are required, set 'ALLOW_NO_VALIDATORS' to 'true'. Affected upstreams: [testService]",
+			},
+		},
+		{
+			name: "validators defined, one using wildcard returns error",
+			upstreamConfig: &UpstreamConfig{
+				Service:               "testService",
+				AllowedEmailDomains:   []string{""},
+				AllowedEmailAddresses: []string{"*"},
+				AllowedGroups:         []string{"foo"},
+			},
+			expectedErrors: []string{
+				"invalid setting: a wildcard cannot be used within validators. If no extra validators are required, set 'ALLOW_NO_VALIDATORS' to 'true'. Affected upstreams: [testService]",
+			},
+		},
+		{
+			name: "AllowNoValidators is true. No validators defined returns success",
+			upstreamConfig: &UpstreamConfig{
+				Service:               "testService",
+				AllowedEmailDomains:   []string{},
+				AllowedEmailAddresses: []string{},
+				AllowedGroups:         []string{},
+			},
+			AllowNoValidators: true,
+			expectedErrors:    []string{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			o := testOptions()
+			o.AllowNoValidators = tc.AllowNoValidators
+			o.UpstreamConfigsFile = ""
+			if !tc.AllowNoValidators {
+				o.upstreamConfigs = []*UpstreamConfig{tc.upstreamConfig}
+			}
+
+			err := o.Validate()
+			// Above we override the o.UpstreamConfigsFile setting to ensure we test these upstream configs with a clean slate,
+			// but this means we always get the below 'missing setting: upstream-configs' error.
+			tc.expectedErrors = append([]string{"missing setting: upstream-configs"}, tc.expectedErrors...)
+			testutil.Equal(t, errorMsg(tc.expectedErrors), err.Error())
+		})
+	}
 }
 
 func TestProviderURLValidation(t *testing.T) {
