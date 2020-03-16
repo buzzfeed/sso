@@ -203,17 +203,29 @@ func (o *Options) Validate() error {
 			if uc.Timeout > o.TCPWriteTimeout {
 				o.TCPWriteTimeout = uc.Timeout
 			}
+
+			// If we don't explicity accept 'no validators' then ensure defined validator values aren't len(0) or len(1) with a wildcard.
+			// Not accepting wildcards is a new restriction, so we largely test against this for now to raise awareness and avoid unexpected outcomes.
 			if !o.AllowNoValidators {
 				if len(uc.AllowedEmailDomains) == 0 && len(uc.AllowedEmailAddresses) == 0 && len(uc.AllowedGroups) == 0 {
 					noValidatorsDefined = append(noValidatorsDefined, uc.Service)
-				} else if uc.AllowedEmailDomains[0] == "*" || uc.AllowedEmailAddresses[0] == "*" || uc.AllowedGroups[0] == "*" {
-					wildcardUsed = append(wildcardUsed, uc.Service)
+				} else {
+					validatorValues := make(map[string][]string)
+					validatorValues["Addresses"] = uc.AllowedEmailAddresses
+					validatorValues["Domains"] = uc.AllowedEmailDomains
+					validatorValues["Groups"] = uc.AllowedGroups
+					for _, v := range validatorValues {
+						if len(v) != 0 && v[0] == "*" {
+							wildcardUsed = append(wildcardUsed, uc.Service)
+							break
+						}
+					}
 				}
 			}
 		}
 		if len(noValidatorsDefined) != 0 {
 			msgs = append(msgs, fmt.Sprintf(
-				`missing setting: ALLOWED_EMAIL_DOMAINS, ALLOWED_EMAIL_ADDRESSES, ALLOWED_GROUPS default in environment or override in upstream config. 
+				`missing setting: ALLOWED_EMAIL_DOMAINS, ALLOWED_EMAIL_ADDRESSES, ALLOWED_GROUPS default in environment or override in upstream config.
 				If no extra validators are required, set 'ALLOW_NO_VALIDATORS' to 'true'. Affected usptreams: %v`,
 				noValidatorsDefined))
 		}
