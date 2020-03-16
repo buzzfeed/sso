@@ -153,6 +153,15 @@ func TestSSOProviderGroups(t *testing.T) {
 			ExpectError:      nil,
 		},
 		{
+			Name:             "valid when group list consists of a single wildcard",
+			Email:            "michael.bland@gsa.gov",
+			Groups:           []string{},
+			ProxyGroupIds:    []string{"*"},
+			ExpectedValid:    true,
+			ExpectedInGroups: []string{},
+			ExpectError:      nil,
+		},
+		{
 			Name:             "valid when the group id exists",
 			Email:            "michael.bland@gsa.gov",
 			Groups:           []string{"user-in-this-group", "random-group"},
@@ -319,6 +328,17 @@ func TestSSOProviderValidateSessionState(t *testing.T) {
 			ProviderResponse: http.StatusOK,
 			Groups:           []string{},
 			ProxyGroupIds:    []string{},
+			ExpectedValid:    true,
+		},
+		{
+			Name: "valid when group list consists of single wildcard",
+			SessionState: &sessions.SessionState{
+				AccessToken: "abc",
+				Email:       "michael.bland@gsa.gov",
+			},
+			ProviderResponse: http.StatusOK,
+			Groups:           []string{},
+			ProxyGroupIds:    []string{"*"},
 			ExpectedValid:    true,
 		},
 		{
