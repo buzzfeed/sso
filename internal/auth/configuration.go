@@ -281,10 +281,6 @@ func (opc OktaProviderConfig) Validate() error {
 		return xerrors.New("no okta.url is configured")
 	}
 
-	if opc.ServerID == "" {
-		return xerrors.New("no okta.server is configured")
-	}
-
 	return nil
 }
 
