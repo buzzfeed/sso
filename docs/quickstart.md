@@ -102,7 +102,7 @@ Notes:
 - `DEFAULT_PROVIDER_SLUG` tells **sso** to use the Okta provider by default
 
 - **If you are not using the default Okta authorization server** you will also
-  need to add `PROVIDER_OKTAQUICKSTART_SERVER_ID=<okta auth server ID>` to the
+  need to add `PROVIDER_OKTAQUICKSTART_OKTA_SERVER=<okta auth server ID>` to the
   above file.
 
 This `env` file will be used to configure `sso-auth` in the example deployment

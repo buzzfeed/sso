@@ -33,13 +33,12 @@ type GetUserProfileResponse struct {
 
 // NewOktaProvider returns a new OktaProvider and sets the provider url endpoints.
 func NewOktaProvider(p *ProviderData, OrgURL, providerServerID string) (*OktaProvider, error) {
-	if OrgURL != "" || providerServerID != "" {
-		if OrgURL == "" {
-			return nil, errors.New("missing setting: okta_org_url")
-		}
-		if providerServerID == "" {
-			return nil, errors.New("missing setting: provider_server_id")
-		}
+	if OrgURL == "" {
+		return nil, errors.New("missing setting: okta_org_url")
+	}
+	urlprefix := "/oauth2"
+	if providerServerID != "" {
+		urlprefix = fmt.Sprintf("/oauth2/%s", providerServerID)
 	}
 
 	p.ProviderName = "Okta"
@@ -49,7 +48,7 @@ func NewOktaProvider(p *ProviderData, OrgURL, providerServerID string) (*OktaPro
 	p.SignInURL = &url.URL{
 		Scheme: scheme,
 		Host:   OrgURL,
-		Path:   fmt.Sprintf("/oauth2/%s/v1/authorize", providerServerID),
+		Path:   fmt.Sprintf("%s/v1/authorize", urlprefix),
 	}
 	// to get a refresh token. see https://developer.okta.com/authentication-guide/tokens/refreshing-tokens/
 
@@ -57,26 +56,26 @@ func NewOktaProvider(p *ProviderData, OrgURL, providerServerID string) (*OktaPro
 	p.RedeemURL = &url.URL{
 		Scheme: scheme,
 		Host:   OrgURL,
-		Path:   fmt.Sprintf("/oauth2/%s/v1/token", providerServerID),
+		Path:   fmt.Sprintf("%s/v1/token", urlprefix),
 	}
 
 	// revokes an access or refresh token
 	p.RevokeURL = &url.URL{
 		Scheme: scheme,
 		Host:   OrgURL,
-		Path:   fmt.Sprintf("/oauth2/%s/v1/revoke", providerServerID),
+		Path:   fmt.Sprintf("%s/v1/revoke", urlprefix),
 	}
 	// takes an access token and returns claims for the currently logged-in user
 	p.ProfileURL = &url.URL{
 		Scheme: scheme,
 		Host:   OrgURL,
-		Path:   fmt.Sprintf("/oauth2/%s/v1/userinfo", providerServerID),
+		Path:   fmt.Sprintf("%s/v1/userinfo", urlprefix),
 	}
 	// takes token as a URL query and returns active/inactive, and further info if active.
 	p.ValidateURL = &url.URL{
 		Scheme: scheme,
 		Host:   OrgURL,
-		Path:   fmt.Sprintf("/oauth2/%s/v1/introspect", providerServerID),
+		Path:   fmt.Sprintf("%s/v1/introspect", urlprefix),
 	}
 	if p.Scope == "" {
 		// https://developer.okta.com/docs/api/resources/oidc/#scopes
