@@ -3,7 +3,7 @@
 #
 # install golang dependencies & build binaries
 # =============================================================================
-FROM golang:1.12 AS build
+FROM golang:1.14 AS build
 
 ENV GOFLAGS='-ldflags=-s -ldflags=-w'
 ENV CGO_ENABLED=0
@@ -23,6 +23,7 @@ RUN cd cmd/sso-proxy && go build -mod=readonly -o /bin/sso-proxy
 # add static assets and copy binaries from build stage
 # =============================================================================
 FROM debian:stable-slim
+ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update && apt-get install -y ca-certificates curl && rm -rf /var/lib/apt/lists/* \
     && groupadd -r sso && useradd -r -g sso sso
 WORKDIR /sso
