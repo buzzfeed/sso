@@ -1,7 +1,5 @@
 module github.com/buzzfeed/sso
 
-go 1.14
-
 require (
 	github.com/18F/hmacauth v0.0.0-20151013130326-9232a6386b73
 	github.com/aws/aws-sdk-go v1.23.12
@@ -25,3 +23,5 @@ require (
 	google.golang.org/api v0.5.0
 	gopkg.in/yaml.v2 v2.2.2
 )
+
+go 1.14
