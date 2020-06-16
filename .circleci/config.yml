@@ -1,6 +1,6 @@
 defaults: &defaults
   docker:
-    - image: circleci/golang:1.12
+    - image: circleci/golang:1.14
   working_directory: /go/src/github.com/buzzfeed/sso
 
 attach_workspace: &attach_workspace
