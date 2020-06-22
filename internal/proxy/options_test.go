@@ -118,7 +118,7 @@ func TestProviderURLValidation(t *testing.T) {
 			name:              "invalid url rejected",
 			providerURLString: "%ZZZ",
 			expectedError: errorMsg([]string{
-				`invalid value for provider-url: parse %ZZZ: invalid URL escape "%ZZ"`,
+				`invalid value for provider-url: parse "%ZZZ": invalid URL escape "%ZZ"`,
 			}),
 		},
 	}
