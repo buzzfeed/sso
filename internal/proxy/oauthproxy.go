@@ -40,9 +40,10 @@ var SignatureHeaders = []string{
 
 // Errors
 var (
-	ErrLifetimeExpired       = errors.New("user lifetime expired")
-	ErrUserNotAuthorized     = errors.New("user not authorized")
-	ErrWrongIdentityProvider = errors.New("user authenticated with wrong identity provider")
+	ErrLifetimeExpired               = errors.New("user lifetime expired")
+	ErrUserNotAuthorized             = errors.New("user not authorized")
+	ErrWrongIdentityProvider         = errors.New("user authenticated with wrong identity provider")
+	ErrUnauthorizedUpstreamRequested = errors.New("user session authorized with different upstream")
 )
 
 type ErrOAuthProxyMisconfigured struct {
@@ -591,6 +592,13 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 	logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).WithInGroups(session.Groups).Info(
 		fmt.Sprintf("oauth callback: user validated "))
 
+	// We add the request host into the session to allow us to validate that each request has
+	// been authorized for the upstream it's requesting.
+	// e.g. if a request is authenticated while trying to reach 'foo' upstream, it should not
+	// automatically be seen as authorized with 'bar' upstream. Each upstream may set different
+	// validators, so the request should be reauthenticated.
+	session.AuthorizedUpstream = req.Host
+
 	// We store the session in a cookie and redirect the user back to the application
 	err = p.sessionStore.SaveSession(rw, req, session)
 	if err != nil {
@@ -655,6 +663,12 @@ func (p *OAuthProxy) Proxy(rw http.ResponseWriter, req *http.Request) {
 			// the user has a stale sesssion.
 			p.OAuthStart(rw, req, tags)
 			return
+		case ErrUnauthorizedUpstreamRequested:
+			// The users session has been authorised for use with a different upstream than the one
+			// that is being requested, so we trigger the start of the oauth flow.
+			// This exists primarily to implement some form of grace period while this additional session
+			// check is being introduced.
+			p.OAuthStart(rw, req, tags)
 		case sessions.ErrInvalidSession:
 			// The user session is invalid and we can't decode it.
 			// This can happen for a variety of reasons but the most common non-malicious
@@ -718,6 +732,15 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 		logger.WithUser(session.Email).Info(
 			"authenticated with incorrect identity provider; restarting authentication")
 		return ErrWrongIdentityProvider
+	}
+
+	// check that the user has been authorized against the requested upstream
+	// this is primarily to combat against a user authorizing with one upstream and attempting to use
+	// the session cookie for a different upstream.
+	if req.Host != session.AuthorizedUpstream {
+		logger.WithProxyHost(req.Host).WithAuthorizedUpstream(session.AuthorizedUpstream).WithUser(session.Email).Warn(
+			"session authorized against different upstream; restarting authentication")
+		return ErrUnauthorizedUpstreamRequested
 	}
 
 	// Lifetime period is the entire duration in which the session is valid.
