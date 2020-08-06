@@ -669,6 +669,7 @@ func (p *OAuthProxy) Proxy(rw http.ResponseWriter, req *http.Request) {
 			// This exists primarily to implement some form of grace period while this additional session
 			// check is being introduced.
 			p.OAuthStart(rw, req, tags)
+			return
 		case sessions.ErrInvalidSession:
 			// The user session is invalid and we can't decode it.
 			// This can happen for a variety of reasons but the most common non-malicious
