@@ -147,7 +147,7 @@ func (s *CookieStore) LoadSession(req *http.Request) (*SessionState, error) {
 	}
 	session, err := UnmarshalSession(c.Value, s.CookieCipher)
 	if err != nil {
-		logger.WithRequestHost(req.Host).WithError(err).Error("error unmarshaling session")
+		logger.WithRequestHost(req.Host).Error(err, "error unmarshaling session")
 		return nil, ErrInvalidSession
 	}
 	return session, nil
