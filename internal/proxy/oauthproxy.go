@@ -738,7 +738,7 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 	// check that the user has been authorized against the requested upstream
 	// this is primarily to combat against a user authorizing with one upstream and attempting to use
 	// the session cookie for a different upstream.
-	if req.Host != session.AuthorizedUpstream {
+	if req.Host != session.AuthorizedUpstream && session.AuthorizedUpstream != "" {
 		logger.WithProxyHost(req.Host).WithAuthorizedUpstream(session.AuthorizedUpstream).WithUser(session.Email).Warn(
 			"session authorized against different upstream; restarting authentication")
 		return ErrUnauthorizedUpstreamRequested
