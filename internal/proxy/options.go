@@ -27,6 +27,7 @@ import (
 // DefaultAllowedEmailDomains - csv list of emails with the specified domain to authenticate. Use * to authenticate any email
 // DefaultAllowedEmailAddresses - []string - authenticate emails with the specified email address (may be given multiple times). Use * to authenticate any email
 // DefaultAllowedGroups - csv list of default allowed groups that are applied to authorize access to upstreams. Will be overridden by groups specified in upstream configs.
+// DefaultProviderSlug - the provider that upstreams should use by default. Provider must exist within `sso_auth`. ie: "google"
 // ClientID - the OAuth Client ID: ie: "123456.apps.googleusercontent.com"
 // ClientSecret - The OAuth Client Secret
 // DefaultUpstreamTimeout - the default time period to wait for a response from an upstream

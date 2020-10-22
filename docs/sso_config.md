@@ -35,11 +35,12 @@ For example, the following config would have the following environment variables
     * **allowed groups** optional list of authorized google groups that can access the service. If not specified, anyone within an email domain is allowed to access the service. *Note*: We do not support nested group authentication at this time. Groups must be made up of email addresses associated with individual's accounts. See [#133](https://github.com/buzzfeed/sso/issues/133).
     * **allowed_email_domains** optional list of authorized email domains that can access the service.
     * **allowed_email_addresses** optional list of authorized email addresses that can access the service.
-    * **skip_auth_regex** skips authentication for paths matching these regular expressions. NOTE: Use with extreme caution.
+    * **flush_interval** sets an interval to periodically flush the buffered response to the client. If specified, SSO Proxy will not timeout requests to this upstream and will stream the response to the client. NOTE: Use with extreme caution.
     * **header_overrides** overrides any heads set either by SSO proxy itself or upstream applications. Useful for modifying browser security headers.
     * **inject_request_headers** adds headers to the request before the request is sent to the proxied service.  Useful for adding basic auth headers if needed.
+    * **provider_slug** determines which identity provider this upstream will use. This provider must first be configured within `sso_auth`.
+    * **skip_auth_regex** skips authentication for paths matching these regular expressions. NOTE: Use with extreme caution.
     * **timeout** sets the amount of time that SSO Proxy will wait for the upstream to complete its request.
-    * **flush_interval** sets an interval to periodically flush the buffered response to the client. If specified, SSO Proxy will not timeout requests to this upstream and will stream the response to the client. NOTE: Use with extreme caution.
   * **extra_routes** allows services to specify multiple routes. These route can includes the *from*, *to*, *type*, and *options* fields defined above and inherit any configuration
 from their parent routing config if not specified here (e.g. *options*).
 * **cluster name <identifier>** are cluster-specific settings. Any configuration specified in the default field can be override here with cluster specific configuration.
