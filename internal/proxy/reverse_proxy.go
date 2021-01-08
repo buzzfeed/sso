@@ -25,6 +25,7 @@ type upstreamTransport struct {
 
 	transport          *http.Transport
 	insecureSkipVerify bool
+	serverName         string
 }
 
 // RoundTrip fulfilles the RoundTripper interface.
@@ -56,10 +57,13 @@ func (t *upstreamTransport) getTransport() *http.Transport {
 				KeepAlive: 30 * time.Second,
 				DualStack: true,
 			}).DialContext,
-			MaxIdleConns:          100,
-			IdleConnTimeout:       90 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			TLSClientConfig:       &tls.Config{InsecureSkipVerify: t.insecureSkipVerify},
+			MaxIdleConns:        100,
+			IdleConnTimeout:     90 * time.Second,
+			TLSHandshakeTimeout: 10 * time.Second,
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: t.insecureSkipVerify,
+				ServerName:         t.serverName,
+			},
 			ExpectContinueTimeout: 1 * time.Second,
 		}
 	}
@@ -90,6 +94,7 @@ func NewUpstreamReverseProxy(config *UpstreamConfig, signer *RequestSigner) (htt
 		Transport: &upstreamTransport{
 			resetDeadline:      config.ResetDeadline,
 			insecureSkipVerify: config.TLSSkipVerify,
+			serverName:         config.TLSServerName,
 		},
 		FlushInterval: config.FlushInterval,
 		ModifyResponse: func(resp *http.Response) error {

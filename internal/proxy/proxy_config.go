@@ -55,6 +55,7 @@ type UpstreamConfig struct {
 	AllowedEmailDomains   []string
 	AllowedEmailAddresses []string
 	TLSSkipVerify         bool
+	TLSServerName         string
 	PreserveHost          bool
 	HMACAuth              hmacauth.HmacAuth
 	Timeout               time.Duration
@@ -97,6 +98,7 @@ type OptionsConfig struct {
 	AllowedEmailDomains   []string          `yaml:"allowed_email_domains"`
 	AllowedEmailAddresses []string          `yaml:"allowed_email_addresses"`
 	TLSSkipVerify         bool              `yaml:"tls_skip_verify"`
+	TLSServerName         string            `yaml:"tls_server_name"`
 	PreserveHost          bool              `yaml:"preserve_host"`
 	Timeout               time.Duration     `yaml:"timeout"`
 	ResetDeadline         time.Duration     `yaml:"reset_deadline"`
@@ -408,6 +410,7 @@ func parseOptionsConfig(proxy *UpstreamConfig, defaultOpts *OptionsConfig) error
 	proxy.HeaderOverrides = dst.HeaderOverrides
 	proxy.InjectRequestHeaders = dst.InjectRequestHeaders
 	proxy.TLSSkipVerify = dst.TLSSkipVerify
+	proxy.TLSServerName = dst.TLSServerName
 	proxy.PreserveHost = dst.PreserveHost
 	proxy.SkipRequestSigning = dst.SkipRequestSigning
 	proxy.CookieName = dst.CookieName
