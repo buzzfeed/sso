@@ -53,8 +53,6 @@ func main() {
 		logger.Error(err, "error setting upstream configs")
 		os.Exit(1)
 	}
-	logger.Info(fmt.Printf("%+v", config))
-	os.Exit(1)
 
 	ssoProxy, err := proxy.New(config, statsdClient)
 	if err != nil {
