@@ -29,7 +29,7 @@ func TestSetUpstreamConfigs(t *testing.T) {
 				},
 			},
 			serverConfig: ServerConfig{
-				TimeoutConfig: &TimeoutConfig{Write: time.Duration(5) * time.Second},
+				TimeoutConfig: TimeoutConfig{Write: time.Duration(5) * time.Second},
 			},
 			expectedErrMsg: "missing setting: ALLOWED_EMAIL_DOMAINS, ALLOWED_EMAIL_ADDRESSES, ALLOWED_GROUPS default in environment or override in upstream config in the following upstreams: [invalidUpstream]",
 		},
@@ -47,7 +47,7 @@ func TestSetUpstreamConfigs(t *testing.T) {
 				},
 			},
 			serverConfig: ServerConfig{
-				TimeoutConfig: &TimeoutConfig{
+				TimeoutConfig: TimeoutConfig{
 					Write: time.Duration(5) * time.Second,
 				},
 			},
@@ -61,7 +61,7 @@ func TestSetUpstreamConfigs(t *testing.T) {
 				serverConfigTimeoutShouldChange = true
 			}
 
-			err := SetUpstreamConfigs(tc.upstreamConfigs, CookieConfig{}, tc.serverConfig)
+			err := SetUpstreamConfigs(tc.upstreamConfigs, CookieConfig{}, &tc.serverConfig)
 			if err == nil && tc.expectedErrMsg != "" {
 				t.Fatalf("expected error but error was nil")
 			}
@@ -107,7 +107,7 @@ func TestUpstreamConfigsFile(t *testing.T) {
 				Scheme: "https",
 			},
 			serverConfig: ServerConfig{
-				TimeoutConfig: &TimeoutConfig{
+				TimeoutConfig: TimeoutConfig{
 					Write: time.Duration(5) * time.Second,
 				},
 			},
@@ -135,7 +135,7 @@ func TestUpstreamConfigsFile(t *testing.T) {
 			},
 
 			serverConfig: ServerConfig{
-				TimeoutConfig: &TimeoutConfig{
+				TimeoutConfig: TimeoutConfig{
 					Write: time.Duration(5) * time.Second,
 				},
 			},
@@ -180,7 +180,7 @@ func TestUpstreamConfigsFile(t *testing.T) {
 				tc.upstreamConfigs.ConfigsFile = tempFile.Name()
 			}
 
-			err := SetUpstreamConfigs(tc.upstreamConfigs, CookieConfig{}, tc.serverConfig)
+			err := SetUpstreamConfigs(tc.upstreamConfigs, CookieConfig{}, &tc.serverConfig)
 			if err == nil && tc.expectedErrMsg != "" {
 				t.Fatalf("expected error but error was nil")
 			}
