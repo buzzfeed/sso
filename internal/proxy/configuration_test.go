@@ -123,7 +123,7 @@ func TestConfigValidate(t *testing.T) {
 			Validator: Configuration{
 				ServerConfig: ServerConfig{
 					Port: 4180,
-					TimeoutConfig: &TimeoutConfig{
+					TimeoutConfig: TimeoutConfig{
 						Write:    30 * time.Second,
 						Read:     30 * time.Second,
 						Shutdown: 30 * time.Second,
@@ -179,7 +179,7 @@ func TestConfigValidate(t *testing.T) {
 		{
 			Name: "ServerConfig: missing server.port configuration",
 			Validator: ServerConfig{
-				TimeoutConfig: &TimeoutConfig{
+				TimeoutConfig: TimeoutConfig{
 					Write:    30 * time.Second,
 					Read:     30 * time.Second,
 					Shutdown: 30 * time.Second,
