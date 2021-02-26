@@ -62,7 +62,7 @@ func DefaultProxyConfig() Configuration {
 	return Configuration{
 		ServerConfig: ServerConfig{
 			Port: 4180,
-			TimeoutConfig: &TimeoutConfig{
+			TimeoutConfig: TimeoutConfig{
 				Write:    30 * time.Second,
 				Read:     30 * time.Second,
 				Shutdown: 30 * time.Second,
@@ -304,8 +304,8 @@ func (cc ClientConfig) Validate() error {
 }
 
 type ServerConfig struct {
-	Port          int            `mapstructure:"port"`
-	TimeoutConfig *TimeoutConfig `mapstructure:"timeout"`
+	Port          int           `mapstructure:"port"`
+	TimeoutConfig TimeoutConfig `mapstructure:"timeout"`
 }
 
 func (sc ServerConfig) Validate() error {

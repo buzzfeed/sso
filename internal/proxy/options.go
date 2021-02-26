@@ -110,7 +110,7 @@ func SetProvider(provider providers.Provider) func(*OAuthProxy) error {
 	}
 }
 
-func SetUpstreamConfigs(uc *UpstreamConfigs, cc CookieConfig, svc ServerConfig) error {
+func SetUpstreamConfigs(uc *UpstreamConfigs, cc CookieConfig, svc *ServerConfig) error {
 	if uc.ConfigsFile != "" {
 		rawBytes, err := ioutil.ReadFile(uc.ConfigsFile)
 		if err != nil {
