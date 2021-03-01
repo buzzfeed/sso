@@ -6,7 +6,6 @@ package proxy
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -90,7 +89,6 @@ type loggingHandler struct {
 
 // NewLoggingHandler returns a new loggingHandler that wraps a handler, statsd client, and writer.
 func NewLoggingHandler(out io.Writer, h http.Handler, lc LoggingConfig, StatsdClient *statsd.Client) http.Handler {
-	fmt.Printf("\n-----------------LOGGING CONFIG: %+v-----------------", lc)
 	return loggingHandler{writer: out,
 		handler:      h,
 		enabled:      lc.Enable,
@@ -99,13 +97,11 @@ func NewLoggingHandler(out io.Writer, h http.Handler, lc LoggingConfig, StatsdCl
 }
 
 func (h loggingHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	fmt.Println("debugging: ServeHTTP")
 	now := time.Now()
 	url := *req.URL
 	logger := &responseLogger{w: w}
 	h.handler.ServeHTTP(logger, req)
 	if !h.enabled {
-		fmt.Println("debugging: Handler is NOT enabled")
 		return
 	}
 	logRequest(logger.authInfo, req, url, now, logger.Status(), h.StatsdClient)
@@ -113,7 +109,6 @@ func (h loggingHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 // logRequest logs information about a request
 func logRequest(username string, req *http.Request, url url.URL, ts time.Time, status int, StatsdClient *statsd.Client) {
-	fmt.Println("debugging: logRequest")
 	duration := time.Now().Sub(ts)
 
 	// Convert duration to floating point milliseconds
@@ -127,7 +122,6 @@ func logRequest(username string, req *http.Request, url url.URL, ts time.Time, s
 		uri).WithUserAgent(req.Header.Get("User-Agent")).WithRemoteAddress(
 		getRemoteAddr(req)).WithRequestDurationMs(durationMS).WithUser(
 		username).WithAction(GetActionTag(req)).Info()
-	fmt.Println("debugging: logRequestMetrics called")
 	logRequestMetrics(req, duration, status, StatsdClient)
 }
 

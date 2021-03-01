@@ -44,7 +44,6 @@ func GetActionTag(req *http.Request) string {
 
 // logMetrics logs all metrics surrounding a given request to the metricsWriter
 func logRequestMetrics(req *http.Request, requestDuration time.Duration, status int, StatsdClient *statsd.Client) {
-	fmt.Println("debugging: logRequestMetrics beginning")
 	// Normalize proxyHost for a) invalid requests or b) LB health checks to
 	// avoid polluting the proxy_host tag's value space
 	proxyHost := req.Host
@@ -62,10 +61,12 @@ func logRequestMetrics(req *http.Request, requestDuration time.Duration, status 
 		fmt.Sprintf("action:%s", GetActionTag(req)),
 		fmt.Sprintf("proxy_host:%s", proxyHost),
 	}
-	fmt.Println("\n------------------ WE'RE EMITTING REQUEST METRICS -----------------")
-	fmt.Printf("\n------------------- TAGS: %+v, HOST: %s", tags, proxyHost)
-	fmt.Printf("\n------------------ STATSD CLIENT: %+v -----------------\n", StatsdClient)
+	fmt.Println("debugging: we're sending metrics")
+	fmt.Printf("debugging: tags: %+v", tags)
 	// TODO: eventually make rates configurable
-	StatsdClient.Timing("request.duration", requestDuration, tags, 1.0)
+	err := StatsdClient.Timing("request.duration", requestDuration, tags, 1.0)
+	if err != nil {
+		fmt.Printf("debugging: error sending metric: %v", err)
+	}
 
 }
