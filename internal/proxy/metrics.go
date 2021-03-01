@@ -62,7 +62,7 @@ func logRequestMetrics(req *http.Request, requestDuration time.Duration, status 
 		fmt.Sprintf("action:%s", GetActionTag(req)),
 		fmt.Sprintf("proxy_host:%s", proxyHost),
 	}
-	fmt.Println("\n------------------ WE'RE EMITTING REQUEST METRICS -----------------\n")
+	fmt.Println("\n------------------ WE'RE EMITTING REQUEST METRICS -----------------")
 	fmt.Printf("\n------------------- TAGS: %+v, HOST: %s", tags, proxyHost)
 	fmt.Printf("\n------------------ STATSD CLIENT: %+v -----------------\n", StatsdClient)
 	// TODO: eventually make rates configurable
