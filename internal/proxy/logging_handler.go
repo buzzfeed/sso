@@ -6,6 +6,7 @@ package proxy
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -89,6 +90,7 @@ type loggingHandler struct {
 
 // NewLoggingHandler returns a new loggingHandler that wraps a handler, statsd client, and writer.
 func NewLoggingHandler(out io.Writer, h http.Handler, lc LoggingConfig, StatsdClient *statsd.Client) http.Handler {
+	fmt.Printf("\n-----------------LOGGING CONFIG: %+v-----------------", lc)
 	return loggingHandler{writer: out,
 		handler:      h,
 		enabled:      lc.Enable,

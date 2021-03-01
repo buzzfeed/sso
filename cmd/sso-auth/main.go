@@ -35,6 +35,7 @@ func main() {
 		logger.Error(err, "error creating statsd client")
 		os.Exit(1)
 	}
+	fmt.Printf("STATSDCLIENT -- Host: %v, Port: %v", sc.Host, sc.Port)
 
 	authMux, err := auth.NewAuthenticatorMux(config, statsdClient)
 	if err != nil {
