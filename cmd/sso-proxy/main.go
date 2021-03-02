@@ -33,7 +33,9 @@ func main() {
 
 	sc := config.MetricsConfig.StatsdConfig
 	statsdClient, err := proxy.NewStatsdClient(sc.Host, sc.Port)
-	fmt.Printf("STATSDCLIENT -- Host: %v, Port: %v", sc.Host, sc.Port)
+	fmt.Printf("\nSTATSDCLIENT -- Host: %v, Port: %v\n", sc.Host, sc.Port)
+	fmt.Printf("\nMETRICS_STATSD_HOST:\n", os.Getenv("METRICS_STATSD_HOST"))
+	fmt.Printf("\nMETRICS_STATSD_PORT:\n", os.Getenv("METRICS_STATSD_PORT"))
 	if err != nil {
 		logger.Error(err, "error creating statsd client")
 		os.Exit(1)
