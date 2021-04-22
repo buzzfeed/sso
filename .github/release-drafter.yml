@@ -1,7 +1,7 @@
 name-template: 'v$NEXT_PATCH_VERSION'
 tag-template: 'v$NEXT_PATCH_VERSION'
 change-template: '*#$NUMBER - $TITLE'
-branches: master
+branches: main
 categories:
   - title: 'Features 🚀'
     labels:
@@ -20,4 +20,3 @@ template: |
   $CHANGES
 
   Release Contributors: $CONTRIBUTORS
-
