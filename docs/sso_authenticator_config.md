@@ -2,7 +2,7 @@
 We currently use environment variables to read configuration options, below is a list of environment variables and
 their corresponding types that the sso authenticator will read.
 
-Defaults for the below settings can be found here: https://github.com/buzzfeed/sso/blob/master/internal/auth/configuration.go#L66-L117
+Defaults for the below settings can be found here: https://github.com/buzzfeed/sso/blob/main/internal/auth/configuration.go#L66-L117
 
 
 ## Session and Server configuration

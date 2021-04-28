@@ -99,7 +99,7 @@ export SSO_CONFIG_FOOBAR_SIGNING_KEY="sha256:shared-secret-value"
 ```
 would be the signing key for the `foobar` upstream service, use the sha256 with the `shared-secret-value` as it's signing key value.
 
-This signs the request using defined signature headers found in https://github.com/buzzfeed/sso/blob/master/sso_proxy/oauthproxy.go#L25.
+This signs the request using defined signature headers found in https://github.com/buzzfeed/sso/blob/main/sso_proxy/oauthproxy.go#L25.
 Specific implementation details can be found at https://github.com/18F/hmacauth
 
 ### Headers

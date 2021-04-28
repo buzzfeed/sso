@@ -49,7 +49,7 @@ For 'Platform', choose `Web`, and for 'Sign on method' choose `OpenID Connect`. 
     `https://sso-auth.example.com/okta/callback`. Multiple URIs can be added if required.
 -  **Logout redirect URIs**: This can be left blank.
 
-**⚡️ Note**: If you're following the [Quickstart guide](https://github.com/buzzfeed/sso/blob/master/docs/quickstart.md), use `http://sso-auth.localtest.me/okta/callback` as the Authorized redirect URI.
+**⚡️ Note**: If you're following the [Quickstart guide](https://github.com/buzzfeed/sso/blob/main/docs/quickstart.md), use `http://sso-auth.localtest.me/okta/callback` as the Authorized redirect URI.
 
 ## 4. Finish configuring your Application
 
@@ -66,8 +66,8 @@ and make sure `Refresh Token` is checked under 'Client acting on behalf of a use
 At the bottom of this same page you will see a section called 'Client Credentials' containing a `Client ID` and a `Client secret`.
 Copy both of these values to a safe and secure location - these are required to configure your `sso` deployment.
 
-**⚡️Note:**  If you're following the  [Quickstart guide](https://github.com/buzzfeed/sso/blob/master/docs/quickstart.md),  **stop here!**
-You'll add these credentials to  `quickstart/env`  as instructed in  [the guide](https://github.com/buzzfeed/sso/blob/master/docs/quickstart.md).
+**⚡️Note:**  If you're following the  [Quickstart guide](https://github.com/buzzfeed/sso/blob/main/docs/quickstart.md),  **stop here!**
+You'll add these credentials to  `quickstart/env`  as instructed in  [the guide](https://github.com/buzzfeed/sso/blob/main/docs/quickstart.md).
 
 ### Assignments
 

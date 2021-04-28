@@ -74,7 +74,7 @@ Here are the steps to running the tests for SSO:
 
 Changes to `buzzfeed/sso` happen via GitHub pull requests, which is where at least one other engineer reviews and approves all code changes. Some tips for pull requests and code review:
 
-* Each pull request is a branch from `master` — there are no other long-lived branches
+* Each pull request is a branch from `main` — there are no other long-lived branches
 * A single pull request is used for each set of changes — i.e., once a pull request has been opened, any follow-up commits to address code review and discussion should be pushed to that pull request instead of a new one
 * Before a pull request is merged, it must get a green check mark from our CI for passing tests
 * Before a pull request is merged, the author should take the opportunity to clean up and rewrite the commits on the branch (see [How to Write a Git Commit Message](https://chris.beams.io/posts/git-commit/).
