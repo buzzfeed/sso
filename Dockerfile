@@ -16,6 +16,7 @@ RUN go mod download
 COPY . .
 RUN cd cmd/sso-auth && go build -mod=readonly -o /bin/sso-auth
 RUN cd cmd/sso-proxy && go build -mod=readonly -o /bin/sso-proxy
+RUN cd cmd/sso-proxy/generate-request-signature && go build -mod=readonly -o /bin/sso-generate-request-signature
 
 # =============================================================================
 # final stage
