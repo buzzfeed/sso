@@ -9,6 +9,7 @@ import (
 var httpClient = &http.Client{
 	Timeout: time.Second * 5,
 	Transport: &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
 		Dial: (&net.Dialer{
 			Timeout: 2 * time.Second,
 		}).Dial,
