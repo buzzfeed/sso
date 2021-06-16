@@ -13,8 +13,8 @@ import (
 
 	"github.com/buzzfeed/sso/internal/pkg/aead"
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
-	"github.com/buzzfeed/sso/internal/pkg/options"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
+	"github.com/buzzfeed/sso/internal/pkg/validators"
 	"github.com/buzzfeed/sso/internal/proxy/providers"
 
 	"github.com/datadog/datadog-go/statsd"
@@ -59,7 +59,7 @@ const statusInvalidHost = 421
 // OAuthProxy stores all the information associated with proxying the request.
 type OAuthProxy struct {
 	cookieSecure bool
-	Validators   []options.Validator
+	Validators   []validators.Validator
 	redirectURL  *url.URL // the url to receive requests at
 	templates    *template.Template
 
@@ -87,7 +87,7 @@ type StateParameter struct {
 func NewOAuthProxy(sc SessionConfig, optFuncs ...func(*OAuthProxy) error) (*OAuthProxy, error) {
 	p := &OAuthProxy{
 		cookieSecure: sc.CookieConfig.Secure,
-		Validators:   []options.Validator{},
+		Validators:   []validators.Validator{},
 
 		redirectURL: &url.URL{Path: "/oauth2/callback"},
 		templates:   getTemplates(),
@@ -478,7 +478,7 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 	//
 	// set cookie, or deny
 
-	errors := options.RunValidators(p.Validators, session)
+	errors := validators.RunValidators(p.Validators, session)
 	if len(errors) == len(p.Validators) {
 		tags = append(tags, "error:validation_failed")
 		p.StatsdClient.Incr("application_error", tags, 1.0)
@@ -718,7 +718,7 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 	// To reduce strain on upstream identity providers we only revalidate email domains and
 	// addresses on each request here.
 	for _, v := range p.Validators {
-		_, EmailGroupValidator := v.(options.EmailGroupValidator)
+		_, EmailGroupValidator := v.(validators.EmailGroupValidator)
 
 		if !EmailGroupValidator {
 			err := v.Validate(session)

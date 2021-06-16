@@ -21,9 +21,9 @@ import (
 	"github.com/mccutchen/go-httpbin/httpbin"
 
 	"github.com/buzzfeed/sso/internal/pkg/aead"
-	"github.com/buzzfeed/sso/internal/pkg/options"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
 	"github.com/buzzfeed/sso/internal/pkg/testutil"
+	"github.com/buzzfeed/sso/internal/pkg/validators"
 	"github.com/buzzfeed/sso/internal/proxy/providers"
 )
 
@@ -121,7 +121,7 @@ func testNewOAuthProxy(t *testing.T, optFuncs ...func(*OAuthProxy) error) (*OAut
 	statsdClient, _ := statsd.New("127.0.0.1:8125")
 
 	standardOptFuncs := []func(*OAuthProxy) error{
-		SetValidators([]options.Validator{options.NewMockValidator(true)}),
+		SetValidators([]validators.Validator{validators.NewMockValidator(true)}),
 		SetProvider(provider),
 		setSessionStore(&sessions.MockSessionStore{Session: testSession()}),
 		SetUpstreamConfig(upstreamConfig),
@@ -279,7 +279,7 @@ func TestAuthOnlyEndpoint(t *testing.T) {
 
 			proxy, close := testNewOAuthProxy(t,
 				setSessionStore(tc.sessionStore),
-				SetValidators([]options.Validator{options.NewMockValidator(tc.validEmail)}),
+				SetValidators([]validators.Validator{validators.NewMockValidator(tc.validEmail)}),
 				SetProvider(tp),
 			)
 			defer close()
