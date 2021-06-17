@@ -11,8 +11,8 @@ import (
 	"strings"
 
 	log "github.com/buzzfeed/sso/internal/pkg/logging"
-	"github.com/buzzfeed/sso/internal/pkg/options"
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
+	"github.com/buzzfeed/sso/internal/pkg/validators"
 	"github.com/buzzfeed/sso/internal/proxy/providers"
 
 	"github.com/datadog/datadog-go/statsd"
@@ -95,7 +95,7 @@ func SetProxyHandler(handler http.Handler) func(*OAuthProxy) error {
 }
 
 // SetValidator sets the email validator as a functional option
-func SetValidators(validators []options.Validator) func(*OAuthProxy) error {
+func SetValidators(validators []validators.Validator) func(*OAuthProxy) error {
 	return func(op *OAuthProxy) error {
 		op.Validators = validators
 		return nil
