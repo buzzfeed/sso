@@ -1,4 +1,4 @@
-version := "v2.1.0"
+version := "v3.0.0"
 
 commit := $(shell git rev-parse --short HEAD)
 
