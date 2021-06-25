@@ -29,14 +29,13 @@ services:
     entrypoint: /bin/sso-proxy
     environment:
       # Allow any google account to log in for demo purposes
-      - DEFAULT_ALLOWED_EMAIL_DOMAINS=*
+      - UPSTREAM_DEFAULT_EMAIL_DOMAINS=*
 
       # (Optional) Allow specific google email address to log in for demo purposes
-      # This overrides DEFAULT_ALLOWED_EMAIL_DOMAIN
-      # - DEFAULT_ALLOWED_EMAIL_ADDRESSES=*
+      # - UPSTREAM_DEFAULT_EMAIL_ADDRESSES=*
 
-      - UPSTREAM_CONFIGS=/sso/upstream_configs.yml
-      - PROVIDER_URL=http://sso-auth.localtest.me
+      - UPSTREAM_CONFIGSFILE=/sso/upstream_configs.yml
+      - PROVIDER_URL_EXTERNAL=http://sso-auth.localtest.me
       - PROVIDER_URL_INTERNAL=http://host.docker.internal
 
       # CLIENT_ID and CLIENT_SECRET must match sso-auth's PROXY_CLIENT_ID and
@@ -49,15 +48,15 @@ services:
       #     openssl rand -base64 32
       #
       # to generate your own.
-      - COOKIE_SECRET=WEl0Y054TXNUN2ltTWRkazZ0YmNpRTlucXBPQUY2VHU=
+      - SESSION_COOKIE_SECRET=WEl0Y054TXNUN2ltTWRkazZ0YmNpRTlucXBPQUY2VHU=
 
       # Disable https for demo purposes
-      - COOKIE_SECURE=false
+      - SESSION_COOKIE_SECURE=false
 
       # TODO: these config values should probably have defaults
       - CLUSTER=dev
-      - STATSD_HOST=127.0.0.1
-      - STATSD_PORT=8125
+      - METRICS_STATSD_HOST=127.0.0.1
+      - METRICS_STATSD_PORT=8125
 
       # Tells nginx-proxy service how to route requests to this service
       - VIRTUAL_HOST=*.sso.localtest.me

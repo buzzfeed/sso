@@ -138,22 +138,22 @@ There are four configuration options that can be set as environment variables re
 of sso proxy when it authenticates with sso authenticator.
 
 
-The **session_valid_ttl** option controls the amount of time it will take for
+The **session\_ttl\_valid** option controls the amount of time it will take for
 `sso_proxy` to pick up on authentication changes in the 3rd party provider
 (e.g. revoked access, group membership updates).  Once expired, `sso_proxy`
 will make an _internal request_ to `sso_auth` (i.e. invisible to the
 end user) to revalidate & refresh the session.
 
-The **session_lifetime_ttl** option controls the maximum lifetime of a
+The **sessioni\_ttl\_lifetime** option controls the maximum lifetime of a
 `sso_proxy` session, after which a user will be 301 redirected to
 `sso_auth` to go through the 3rd party OAuth2 flow again.
 
-The **cookie_expire** option controls the maximum lifetime of the `sso_proxy`
+The **session\_cookie\_expire** option controls the maximum lifetime of the `sso_proxy`
 cookie stored by a user's web browser, after which a user will also be 301
 redirected to `sso_auth` to go through the 3rd party OAuth2 flow
 again.
 
-The **grace_period_ttl** option controls the duration of the grace period that
+The **session\_ttl\_graceperiod** option controls the duration of the grace period that
 `sso_proxy` grants to existing sessions in the event that `sso_auth`'s
 upstream provider is unavailable. `sso_proxy` starts this grace period whenever
 `sso_auth` returns either a `429 Too Many Requests` or `503 Service
@@ -163,11 +163,11 @@ honored as valid. The grace period ends either after the TTL expires or when
 
 ##### Notes
 
-* For now, the `cookie_expire` value should be greater than or equal to the
+* For now, the `session_cookie_expire` value should be greater than or equal to the
   `session_lifetime_ttl` value. In the future, we should remove the separate
   `cookie_expire` option altogether and just rely on `session_lifetime_ttl`.
 
-* The value of `session_valid_ttl` has a direct impact on the number of
+* The value of `session_ttl_valid` has a direct impact on the number of
   requests we will make to the 3rd party authentication provider, as requests
   to re-validate a user's permissions will be made every time it expires. Tune
   this value to balance between responsiveness to permission changes and
@@ -176,7 +176,7 @@ honored as valid. The grace period ends either after the TTL expires or when
   See [Google service accounts](#google-service-accounts) below to
   check API usage and quotas.
 
-* The grace period defined by `grace_period_ttl` is granted on a per-user basis,
+* The grace period defined by `session_ttl_graceperiod` is granted on a per-user basis,
   starting from the first failure to authenticate.
 
 ### Websockets
