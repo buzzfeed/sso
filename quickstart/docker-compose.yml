@@ -54,7 +54,7 @@ services:
       - SESSION_COOKIE_SECURE=false
 
       # TODO: these config values should probably have defaults
-      - CLUSTER=dev
+      - UPSTREAM_CLUSTER=dev
       - METRICS_STATSD_HOST=127.0.0.1
       - METRICS_STATSD_PORT=8125
 
@@ -103,7 +103,6 @@ services:
       - SESSION_COOKIE_SECURE=false
 
       # TODO: these config values should probably have defaults
-      - CLUSTER=dev
       - METRICS_STATSD_HOST=127.0.0.1
       - METRICS_STATSD_PORT=8125
 
