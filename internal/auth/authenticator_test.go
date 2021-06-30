@@ -1479,29 +1479,45 @@ func TestGlobalHeaders(t *testing.T) {
 	config := testConfiguration(t)
 	proxy, _ := NewAuthenticator(config, setMockCSRFStore(&sessions.MockCSRFStore{}))
 
-	// see middleware.go
-	expectedHeaders := securityHeaders
-
 	testCases := []struct {
-		path string
+		Path            string
+		HeaderOverrides map[string]string
 	}{
-		{"/callback"},
-		{"/ping"},
-		{"/profile"},
-		{"/redeem"},
-		{"/robots.txt"},
-		{"/sign_in"},
-		{"/sign_out"},
-		{"/start"},
-		{"/validate"},
+		{Path: "/callback"},
+		{Path: "/ping"},
+		{Path: "/profile"},
+		{Path: "/redeem"},
+		{Path: "/robots.txt"},
+		{Path: "/sign_in"},
+		{Path: "/sign_out"},
+		{Path: "/start"},
+		{Path: "/validate"},
 		// even 404s get headers set
-		{"/unknown"},
+		{Path: "/unknown"},
+		{
+			// securityHeaders should be overriden
+			Path: "/callback",
+			HeaderOverrides: map[string]string{
+				"X-Frame-Options": "foo",
+			},
+		},
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.path, func(t *testing.T) {
+		t.Run(tc.Path, func(t *testing.T) {
+			// see middleware.go for securityHeaders value
+			expectedHeaders := securityHeaders
 			rw := httptest.NewRecorder()
-			req, _ := http.NewRequest("GET", tc.path, nil)
+			req, _ := http.NewRequest("GET", tc.Path, nil)
+
+			if len(tc.HeaderOverrides) != 0 {
+				// recreate the auth proxy with the config overrides, and ovewrite expectedHeader values
+				config.ServerConfig.ParsedHeaderOverrides = tc.HeaderOverrides
+				proxy, _ = NewAuthenticator(config, setMockCSRFStore(&sessions.MockCSRFStore{}))
+				for k, v := range tc.HeaderOverrides {
+					expectedHeaders[k] = v
+				}
+			}
 			proxy.ServeMux.ServeHTTP(rw, req)
 			for key, expectedVal := range expectedHeaders {
 				gotVal := rw.Header().Get(key)

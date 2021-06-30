@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"os"
 	"time"
@@ -55,6 +56,7 @@ import (
 // SERVER_SCHEME
 // SERVER_HOST
 // SERVER_PORT
+// SERVER_HEADERS
 // SERVER_TIMEOUT_REQUEST
 // SERVER_TIMEOUT_WRITE
 // SERVER_TIMEOUT_READ
@@ -414,9 +416,11 @@ func (cc CookieConfig) Validate() error {
 }
 
 type ServerConfig struct {
-	Host   string `mapstructure:"host"`
-	Port   int    `mapstructure:"port"`
-	Scheme string `mapstructure:"scheme"`
+	Host                  string `mapstructure:"host"`
+	Port                  int    `mapstructure:"port"`
+	Scheme                string `mapstructure:"scheme"`
+	Headers               string `mapstructure:"headers"`
+	ParsedHeaderOverrides map[string]string
 
 	TimeoutConfig TimeoutConfig `mapstructure:"timeout"`
 }
@@ -432,6 +436,12 @@ func (sc ServerConfig) Validate() error {
 
 	if err := sc.TimeoutConfig.Validate(); err != nil {
 		return xerrors.Errorf("invalid server.tcp config: %w", err)
+	}
+
+	if sc.Headers != "" {
+		if err := json.Unmarshal([]byte(sc.Headers), &sc.ParsedHeaderOverrides); err != nil {
+			return xerrors.Errorf("invalid server.headers: cannot unmarshal", err)
+		}
 	}
 
 	return nil

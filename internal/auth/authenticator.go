@@ -22,11 +22,12 @@ import (
 
 // Authenticator stores all the information associated with proxying the request.
 type Authenticator struct {
-	Validators       []validators.Validator
-	EmailDomains     []string
-	ProxyRootDomains []string
-	Host             string
-	Scheme           string
+	Validators              []validators.Validator
+	EmailDomains            []string
+	ProxyRootDomains        []string
+	Host                    string
+	Scheme                  string
+	SecurityHeaderOverrides map[string]string
 
 	csrfStore    sessions.CSRFStore
 	sessionStore sessions.SessionStore
@@ -80,11 +81,12 @@ func NewAuthenticator(config Configuration, optionFuncs ...func(*Authenticator) 
 	}
 
 	p := &Authenticator{
-		ProxyClientID:     config.ClientConfigs["proxy"].ID,
-		ProxyClientSecret: config.ClientConfigs["proxy"].Secret,
-		EmailDomains:      config.AuthorizeConfig.EmailConfig.Domains,
-		Host:              config.ServerConfig.Host,
-		Scheme:            config.ServerConfig.Scheme,
+		ProxyClientID:           config.ClientConfigs["proxy"].ID,
+		ProxyClientSecret:       config.ClientConfigs["proxy"].Secret,
+		EmailDomains:            config.AuthorizeConfig.EmailConfig.Domains,
+		Host:                    config.ServerConfig.Host,
+		Scheme:                  config.ServerConfig.Scheme,
+		SecurityHeaderOverrides: config.ServerConfig.ParsedHeaderOverrides,
 
 		ProxyRootDomains: proxyRootDomains,
 		templates:        templates,
@@ -117,7 +119,9 @@ func (p *Authenticator) newMux() http.Handler {
 	serviceMux.HandleFunc("/redeem", p.withMethods(p.validateClientID(p.validateClientSecret(p.Redeem)), "POST"))
 	serviceMux.HandleFunc("/refresh", p.withMethods(p.validateClientID(p.validateClientSecret(p.Refresh)), "POST"))
 
-	return setHeaders(serviceMux)
+	handler := setSecurityHeadersWithOverrides(serviceMux, p.SecurityHeaderOverrides)
+
+	return handler
 }
 
 // GetRedirectURI returns the redirect url for a given OAuthProxy,
