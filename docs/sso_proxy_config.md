@@ -5,6 +5,8 @@ their corresponding types that the sso proxy will read.
 Defaults for the below settings can be found here: https://github.com/buzzfeed/sso/blob/main/internal/proxy/configuration.go#L61-L105
 
 
+## Session and Server configuration
+
 ### Session
 ```
 SESSION_COOKIE_NAME     - string - name associated with the session cookie
@@ -36,6 +38,8 @@ CLIENT_SECRET - string - the OAuth Client secret
 REQUESTSIGNER_KEY - string - RSA private key used for digitally signing requests
 ```
 
+## Upstream and Provider Configuration
+
 ### Upstream
 For further upstream configuration, see https://github.com/buzzfeed/sso/blob/main/docs/sso_config.md.
 ```
@@ -58,6 +62,7 @@ PROVIDER_URL_INTERNAL  - string - the internal URL for the upstream provider in 
 PROVIDER_SCOPE         - string - OAuth `scope` sent with provider requests
 ```
 
+## Logging and Monitoring Configuration
 ### StatsD
 ```
 METRICS_STATSD_PORT - int - port that statsdclient listens on
