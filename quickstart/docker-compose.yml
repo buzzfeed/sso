@@ -34,7 +34,7 @@ services:
       # (Optional) Allow specific google email address to log in for demo purposes
       # - UPSTREAM_DEFAULT_EMAIL_ADDRESSES=*
 
-      - UPSTREAM_CONFIGSFILE=/sso/upstream_configs.yml
+      - UPSTREAM_CONFIGFILE=/sso/upstream_configs.yml
       - PROVIDER_URL_EXTERNAL=http://sso-auth.localtest.me
       - PROVIDER_URL_INTERNAL=http://host.docker.internal
 

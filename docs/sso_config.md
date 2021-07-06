@@ -32,11 +32,11 @@ For example, the following config would have the following environment variables
   * **to** is the cname of the proxied service (this tells sso proxy where to proxy requests that come in on the from field)
   * **type** declares the type of route to use, right now there is just *simple* and *rewrite*.
   * **options** are a set of options that can be added to your configuration.
-    * **allowed groups** optional list of authorized google groups that can access the service. If not specified, anyone within an email domain is allowed to access the service. *Note*: We do not support nested group authentication at this time. Groups must be made up of email addresses associated with individual's accounts. See [#133](https://github.com/buzzfeed/sso/issues/133).
-    * **allowed_email_domains** optional list of authorized email domains that can access the service.
-    * **allowed_email_addresses** optional list of authorized email addresses that can access the service.
+    * **allowed_groups** optional list of authorized google groups that can access the service. *Note*: We do not support nested group authentication at this time. Groups must be made up of email addresses associated with individual's accounts. See [#133](https://github.com/buzzfeed/sso/issues/133).
+    * **allowed_email_domains** optional list of authorized email domains that can access the service. Set to `*` to allow any email domain.
+    * **allowed_email_addresses** optional list of authorized email addresses that can access the service. Set to `*` to allow any email address.
     * **flush_interval** sets an interval to periodically flush the buffered response to the client. If specified, SSO Proxy will not timeout requests to this upstream and will stream the response to the client. NOTE: Use with extreme caution.
-    * **header_overrides** overrides any heads set either by SSO proxy itself or upstream applications. Useful for modifying browser security headers.
+    * **header_overrides** overrides any headers set either by SSO proxy itself or upstream applications. Useful for modifying browser security headers.
     * **inject_request_headers** adds headers to the request before the request is sent to the proxied service.  Useful for adding basic auth headers if needed.
     * **provider_slug** determines which identity provider this upstream will use. This provider must first be configured within `sso_auth`.
     * **skip_auth_regex** skips authentication for paths matching these regular expressions. NOTE: Use with extreme caution.
@@ -44,6 +44,9 @@ For example, the following config would have the following environment variables
   * **extra_routes** allows services to specify multiple routes. These route can includes the *from*, *to*, *type*, and *options* fields defined above and inherit any configuration
 from their parent routing config if not specified here (e.g. *options*).
 * **cluster name <identifier>** are cluster-specific settings. Any configuration specified in the default field can be override here with cluster specific configuration.
+
+Note: From the perspective of request validations, if a request meets the requirements set in any of `allowed_groups`, `allowed_email_domains`, and `allowed_email_addresses`,
+then it will be deemed valid. It need only pass _one_, not all of them.
 
 ### Route Types
 
@@ -99,7 +102,7 @@ export SSO_CONFIG_FOOBAR_SIGNING_KEY="sha256:shared-secret-value"
 ```
 would be the signing key for the `foobar` upstream service, use the sha256 with the `shared-secret-value` as it's signing key value.
 
-This signs the request using defined signature headers found in https://github.com/buzzfeed/sso/blob/main/sso_proxy/oauthproxy.go#L25.
+This signs the request using defined signature headers found in the `SignatureHeaders` variable at https://github.com/buzzfeed/sso/blob/main/internal/proxy/oauthproxy.go#L27-L39.
 Specific implementation details can be found at https://github.com/18F/hmacauth
 
 ### Headers
@@ -120,7 +123,8 @@ Optional:
 
 #### Security Headers
 
-`sso_proxy` adds the following headers to every outgoing request, to ensure a baseline level of browser security for every service that it protects.  These headers _cannot_ be overridden by upstream services, but _can_ be overridden in the `HEADER_OVERRIDES` environment variable.
+`sso_proxy` adds the following headers to every outgoing request, to ensure a baseline level of browser security for every service that it protects.
+These headers _cannot_ be overridden by upstream services themselves, but _can_ be overridden in invdividual upstream configurations by setting the `header_overrides` variable.
 
 * `Strict-Transport-Security`
 * `X-Content-Type-Options`
@@ -144,7 +148,7 @@ The **session\_ttl\_valid** option controls the amount of time it will take for
 will make an _internal request_ to `sso_auth` (i.e. invisible to the
 end user) to revalidate & refresh the session.
 
-The **sessioni\_ttl\_lifetime** option controls the maximum lifetime of a
+The **session\_ttl\_lifetime** option controls the maximum lifetime of a
 `sso_proxy` session, after which a user will be 301 redirected to
 `sso_auth` to go through the 3rd party OAuth2 flow again.
 
