@@ -46,7 +46,7 @@ from their parent routing config if not specified here (e.g. *options*).
 * **cluster name <identifier>** are cluster-specific settings. Any configuration specified in the default field can be override here with cluster specific configuration.
 
 Note: From the perspective of request validations, if a request meets the requirements set in any of `allowed_groups`, `allowed_email_domains`, and `allowed_email_addresses`,
-      then it will be deemed valid. It need only pass _one_, not all of them.
+then it will be deemed valid. It need only pass _one_, not all of them.
 
 ### Route Types
 
