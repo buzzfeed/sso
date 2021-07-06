@@ -57,7 +57,7 @@ UPSTREAM_CLUSTER                    - string - the cluster in which this is runn
 ## Provider
 ```
 PROVIDER_TYPE - string - string - the 'type' of upstream provider to use (at this time, only a provider type of 'sso' is supported)
-PROVIDER_URL_EXTERNAL  - string - the external URL for the upstream provider in this envrironment (e.g. "https://sso-auth.example.com")
+PROVIDER_URL_EXTERNAL  - string - the external URL for the upstream provider in this environment (e.g. "https://sso-auth.example.com")
 PROVIDER_URL_INTERNAL  - string - the internal URL for the upstream provider in this environment (e.g.  "https://sso-auth-int.example.com")
 PROVIDER_SCOPE         - string - OAuth `scope` sent with provider requests
 ```
