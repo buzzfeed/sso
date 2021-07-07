@@ -1,6 +1,7 @@
 version := "v3.0.0"
 
 commit := $(shell git rev-parse --short HEAD)
+gopath := $(shell go env GOPATH)
 
 
 build: dist/sso-auth dist/sso-proxy
@@ -16,7 +17,7 @@ dist/sso-proxy:
 	go build -mod=readonly -o dist/sso-proxy ./cmd/sso-proxy
 
 tools:
-	go get golang.org/x/lint/golint
+	curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s -- -b $(gopath)/bin v1.16.0
 	go get github.com/rakyll/statik 
 
 test:
