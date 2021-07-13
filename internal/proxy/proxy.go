@@ -60,6 +60,7 @@ func New(config Configuration, statsdClient *statsd.Client) (*SSOProxy, error) {
 
 		optFuncs = append(optFuncs,
 			SetProvider(provider),
+			SetCookieSameSite(upstreamConfig.CookieSameSite, config.SessionConfig.CookieConfig),
 			SetCookieStore(config.SessionConfig.CookieConfig),
 			SetUpstreamConfig(upstreamConfig),
 			SetProxyHandler(handler),

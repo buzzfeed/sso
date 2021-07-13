@@ -473,6 +473,20 @@ func TestUpstreamConfigErrorParsing(t *testing.T) {
 				Message: "unable to compile skip auth regex",
 			},
 		},
+		{
+			Name: "error on invalid samesite",
+			Config: []byte(`
+- service: bar
+  default:
+    from: bar.{{cluster}}.{{root_domain}}
+    to: bar-internal.{{cluster}}.{{root_domain}}
+    options:
+      cookie_samesite: foo
+`),
+			WantErr: &ErrParsingConfig{
+				Message: "invalid upstream config value for cookie_samesite: \"foo\". must be one of [\"none\" \"lax\" \"strict\"]",
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
@@ -487,8 +501,8 @@ func TestUpstreamConfigErrorParsing(t *testing.T) {
 
 			typedErr, ok := err.(*ErrParsingConfig)
 			if !ok {
-				t.Logf("want: %v", tc.WantErr)
-				t.Logf(" got: %v", err)
+				t.Logf("want: %T", tc.WantErr)
+				t.Logf(" got: %T", err)
 				t.Fatalf("got unexpected error type")
 			}
 

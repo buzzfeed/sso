@@ -41,6 +41,7 @@ For example, the following config would have the following environment variables
     * **provider_slug** determines which identity provider this upstream will use. This provider must first be configured within `sso_auth`.
     * **skip_auth_regex** skips authentication for paths matching these regular expressions. NOTE: Use with extreme caution.
     * **timeout** sets the amount of time that SSO Proxy will wait for the upstream to complete its request.
+    * **cookie_samesite** sets the `SameSite` attribute on sso\_proxy cookies (valid inputs: "none", "lax", "strict").
   * **extra_routes** allows services to specify multiple routes. These route can includes the *from*, *to*, *type*, and *options* fields defined above and inherit any configuration
 from their parent routing config if not specified here (e.g. *options*).
 * **cluster name <identifier>** are cluster-specific settings. Any configuration specified in the default field can be override here with cluster specific configuration.

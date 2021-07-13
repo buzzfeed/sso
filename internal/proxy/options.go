@@ -48,6 +48,29 @@ func SetCookieStore(cc CookieConfig) func(*OAuthProxy) error {
 	}
 }
 
+// SetCookieStore sets the OAuthProxy.cookieSameSite attribute as a functional option
+func SetCookieSameSite(upstreamSameSite string, cc CookieConfig) func(*OAuthProxy) error {
+	return func(op *OAuthProxy) error {
+
+		var sameSite http.SameSite
+		switch upstreamSameSite {
+		case "none":
+			if !cc.Secure {
+				return fmt.Errorf("if sameSite is none, cookie must be Secure")
+			}
+			sameSite = http.SameSiteNoneMode
+		case "lax":
+			sameSite = http.SameSiteLaxMode
+		case "strict":
+			sameSite = http.SameSiteStrictMode
+		default:
+			sameSite = http.SameSiteDefaultMode
+		}
+		op.cookieSameSite = sameSite
+		return nil
+	}
+}
+
 // SetRequestSigner sets the request signer  as a functional option
 func SetRequestSigner(signer *RequestSigner) func(*OAuthProxy) error {
 	logger := log.NewLogEntry()
