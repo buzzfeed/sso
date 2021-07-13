@@ -113,6 +113,7 @@ func TestMakeSessionCookie(t *testing.T) {
 				HttpOnly: true,
 				Secure:   true,
 				Expires:  now.Add(expiration),
+				SameSite: http.SameSiteDefaultMode,
 			},
 		},
 		{
@@ -131,6 +132,7 @@ func TestMakeSessionCookie(t *testing.T) {
 				HttpOnly: true,
 				Secure:   true,
 				Expires:  now.Add(expiration),
+				SameSite: http.SameSiteDefaultMode,
 			},
 		},
 	}
@@ -140,7 +142,7 @@ func TestMakeSessionCookie(t *testing.T) {
 			session, err := NewCookieStore(cookieName, tc.optFuncs...)
 			testutil.Ok(t, err)
 			req := httptest.NewRequest("GET", "http://www.example.com", nil)
-			cookie := session.makeSessionCookie(req, cookieValue, expiration, now)
+			cookie := session.makeSessionCookie(req, cookieValue, expiration, now, http.SameSiteDefaultMode)
 			testutil.Equal(t, cookie, tc.expectedCookie)
 		})
 	}
@@ -168,6 +170,7 @@ func TestMakeSessionCSRFCookie(t *testing.T) {
 				HttpOnly: true,
 				Secure:   true,
 				Expires:  now.Add(expiration),
+				SameSite: http.SameSiteDefaultMode,
 			},
 		},
 		{
@@ -186,6 +189,7 @@ func TestMakeSessionCSRFCookie(t *testing.T) {
 				HttpOnly: true,
 				Secure:   true,
 				Expires:  now.Add(expiration),
+				SameSite: http.SameSiteDefaultMode,
 			},
 		},
 	}
@@ -195,7 +199,7 @@ func TestMakeSessionCSRFCookie(t *testing.T) {
 			session, err := NewCookieStore(cookieName, tc.optFuncs...)
 			testutil.Ok(t, err)
 			req := httptest.NewRequest("GET", "http://www.example.com", nil)
-			cookie := session.makeCSRFCookie(req, cookieValue, expiration, now)
+			cookie := session.makeCSRFCookie(req, cookieValue, expiration, now, http.SameSiteDefaultMode)
 			testutil.Equal(t, tc.expectedCookie, cookie)
 		})
 	}
@@ -210,7 +214,7 @@ func TestSetSessionCookie(t *testing.T) {
 		testutil.Ok(t, err)
 		req := httptest.NewRequest("GET", "http://www.example.com", nil)
 		rw := httptest.NewRecorder()
-		session.setSessionCookie(rw, req, cookieValue)
+		session.setSessionCookie(rw, req, cookieValue, http.SameSiteDefaultMode)
 		var found bool
 		for _, cookie := range rw.Result().Cookies() {
 			if cookie.Name == cookieName {
@@ -252,7 +256,7 @@ func TestClearSessionCookie(t *testing.T) {
 		session, err := NewCookieStore(cookieName)
 		testutil.Ok(t, err)
 		req := httptest.NewRequest("GET", "http://www.example.com", nil)
-		req.AddCookie(session.makeSessionCookie(req, cookieValue, time.Hour, time.Now()))
+		req.AddCookie(session.makeSessionCookie(req, cookieValue, time.Hour, time.Now(), http.SameSiteDefaultMode))
 
 		rw := httptest.NewRecorder()
 		session.ClearSession(rw, req)
@@ -276,7 +280,7 @@ func TestClearCSRFSessionCookie(t *testing.T) {
 		session, err := NewCookieStore(cookieName)
 		testutil.Ok(t, err)
 		req := httptest.NewRequest("GET", "http://www.example.com", nil)
-		req.AddCookie(session.makeCSRFCookie(req, cookieValue, time.Hour, time.Now()))
+		req.AddCookie(session.makeCSRFCookie(req, cookieValue, time.Hour, time.Now(), http.SameSiteDefaultMode))
 
 		rw := httptest.NewRecorder()
 		session.ClearCSRF(rw, req)
@@ -313,7 +317,7 @@ func TestLoadCookiedSession(t *testing.T) {
 			setupCookies: func(t *testing.T, req *http.Request, s *CookieStore, sessionState *SessionState) {
 				value, err := MarshalSession(sessionState, s.CookieCipher)
 				testutil.Ok(t, err)
-				req.AddCookie(s.makeSessionCookie(req, value, time.Hour, time.Now()))
+				req.AddCookie(s.makeSessionCookie(req, value, time.Hour, time.Now(), http.SameSiteDefaultMode))
 			},
 			sessionState: &SessionState{
 				Email:        "example@email.com",
@@ -326,7 +330,7 @@ func TestLoadCookiedSession(t *testing.T) {
 			optFuncs: []func(*CookieStore) error{CreateMiscreantCookieCipher(testEncodedCookieSecret)},
 			setupCookies: func(t *testing.T, req *http.Request, s *CookieStore, sessionState *SessionState) {
 				value := "574b776a7c934d6b9fc42ec63a389f79"
-				req.AddCookie(s.makeSessionCookie(req, value, time.Hour, time.Now()))
+				req.AddCookie(s.makeSessionCookie(req, value, time.Hour, time.Now(), http.SameSiteDefaultMode))
 			},
 			expectedError: ErrInvalidSession,
 		},
