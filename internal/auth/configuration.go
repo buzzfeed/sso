@@ -23,6 +23,7 @@ import (
 // SESSION_COOKIE_REFRESH
 // SESSION_COOKIE_SECURE
 // SESSION_COOKIE_HTTPONLY
+// SESSION_COOKIE_SAMESITE
 // SESSION_LIFETIME
 // SESSION_KEY
 //
@@ -388,6 +389,7 @@ type CookieConfig struct {
 	Domain   string        `mapstructure:"domain"`
 	Expire   time.Duration `mapstructure:"expire"`
 	Secure   bool          `mapstructure:"secure"`
+	SameSite string        `mapstructure:"samesite"`
 	HTTPOnly bool          `mapstructure:"httponly"`
 }
 
@@ -408,6 +410,28 @@ func (cc CookieConfig) Validate() error {
 
 	if err := validateCipherKeyValue(cc.Secret); err != nil {
 		return xerrors.Errorf("invalid cookie.secret: %w", err)
+	}
+
+	if cc.SameSite != "" {
+		valid := false
+		validSameSites := []string{"none", "lax", "strict"}
+		for _, v := range validSameSites {
+			if cc.SameSite == v {
+				valid = true
+				break
+			}
+			if !valid {
+				return xerrors.Errorf("invalid value for cookie.samesite: %q. must be one of %q",
+					cc.SameSite, validSameSites)
+			}
+		}
+	}
+
+	if cc.SameSite == "none" {
+		if !cc.Secure {
+			return xerrors.Errorf("invalid cookie.samesite: %q. If 'none', cookie.secure must be true, but it is '%t'",
+				cc.SameSite, cc.Secure)
+		}
 	}
 
 	return nil

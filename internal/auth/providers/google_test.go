@@ -181,7 +181,7 @@ func TestGoogleProviderRedeem(t *testing.T) {
 				t.Errorf("unexpected error %s", err)
 			}
 			if tc.expectedSession == nil && session != nil {
-				t.Errorf("expected session to be nil but it was %s", session)
+				t.Errorf("expected session to be nil but it was %v", session)
 			}
 			if session != nil && tc.expectedSession != nil {
 				if session.Email != tc.expectedSession.Email {

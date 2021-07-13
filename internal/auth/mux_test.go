@@ -70,6 +70,74 @@ func TestHostHeader(t *testing.T) {
 	}
 }
 
+func TestSetCookieSameSite(t *testing.T) {
+	testCases := []struct {
+		Name             string
+		SameSite         string
+		Secure           bool
+		ExpectedSameSite http.SameSite
+		ExpectedErr      string
+	}{
+		{
+			Name:        "(invalid) samesite: none, secure: false",
+			SameSite:    "none",
+			Secure:      false,
+			ExpectedErr: "if sameSite is none, cookie must be Secure",
+		},
+		{
+			Name:             "(valid) samesite: none, secure: true",
+			SameSite:         "none",
+			Secure:           true,
+			ExpectedSameSite: http.SameSiteNoneMode,
+		},
+		{
+			Name:             "(valid) samesite: lax",
+			SameSite:         "lax",
+			ExpectedSameSite: http.SameSiteLaxMode,
+		},
+		{
+			Name:             "(valid) samesite: strict",
+			SameSite:         "strict",
+			ExpectedSameSite: http.SameSiteStrictMode,
+		},
+		{
+			Name:             "(valid) samesite: nil",
+			ExpectedSameSite: http.SameSiteDefaultMode,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			config := testConfiguration(t)
+			config.SessionConfig.CookieConfig.SameSite = tc.SameSite
+			config.SessionConfig.CookieConfig.Secure = tc.Secure
+
+			authMux, err := NewAuthenticatorMux(config, nil)
+			if err == nil && tc.ExpectedErr != "" {
+				t.Logf(" got error: %#v", err)
+				t.Logf("want error: %#v", tc.ExpectedErr)
+				t.Error("unexpected error value")
+			}
+			if err != nil {
+				if err.Error() != tc.ExpectedErr {
+					t.Logf(" got error: %#v", err.Error())
+					t.Logf("want error: %#v", tc.ExpectedErr)
+					t.Error("unexpected error value")
+				}
+			}
+			if err == nil {
+				for _, authenticator := range authMux.authenticators {
+					if authenticator.cookieSameSite != tc.ExpectedSameSite {
+						// https://golang.org/src/net/http/cookie.go
+						t.Logf(" got authenticator.CookieSameSite=%v", authenticator.cookieSameSite)
+						t.Logf("want authenticator.CookieSameSite=%v", tc.ExpectedSameSite)
+						t.Error("unexpected authenticator.CookieSameSite value")
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestRobotsTxt(t *testing.T) {
 	config := testConfiguration(t)
 	authMux, err := NewAuthenticatorMux(config, nil)

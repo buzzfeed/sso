@@ -192,11 +192,13 @@ func TestEnvironmentOverridesConfiguration(t *testing.T) {
 }
 
 func TestConfigValidate(t *testing.T) {
-	testCases := map[string]struct {
+	testCases := []struct {
+		Name        string
 		Validator   Validator
 		ExpectedErr error
 	}{
-		"passing configuration": {
+		{
+			Name: "passing configuration",
 			Validator: Configuration{
 				ServerConfig: ServerConfig{
 					Host: "localhost",
@@ -254,7 +256,8 @@ func TestConfigValidate(t *testing.T) {
 			},
 			ExpectedErr: nil,
 		},
-		"missing host configuration": {
+		{
+			Name: "missing host configuration",
 			Validator: ServerConfig{
 				Port: 4180,
 				TimeoutConfig: TimeoutConfig{
@@ -264,10 +267,41 @@ func TestConfigValidate(t *testing.T) {
 			},
 			ExpectedErr: xerrors.New("no server.host configured"),
 		},
+		{
+			Name: "CookieConfig: invalid cookie.samesite value",
+			Validator: SessionConfig{
+				Key:                "CrYro5Kp6CO2aBbVGoHgnh2/YQaz9cqqRYNbtTSUBDs=",
+				SessionLifetimeTTL: 2 * time.Minute,
+				CookieConfig: CookieConfig{
+					// created with `openssl rand 32 -base64`
+					Secret:   "ekVGRbawiXuvVhgyKUIg0KQXw0ubdSd3rE9Pheog1JU=",
+					Name:     "foo",
+					SameSite: "foo",
+				},
+			},
+			ExpectedErr: xerrors.New(
+				"invalid session.cookie config: invalid value for cookie.samesite: \"foo\". must be one of [\"none\" \"lax\" \"strict\"]"),
+		},
+		{
+			Name: "CookieConfig: if cookie.samesite == 'none', cookie.secure must be 'true'",
+			Validator: SessionConfig{
+				Key:                "CrYro5Kp6CO2aBbVGoHgnh2/YQaz9cqqRYNbtTSUBDs=",
+				SessionLifetimeTTL: 2 * time.Minute,
+				CookieConfig: CookieConfig{
+					// created with `openssl rand 32 -base64`
+					Secret:   "ekVGRbawiXuvVhgyKUIg0KQXw0ubdSd3rE9Pheog1JU=",
+					Name:     "foo",
+					SameSite: "none",
+					Secure:   false,
+				},
+			},
+			ExpectedErr: xerrors.New(
+				"invalid session.cookie config: invalid cookie.samesite: \"none\". If 'none', cookie.secure must be true, but it is 'false'"),
+		},
 	}
 
-	for testName, tc := range testCases {
-		t.Run(testName, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
 			err := tc.Validator.Validate()
 			if err != nil && tc.ExpectedErr != nil {
 				assertEq(tc.ExpectedErr.Error(), err.Error(), t)

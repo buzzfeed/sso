@@ -42,6 +42,7 @@ func NewAuthenticatorMux(config Configuration, statsdClient *statsd.Client) (*Au
 			SetValidators(v),
 			SetProvider(idp),
 			SetCookieStore(config.SessionConfig, idpSlug),
+			SetCookieSameSite(config.SessionConfig.CookieConfig),
 			SetStatsdClient(statsdClient),
 			SetRedirectURL(config.ServerConfig, idpSlug),
 		)
