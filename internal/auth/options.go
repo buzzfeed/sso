@@ -3,6 +3,7 @@ package auth
 import (
 	"encoding/base64"
 	"fmt"
+	"net/http"
 	"net/url"
 	"path"
 
@@ -159,6 +160,29 @@ func SetCookieStore(sessionConfig SessionConfig, providerSlug string) func(*Auth
 		a.csrfStore = cookieStore
 		a.sessionStore = cookieStore
 		a.AuthCodeCipher = codeCipher
+		return nil
+	}
+}
+
+// SetCookieStore sets the Authenticator.cookieSameSite attribute as a functional option
+func SetCookieSameSite(cc CookieConfig) func(*Authenticator) error {
+	return func(a *Authenticator) error {
+
+		var sameSite http.SameSite
+		switch cc.SameSite {
+		case "none":
+			if !cc.Secure {
+				return fmt.Errorf("if sameSite is none, cookie must be Secure")
+			}
+			sameSite = http.SameSiteNoneMode
+		case "lax":
+			sameSite = http.SameSiteLaxMode
+		case "strict":
+			sameSite = http.SameSiteStrictMode
+		default:
+			sameSite = http.SameSiteDefaultMode
+		}
+		a.cookieSameSite = sameSite
 		return nil
 	}
 }

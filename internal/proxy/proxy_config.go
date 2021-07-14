@@ -67,6 +67,7 @@ type UpstreamConfig struct {
 	SkipRequestSigning    bool
 	CookieName            string
 	ProviderSlug          string
+	CookieSameSite        string
 }
 
 // RouteConfig maps to the yaml config fields,
@@ -107,6 +108,7 @@ type OptionsConfig struct {
 	FlushInterval         time.Duration     `yaml:"flush_interval"`
 	SkipRequestSigning    bool              `yaml:"skip_request_signing"`
 	ProviderSlug          string            `yaml:"provider_slug"`
+	CookieSameSite        string            `yaml:"cookie_samesite"`
 
 	// CookieName is still set globally, so we do not provide override behavior
 	CookieName string
@@ -358,6 +360,26 @@ func validateUpstreamConfig(proxy *UpstreamConfig) error {
 		}
 	}
 
+	if proxy.RouteConfig.Options != nil {
+		if proxy.RouteConfig.Options.CookieSameSite != "" {
+			sameSite := proxy.RouteConfig.Options.CookieSameSite
+			valid := false
+			validSameSites := []string{"none", "lax", "strict"}
+			for _, v := range validSameSites {
+				if sameSite == v {
+					valid = true
+					break
+				}
+				if !valid {
+					return &ErrParsingConfig{
+						Message: fmt.Sprintf("invalid upstream config value for cookie_samesite: %q. must be one of %q",
+							sameSite, validSameSites),
+					}
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -415,6 +437,7 @@ func parseOptionsConfig(proxy *UpstreamConfig, defaultOpts *OptionsConfig) error
 	proxy.PreserveHost = dst.PreserveHost
 	proxy.SkipRequestSigning = dst.SkipRequestSigning
 	proxy.CookieName = dst.CookieName
+	proxy.CookieSameSite = dst.CookieSameSite
 	proxy.ProviderSlug = dst.ProviderSlug
 
 	proxy.RouteConfig.Options = nil

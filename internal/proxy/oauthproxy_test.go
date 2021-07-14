@@ -115,6 +115,7 @@ func testNewOAuthProxy(t *testing.T, optFuncs ...func(*OAuthProxy) error) (*OAut
 
 	reverseProxy, err := NewUpstreamReverseProxy(upstreamConfig, requestSigner)
 	if err != nil {
+
 		t.Fatalf("unexpected error creating upstream reverse proxy: %v", err)
 	}
 
@@ -222,6 +223,96 @@ func TestSetCookieStore(t *testing.T) {
 	_, ok = proxy.cookieCipher.(*aead.MiscreantCipher)
 	if !ok {
 		t.Error("Unexpected object type")
+	}
+}
+
+func TestSetCookieSameSite(t *testing.T) {
+	testCases := []struct {
+		name             string
+		sameSite         string
+		cookieConfig     CookieConfig
+		expectedSameSite http.SameSite
+		expectedErr      string
+	}{
+		{
+			name:     "(invalid) samesite: none, secure: false",
+			sameSite: "none",
+			cookieConfig: CookieConfig{
+				Secure: false,
+			},
+			expectedErr: "if sameSite is none, cookie must be Secure",
+		},
+		{
+			name:     "(valid) samesite: none, secure: true",
+			sameSite: "none",
+			cookieConfig: CookieConfig{
+				Secure: true,
+			},
+			expectedSameSite: http.SameSiteNoneMode,
+		},
+		{
+			name:             "(valid) samesite: lax",
+			sameSite:         "lax",
+			expectedSameSite: http.SameSiteLaxMode,
+		},
+		{
+			name:             "(valid) samesite: strict",
+			sameSite:         "strict",
+			expectedSameSite: http.SameSiteStrictMode,
+		},
+		{
+			name:             "(valid) samesite: nil",
+			expectedSameSite: http.SameSiteDefaultMode,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+
+			config := DefaultProxyConfig()
+			providerURL, _ := url.Parse("http://localhost/")
+			provider := providers.NewTestProvider(providerURL, "")
+			upstreamConfig := &UpstreamConfig{
+				Route: &SimpleRoute{
+					ToURL: &url.URL{Host: "foo.com"},
+				},
+			}
+			reverseProxy, _ := NewUpstreamReverseProxy(upstreamConfig, nil)
+
+			optFuncs := []func(*OAuthProxy) error{
+				SetCookieSameSite(tc.sameSite, tc.cookieConfig),
+				SetProvider(provider),
+				SetProxyHandler(reverseProxy),
+				setCookieCipher(&aead.MockCipher{}),
+				SetUpstreamConfig(upstreamConfig),
+				setSessionStore(&sessions.MockSessionStore{Session: testSession()}),
+				setCSRFStore(&sessions.MockCSRFStore{}),
+			}
+
+			proxy, err := NewOAuthProxy(config.SessionConfig, optFuncs...)
+			if err == nil && tc.expectedErr != "" {
+				t.Logf(" got error: %#v", err)
+				t.Logf("want error: %#v", tc.expectedErr)
+				t.Error("unexpected error value")
+			}
+			if err != nil {
+				if err.Error() != tc.expectedErr {
+					t.Logf(" got error: %#v", err.Error())
+					t.Logf("want error: %#v", tc.expectedErr)
+					t.Error("unexpected error value")
+				}
+			}
+			if err == nil {
+				if proxy.cookieSameSite != tc.expectedSameSite {
+					// https://golang.org/src/net/http/cookie.go
+					t.Logf(" got proxy.CookieSameSite=%v", proxy.cookieSameSite)
+					t.Logf("want proxy.CookieSameSite=%v", tc.expectedSameSite)
+					t.Error("unexpected proxy.CookieSameSite value")
+				}
+			}
+
+		})
+
 	}
 }
 

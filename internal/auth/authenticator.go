@@ -28,8 +28,9 @@ type Authenticator struct {
 	Host             string
 	Scheme           string
 
-	csrfStore    sessions.CSRFStore
-	sessionStore sessions.SessionStore
+	cookieSameSite http.SameSite
+	csrfStore      sessions.CSRFStore
+	sessionStore   sessions.SessionStore
 
 	redirectURL *url.URL // the url to receive requests at
 	provider    providers.Provider
@@ -603,6 +604,7 @@ func (p *Authenticator) getOAuthCallback(rw http.ResponseWriter, req *http.Reque
 		fmt.Sprintf("oauth callback: user passed validation"))
 
 	logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info("authentication complete")
+	session.SameSite = p.cookieSameSite
 	err = p.sessionStore.SaveSession(rw, req, session)
 	if err != nil {
 		tags = append(tags, "error:save_session_failed")
