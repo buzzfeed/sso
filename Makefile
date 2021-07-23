@@ -26,16 +26,25 @@ clean:
 	rm -r dist
 
 imagepush-commit:
-	docker build -t buzzfeed/sso-dev:$(commit) .
-	docker push buzzfeed/sso-dev:$(commit)
+	docker context create sso-dev
+	docker buildx create sso-dev --name sso-dev
+	docker buildx use sso-dev
+	docker buildx build --tag buzzfeed/sso-dev:$(commit) . --platform linux/amd64,linux/arm64,linux/arm/v7 --push
+	docker buildx rm sso-dev
 
 imagepush-latest:
-	docker build -t buzzfeed/sso-dev:latest .
-	docker push buzzfeed/sso-dev:latest
+	docker context create sso-dev
+	docker buildx create sso-dev --name sso-dev
+	docker buildx use sso-dev
+	docker buildx build --tag buzzfeed/sso-dev:latest . --platform linux/amd64,linux/arm64,linux/arm/v7 --push
+	docker buildx rm sso-dev
 
 releasepush:
-	docker build -t buzzfeed/sso:$(version) -t buzzfeed/sso-dev:latest .
-	docker push buzzfeed/sso:$(version)
-	docker push buzzfeed/sso:latest
+	docker context create sso-dev
+	docker buildx create sso-dev --name sso-dev
+	docker buildx use sso-dev
+	docker buildx build --tag buzzfeed/sso:$(version) . --platform linux/amd64,linux/arm64,linux/arm/v7 --push
+	docker buildx build --tag buzzfeed/sso:latest . --platform linux/amd64,linux/arm64,linux/arm/v7 --push
+	docker buildx rm sso-dev
 
 .PHONY: dist/sso-auth dist/sso-proxy tools
