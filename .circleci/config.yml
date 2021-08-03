@@ -42,7 +42,12 @@ jobs:
     <<: *defaults
     steps:
       - *attach_workspace
-      - setup_remote_docker
+      - setup_remote_docker:
+          version: 18.09.3
+      - run: mkdir -vp ~/.docker/cli-plugins/
+      - run: curl --silent -L --output ~/.docker/cli-plugins/docker-buildx https://github.com/docker/buildx/releases/download/v0.3.1/buildx-v0.3.1.linux-amd64
+      - run: chmod a+x ~/.docker/cli-plugins/docker-buildx
+      - run: docker buildx version
       - run:
           name: push sso-dev commit tag
           command: |
@@ -55,6 +60,12 @@ jobs:
     <<: *defaults
     steps:
       - *attach_workspace
+      - setup_remote_docker:
+          version: 18.09.3
+      - run: mkdir -vp ~/.docker/cli-plugins/
+      - run: curl --silent -L --output ~/.docker/cli-plugins/docker-buildx https://github.com/docker/buildx/releases/download/v0.3.1/buildx-v0.3.1.linux-amd64
+      - run: chmod a+x ~/.docker/cli-plugins/docker-buildx
+      - run: docker buildx version
       - setup_remote_docker
       - run:
           name: push sso-dev latest tag
