@@ -53,6 +53,14 @@ func isExpired(t time.Time) bool {
 	return false
 }
 
+// IsWithinGracePeriod returns true if the session is still within the grace period
+func (s *SessionState) IsWithinGracePeriod(gracePeriodTTL time.Duration) bool {
+	if s.GracePeriodStart.IsZero() {
+		s.GracePeriodStart = time.Now()
+	}
+	return s.GracePeriodStart.Add(gracePeriodTTL).After(time.Now())
+}
+
 // MarshalSession marshals the session state as JSON, encrypts the JSON using the
 // given cipher, and base64-encodes the result
 func MarshalSession(s *SessionState, c aead.Cipher) (string, error) {
