@@ -98,17 +98,6 @@ func isProviderUnavailable(statusCode int) bool {
 	return statusCode == http.StatusTooManyRequests || statusCode == http.StatusServiceUnavailable
 }
 
-func extendDeadline(ttl time.Duration) time.Time {
-	return time.Now().Add(ttl).Truncate(time.Second)
-}
-
-func (p *SSOProvider) withinGracePeriod(s *sessions.SessionState) bool {
-	if s.GracePeriodStart.IsZero() {
-		s.GracePeriodStart = time.Now()
-	}
-	return s.GracePeriodStart.Add(p.GracePeriodTTL).After(time.Now())
-}
-
 // Redeem takes a redirectURL and code and redeems the SessionState
 func (p *SSOProvider) Redeem(redirectURL, code string) (*sessions.SessionState, error) {
 	if code == "" {
@@ -165,9 +154,9 @@ func (p *SSOProvider) Redeem(redirectURL, code string) (*sessions.SessionState, 
 		AccessToken:  jsonResponse.AccessToken,
 		RefreshToken: jsonResponse.RefreshToken,
 
-		RefreshDeadline:  extendDeadline(time.Duration(jsonResponse.ExpiresIn) * time.Second),
-		LifetimeDeadline: extendDeadline(p.SessionLifetimeTTL),
-		ValidDeadline:    extendDeadline(p.SessionValidTTL),
+		RefreshDeadline:  sessions.ExtendDeadline(time.Duration(jsonResponse.ExpiresIn) * time.Second),
+		LifetimeDeadline: sessions.ExtendDeadline(p.SessionLifetimeTTL),
+		ValidDeadline:    sessions.ExtendDeadline(p.SessionValidTTL),
 
 		Email: jsonResponse.Email,
 		User:  user,
@@ -262,10 +251,10 @@ func (p *SSOProvider) RefreshSession(s *sessions.SessionState, allowedGroups []s
 		// When we detect that the auth provider is not explicitly denying
 		// authentication, and is merely unavailable, we refresh and continue
 		// as normal during the "grace period"
-		if err == ErrAuthProviderUnavailable && p.withinGracePeriod(s) {
+		if err == ErrAuthProviderUnavailable && s.IsWithinGracePeriod(p.GracePeriodTTL) {
 			tags := []string{"action:refresh_session", "error:redeem_token_failed"}
 			p.StatsdClient.Incr("provider_error_fallback", tags, 1.0)
-			s.RefreshDeadline = extendDeadline(p.SessionValidTTL)
+			s.RefreshDeadline = sessions.ExtendDeadline(p.SessionValidTTL)
 			return true, nil
 		}
 		return false, err
@@ -276,10 +265,10 @@ func (p *SSOProvider) RefreshSession(s *sessions.SessionState, allowedGroups []s
 		// When we detect that the auth provider is not explicitly denying
 		// authentication, and is merely unavailable, we refresh and continue
 		// as normal during the "grace period"
-		if err == ErrAuthProviderUnavailable && p.withinGracePeriod(s) {
+		if err == ErrAuthProviderUnavailable && s.IsWithinGracePeriod(p.GracePeriodTTL) {
 			tags := []string{"action:refresh_session", "error:user_groups_failed"}
 			p.StatsdClient.Incr("provider_error_fallback", tags, 1.0)
-			s.RefreshDeadline = extendDeadline(p.SessionValidTTL)
+			s.RefreshDeadline = sessions.ExtendDeadline(p.SessionValidTTL)
 			return true, nil
 		}
 		return false, err
@@ -290,7 +279,7 @@ func (p *SSOProvider) RefreshSession(s *sessions.SessionState, allowedGroups []s
 	s.Groups = inGroups
 
 	s.AccessToken = newToken
-	s.RefreshDeadline = extendDeadline(duration)
+	s.RefreshDeadline = sessions.ExtendDeadline(duration)
 	s.GracePeriodStart = time.Time{}
 	logger.WithUser(s.Email).WithRefreshDeadline(s.RefreshDeadline).Info("refreshed session access token")
 	return true, nil
@@ -369,10 +358,10 @@ func (p *SSOProvider) ValidateSessionState(s *sessions.SessionState, allowedGrou
 		// When we detect that the auth provider is not explicitly denying
 		// authentication, and is merely unavailable, we validate and continue
 		// as normal during the "grace period"
-		if isProviderUnavailable(resp.StatusCode) && p.withinGracePeriod(s) {
+		if isProviderUnavailable(resp.StatusCode) && s.IsWithinGracePeriod(p.GracePeriodTTL) {
 			tags := []string{"action:validate_session", "error:validation_failed"}
 			p.StatsdClient.Incr("provider_error_fallback", tags, 1.0)
-			s.ValidDeadline = extendDeadline(p.SessionValidTTL)
+			s.ValidDeadline = sessions.ExtendDeadline(p.SessionValidTTL)
 			return true
 		}
 		logger.WithUser(s.Email).WithHTTPStatus(resp.StatusCode).Info(
@@ -386,10 +375,10 @@ func (p *SSOProvider) ValidateSessionState(s *sessions.SessionState, allowedGrou
 		// When we detect that the auth provider is not explicitly denying
 		// authentication, and is merely unavailable, we validate and continue
 		// as normal during the "grace period"
-		if err == ErrAuthProviderUnavailable && p.withinGracePeriod(s) {
+		if err == ErrAuthProviderUnavailable && s.IsWithinGracePeriod(p.GracePeriodTTL) {
 			tags := []string{"action:validate_session", "error:user_groups_failed"}
 			p.StatsdClient.Incr("provider_error_fallback", tags, 1.0)
-			s.ValidDeadline = extendDeadline(p.SessionValidTTL)
+			s.ValidDeadline = sessions.ExtendDeadline(p.SessionValidTTL)
 			return true
 		}
 		logger.WithUser(s.Email).Error(err, "error fetching group memberships")
@@ -403,7 +392,7 @@ func (p *SSOProvider) ValidateSessionState(s *sessions.SessionState, allowedGrou
 	}
 	s.Groups = inGroups
 
-	s.ValidDeadline = extendDeadline(p.SessionValidTTL)
+	s.ValidDeadline = sessions.ExtendDeadline(p.SessionValidTTL)
 	s.GracePeriodStart = time.Time{}
 
 	logger.WithUser(s.Email).WithSessionValid(s.ValidDeadline).Info("validated session")
