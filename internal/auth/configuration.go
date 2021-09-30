@@ -155,7 +155,7 @@ type Configuration struct {
 	AuthorizeConfig  AuthorizeConfig           `mapstructure:"authorize"`
 	SessionConfig    SessionConfig             `mapstructure:"session"`
 	ServerConfig     ServerConfig              `mapstructure:"server"`
-	MetricsConfig    MetricsConfig             `mapstructrue:"metrics"`
+	MetricsConfig    MetricsConfig             `mapstructure:"metrics"`
 	LoggingConfig    LoggingConfig             `mapstructure:"logging"`
 }
 
