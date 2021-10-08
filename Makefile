@@ -8,6 +8,7 @@ build: dist/sso-auth dist/sso-proxy
 dist/sso-auth:
 	mkdir -p dist
 	go generate ./...
+	echo $(version) > dist/.version.txt
 	go build -mod=readonly -o dist/sso-auth ./cmd/sso-auth
 
 dist/sso-proxy:

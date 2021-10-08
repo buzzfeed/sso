@@ -1,9 +1,11 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
+	"runtime"
 
 	"github.com/buzzfeed/sso/internal/auth"
 	"github.com/buzzfeed/sso/internal/pkg/httpserver"
@@ -11,11 +13,22 @@ import (
 )
 
 func init() {
+	flag.Bool("version", false, "provides application version and go version")
 	logging.SetServiceName("sso-authenticator")
 }
 
 func main() {
 	logger := logging.NewLogEntry()
+	flag.Parse()
+
+	if flagPassed("version") {
+		version, err := os.ReadFile("./dist/.version.txt")
+		if err != nil {
+			logger.Fatal(err)
+		}
+		fmt.Printf("%sBuilt with %s\n", string(version), runtime.Version())
+		os.Exit(0)
+	}
 
 	config, err := auth.LoadConfig()
 	if err != nil {
@@ -57,4 +70,14 @@ func main() {
 	if err := httpserver.Run(s, config.ServerConfig.TimeoutConfig.Shutdown, logger); err != nil {
 		logger.WithError(err).Fatal("error running server")
 	}
+}
+
+func flagPassed(name string) bool {
+	found := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			found = true
+		}
+	})
+	return found
 }
