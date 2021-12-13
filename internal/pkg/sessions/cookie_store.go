@@ -3,7 +3,6 @@ package sessions
 import (
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -81,13 +80,14 @@ func NewCookieStore(cookieName string, optFuncs ...func(*CookieStore) error) (*C
 
 func (s *CookieStore) makeCookie(req *http.Request, name string, value string, expiration time.Duration, now time.Time) *http.Cookie {
 	logger := log.NewLogEntry()
-	domain := req.Host
-	if h, _, err := net.SplitHostPort(domain); err == nil {
-		domain = h
-	}
+
+	// To avoid subdomains being inadvertently included, omit the domain attribute unless
+	// it's explicitly set in s.CookieDomain.
+	// https://datatracker.ietf.org/doc/html/rfc6265#section-4.1.2.3
+	domain := ""
 	if s.CookieDomain != "" {
 		if !strings.HasSuffix(domain, s.CookieDomain) {
-			logger.WithRequestHost(domain).WithCookieDomain(s.CookieDomain).Warn("Warning: Using configured cookie domain.")
+			logger.WithRequestHost(domain).WithCookieDomain(s.CookieDomain).Warn("Warning: Using explicitly configured cookie domain.")
 		}
 		domain = s.CookieDomain
 	}

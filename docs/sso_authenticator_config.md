@@ -11,7 +11,7 @@ Defaults for the below settings can be found here: https://github.com/buzzfeed/s
 ```
 SESSION_COOKIE_NAME     - string - name associated with the session cookie
 SESSION_COOKIE_SECRET   - string - seed string for secure cookies
-SESSION_COOKIE_DOMAIN   - string - cookie domain to force cookies to (ie: .yourcompany.com)*
+SESSION_COOKIE_DOMAIN   - string - cookie domain (and subdomains) to force cookies to (ie: .yourcompany.com)*
 SESSION_KEY             - string - seed string for secure auth codes
 SESSION_COOKIE_SECURE   - bool - set secure (HTTPS) cookie flag
 SESSION_COOKIE_HTTPONLY - bool - set 'httponly' cookie flag
