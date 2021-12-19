@@ -1,4 +1,4 @@
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: sso-proxy
@@ -7,6 +7,9 @@ metadata:
   namespace: sso
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      k8s-app: sso-proxy
   template:
     metadata:
       labels:
@@ -19,11 +22,11 @@ spec:
         ports:
         - containerPort: 4180
         env:
-          - name: DEFAULT_ALLOWED_EMAIL_DOMAINS
+          - name: UPSTREAM_DEFAULT_EMAIL_DOMAINS
             value: 'mydomain.com'
-          - name: UPSTREAM_CONFIGS
+          - name: UPSTREAM_CONFIGFILE
             value: /sso/upstream_configs.yml
-          - name: PROVIDER_URL
+          - name: PROVIDER_URL_EXTERNAL
             value: https://sso-auth.mydomain.com
           - name: PROVIDER_URL_INTERNAL
             value: http://sso-auth.sso.svc.cluster.local
@@ -37,19 +40,24 @@ spec:
               secretKeyRef:
                 name: proxy-client-secret
                 key: proxy-client-secret
-          - name: COOKIE_SECRET
+          - name: AUTH_CODE_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: proxy-auth-code-secret
+                key: proxy-auth-code-secret
+          - name: SESSION_COOKIE_SECRET
             valueFrom:
               secretKeyRef:
                 name: proxy-cookie-secret
                 key: proxy-cookie-secret
           # STATSD_HOST and STATSD_PORT must be defined or the app wont launch, they dont need to be a real host / port, but they do need to be defined.
-          - name: STATSD_HOST
+          - name: METRICS_STATSD_HOST
             value: localhost
-          - name: STATSD_PORT
+          - name: METRICS_STATSD_PORT
             value: "11111"
-          - name: COOKIE_SECURE
+          - name: SESSION_COOKIE_SECURE
             value: "false"
-          - name: CLUSTER
+          - name: UPSTREAM_CLUSTER
             value: dev
           - name: VIRTUAL_HOST
             value: "*.sso.mydomain.com"

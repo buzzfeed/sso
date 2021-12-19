@@ -1,4 +1,4 @@
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: sso-auth
@@ -7,6 +7,9 @@ metadata:
   namespace: sso
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      k8s-app: sso-auth
   template:
     metadata:
       labels:
@@ -19,52 +22,63 @@ spec:
         ports:
         - containerPort: 4180
         env:
-          - name: GOOGLE_ADMIN_EMAIL
+          - name: PROVIDER_1_GOOGLE_IMPERSONATE
             valueFrom:
               secretKeyRef:
                 name: google-admin-email
                 key: email
-          - name: GOOGLE_SERVICE_ACCOUNT_JSON
+          - name: PROVIDER_1_GOOGLE_CREDENTIALS
             value: /creds/service_account.json
-          - name: SSO_EMAIL_DOMAIN
+          - name: AUTHORIZE_EMAIL_DOMAINS
             value: 'mydomain.com'
-          - name: HOST
+          - name: SERVER_HOST
             value: sso-auth.mydomain.com
           - name: REDIRECT_URL
             value: https://sso-auth.mydomain.com
-          - name: PROXY_ROOT_DOMAIN
+          - name: AUTHORIZE_PROXY_DOMAINS
             value: mydomain.com
-          - name: CLIENT_ID
+          - name: PROVIDER_1_TYPE
+            value: "google"
+          - name: PROVIDER_1_SLUG
+            value: "google"
+          - name: PROVIDER_1_GROUPCACHE_INTERVAL_REFRESH
+            value: "5s"
+          - name: PROVIDER_1_CLIENT_ID
             valueFrom:
               secretKeyRef:
                 name: google-client-id
                 key: client-id
-          - name: CLIENT_SECRET
+          - name: PROVIDER_1_CLIENT_SECRET
             valueFrom:
               secretKeyRef:
                 name: google-client-secret
                 key: client-secret
-          - name: PROXY_CLIENT_ID
+          - name: CLIENT_PROXY_ID
             valueFrom:
               secretKeyRef:
                 name: proxy-client-id
                 key: proxy-client-id
-          - name: PROXY_CLIENT_SECRET
+          - name: CLIENT_PROXY_SECRET
             valueFrom:
               secretKeyRef:
                 name: proxy-client-secret
                 key: proxy-client-secret
-          - name: COOKIE_SECRET
+          - name: SESSION_KEY
+            valueFrom:
+              secretKeyRef:
+                name: auth-code-secret
+                key: auth-code-secret
+          - name: SESSION_COOKIE_SECRET
             valueFrom:
               secretKeyRef:
                 name: auth-cookie-secret
                 key: auth-cookie-secret
           # STATSD_HOST and STATSD_PORT must be defined or the app wont launch, they dont need to be a real host / port
-          - name: STATSD_HOST
+          - name: METRICS_STATSD_HOST
             value: localhost
-          - name: STATSD_PORT
+          - name: METRICS_STATSD_PORT
             value: "11111"
-          - name: COOKIE_SECURE
+          - name: SESSION_COOKIE_SECURE
             value: "false"
           - name: CLUSTER
             value: dev
