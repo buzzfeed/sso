@@ -3,7 +3,7 @@
 #
 # install golang dependencies & build binaries
 # =============================================================================
-FROM golang:1.14 AS build
+FROM golang:1.20 AS build
 
 ENV GOFLAGS='-ldflags=-s -ldflags=-w'
 ENV CGO_ENABLED=0
