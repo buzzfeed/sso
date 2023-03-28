@@ -10,16 +10,13 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GO111MODULE: on
+      GOPATH: /home/runner/go
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
         with:
           go-version: '1.20'
           check-latest: true
-
-      - name: environment
-        run: |
-          env | sort
 
       - name: Setup tools
         run: |
