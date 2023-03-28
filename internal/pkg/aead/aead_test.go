@@ -164,7 +164,7 @@ func TestCipherDataRace(t *testing.T) {
 			if !reflect.DeepEqual(got1, got2) {
 				t.Logf("got2: %#v", got2)
 				t.Logf("got1: %#v", got1)
-				t.Fatalf("expected structs to be equal")
+				t.Errorf("expected structs to be equal")
 			}
 
 		}(miscreantCipher, wg)
