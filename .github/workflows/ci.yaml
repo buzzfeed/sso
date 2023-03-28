@@ -29,6 +29,10 @@ jobs:
         uses: golangci/golangci-lint-action@v3
         continue-on-error: true
 
+      - name: Test
+        run: |
+          ./scripts/test
+
       - name: Build sso-auth
         run: |
           make dist/sso-auth

@@ -16,7 +16,6 @@ dist/sso-proxy:
 	go build -mod=readonly -o dist/sso-proxy ./cmd/sso-proxy
 
 tools:
-	go get golang.org/x/lint/golint
 	go get github.com/rakyll/statik
 
 test:

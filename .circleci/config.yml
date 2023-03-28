@@ -24,7 +24,7 @@ jobs:
       - run:
           name: run lint and tests for both services
           command: |
-            scripts/test
+            make test
       - run:
           name: build sso-auth
           command: |
