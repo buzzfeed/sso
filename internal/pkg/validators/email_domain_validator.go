@@ -22,11 +22,12 @@ type EmailDomainValidator struct {
 
 // NewEmailDomainValidator takes in a list of domains and returns a Validator object.
 // The validator can be used to validate that the session.Email:
-// - is non-empty
-// - the domain of the email address matches one of the originally passed in domains.
-//   (case insensitive)
-// - if the originally passed in list of domains consists only of "*", then all emails
-//   are considered valid based on their domain.
+//   - is non-empty
+//   - the domain of the email address matches one of the originally passed in domains.
+//     (case insensitive)
+//   - if the originally passed in list of domains consists only of "*", then all emails
+//     are considered valid based on their domain.
+//
 // If valid, nil is returned in place of an error.
 func NewEmailDomainValidator(allowedDomains []string) EmailDomainValidator {
 	emailDomains := make([]string, 0, len(allowedDomains))

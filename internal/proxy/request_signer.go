@@ -91,20 +91,21 @@ func NewRequestSigner(signingKeyPemStr string) (*RequestSigner, error) {
 // representation are considered "equivalent" for purposes of verifying the integrity of a request.
 //
 // Representations are formatted as follows:
-//   <HEADER.1>
-//   ...
-//   <HEADER.N>
-//   <URL>
-//   <BODY>
-//  where:
-//    <HEADER.k> is the ','-joined concatenation of all header values of `signedHeaders[k]`; empty
-//      values such as '' and all other headers in the request are ignored,
-//    <URL> is the string "<PATH>(?<QUERY>)(#FRAGMENT)", where "?<QUERY>" and "#<FRAGMENT>" are
-//      omitted if the associated components are absent from the request URL,
-//    <BODY> is the body of the Request (may be `nil`; e.g. for GET requests).
 //
-//  Receiving endpoints authenticating the integrity of a request should reconstruct this document
-//  exactly, when verifying the contents of a received request.
+//	 <HEADER.1>
+//	 ...
+//	 <HEADER.N>
+//	 <URL>
+//	 <BODY>
+//	where:
+//	  <HEADER.k> is the ','-joined concatenation of all header values of `signedHeaders[k]`; empty
+//	    values such as '' and all other headers in the request are ignored,
+//	  <URL> is the string "<PATH>(?<QUERY>)(#FRAGMENT)", where "?<QUERY>" and "#<FRAGMENT>" are
+//	    omitted if the associated components are absent from the request URL,
+//	  <BODY> is the body of the Request (may be `nil`; e.g. for GET requests).
+//
+//	Receiving endpoints authenticating the integrity of a request should reconstruct this document
+//	exactly, when verifying the contents of a received request.
 func mapRequestToHashInput(req *http.Request) (string, error) {
 	entries := []string{}
 
@@ -143,22 +144,28 @@ func mapRequestToHashInput(req *http.Request) (string, error) {
 // a subset of the request headers, together with the request URL and body.
 //
 // Signature is computed as:
-//   repr := Representation(request)  <- Computed by mapRequestToHashInput()
-//   hash := SHA256(repr)
-//   sig  := SIGN(hash, SigningKey)
-//   final := WEB_SAFE_BASE64(sig)
+//
+//	repr := Representation(request)  <- Computed by mapRequestToHashInput()
+//	hash := SHA256(repr)
+//	sig  := SIGN(hash, SigningKey)
+//	final := WEB_SAFE_BASE64(sig)
+//
 // The header `Sso-Signature` is given the value of `final`.
 //
 // Receiving endpoints authenticating the integrity of a request should:
-//   1. Strip the WEB_SAFE_BASE64 encoding from the value of `signatureHeader`,
-//   2. Decrypt the resulting value using the public key published by sso_proxy, thus obtaining the
-//      hash of the request representation,
-//   3. Compute the request representation from the received request, using the same format as the
-//      mapRequestToHashInput() function above,
-//   4. Apply SHA256 hash to the recomputed representation, and verify that it matches the decrypted
-//      hash value received through the `Sso-Signature` of the request.
 //
-//  Any requests failing this check should be considered tampered with, and rejected.
+//  1. Strip the WEB_SAFE_BASE64 encoding from the value of `signatureHeader`,
+//
+//  2. Decrypt the resulting value using the public key published by sso_proxy, thus obtaining the
+//     hash of the request representation,
+//
+//  3. Compute the request representation from the received request, using the same format as the
+//     mapRequestToHashInput() function above,
+//
+//  4. Apply SHA256 hash to the recomputed representation, and verify that it matches the decrypted
+//     hash value received through the `Sso-Signature` of the request.
+//
+//     Any requests failing this check should be considered tampered with, and rejected.
 func (signer RequestSigner) Sign(req *http.Request) error {
 	// Generate the request representation that will serve as hash input.
 	repr, err := mapRequestToHashInput(req)

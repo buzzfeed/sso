@@ -250,11 +250,11 @@ func (p *OktaProvider) cbStateChange(from, to circuit.State) {
 // 1. POSTs the code and grant_type to https://developer.okta.com/docs/api/resources/oidc/#token
 // 2. If the request fails, the authenticator will return a 500 and display an error page (see oauth_proxy.go#OAuthCallback)
 // 3. If the request succeeds, the data from Okta contains:
-//     - the access token which we use to get data from Okta
-//     - the refresh token which we can use to get a new access_token
-//     - the expiration time of the access token
-//     - a Base64 encoded id token which contains the user's email
-//       address and whether or not that email address is verified
+//   - the access token which we use to get data from Okta
+//   - the refresh token which we can use to get a new access_token
+//   - the expiration time of the access token
+//   - a Base64 encoded id token which contains the user's email
+//     address and whether or not that email address is verified
 func (p *OktaProvider) Redeem(redirectURL, code string) (*sessions.SessionState, error) {
 	if code == "" {
 		return nil, ErrBadRequest
