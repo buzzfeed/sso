@@ -29,7 +29,6 @@ jobs:
       - name: Test
         run: |
           make test
-        continue-on-error: true
 
       - name: Build sso-auth
         run: |
