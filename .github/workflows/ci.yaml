@@ -25,8 +25,9 @@ jobs:
         run: |
           make tools
 
-      # - name: Lint
-      #   uses: golangci/golangci-lint-action@v3
+      - name: Lint
+        uses: golangci/golangci-lint-action@v3
+        continue-on-error: true
 
       - name: Build sso-auth
         run: |
