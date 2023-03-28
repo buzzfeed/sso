@@ -17,7 +17,7 @@ dist/sso-proxy:
 
 tools:
 	go get golang.org/x/lint/golint
-	go get github.com/rakyll/statik 
+	go get github.com/rakyll/statik
 
 test:
 	./scripts/test
