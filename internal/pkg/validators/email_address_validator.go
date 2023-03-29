@@ -22,11 +22,12 @@ type EmailAddressValidator struct {
 
 // NewEmailAddressValidator takes in a list of email addresses and returns a Validator object.
 // The validator can be used to validate that the session.Email:
-// - is non-empty
-// - matches one of the originally passed in email addresses
-//   (case insensitive)
-// - if the originally passed in list of emails consists only of "*", then all emails
-//   are considered valid based on their domain.
+//   - is non-empty
+//   - matches one of the originally passed in email addresses
+//     (case insensitive)
+//   - if the originally passed in list of emails consists only of "*", then all emails
+//     are considered valid based on their domain.
+//
 // If valid, nil is returned in place of an error.
 func NewEmailAddressValidator(allowedEmails []string) EmailAddressValidator {
 	var emailAddresses []string

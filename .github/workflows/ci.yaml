@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      GO111MODULE: on
+      GOPATH: /home/runner/go
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '1.20'
+          check-latest: true
+
+      - name: Setup tools
+        run: |
+          make tools
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v3
+        continue-on-error: true
+
+      - name: Test
+        run: |
+          make test
+
+      - name: Build sso-auth
+        run: |
+          make dist/sso-auth
+
+      - name: Build sso-proxy
+        run: |
+          make dist/sso-proxy

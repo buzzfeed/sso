@@ -127,7 +127,7 @@ func (c *Counts) clear() {
 //
 // OnStateChange is called whenever the state of the Breaker changes.
 //
-// OnBackoff is called whenever a backoff is set with the backoff duration and reset time
+// # OnBackoff is called whenever a backoff is set with the backoff duration and reset time
 //
 // TestClock is used to mock the clock during tests
 type Options struct {

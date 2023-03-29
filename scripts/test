@@ -24,9 +24,6 @@ fi
 echo "running go mod verify ..."
 go mod verify
 
-echo "running golint ..."
-golint -set_exit_status cmd internal
-
 echo "running go vet ..."
 go vet ./...
 

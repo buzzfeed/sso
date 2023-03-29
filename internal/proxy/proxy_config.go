@@ -80,17 +80,17 @@ type RouteConfig struct {
 }
 
 // OptionsConfig maps to the yaml config fields:
-// * header_overrides - overrides any heads set either by sso proxy itself or upstream applications.
-//   This can be useful for modifying browser security headers.
-// * skip_auth_regex - skips authentication for paths matching these regular expressions.
-// * allowed_groups - optional list of authorized google groups that can access the service.
-// * tls_skip_verify - a bool to skip certification verification of upstreams
-// * preserve_host - preserve the host named based in up the client request rather than re-writing for the upstream host
-// * timeout - duration before timing out request.
-// * reset_deadline - a duration to trigger resets of tcp connections to upstreams. This is useful in dynamic dns environments.
-// * flush_interval - interval at which the proxy should flush data to the browser
-// * skip_request_signing - skip request signing if this behavior is problematic or undesired. For requests with large http bodies
-//   this maybe useful to unset as http bodies are read into memory in order to sign.
+//   - header_overrides - overrides any heads set either by sso proxy itself or upstream applications.
+//     This can be useful for modifying browser security headers.
+//   - skip_auth_regex - skips authentication for paths matching these regular expressions.
+//   - allowed_groups - optional list of authorized google groups that can access the service.
+//   - tls_skip_verify - a bool to skip certification verification of upstreams
+//   - preserve_host - preserve the host named based in up the client request rather than re-writing for the upstream host
+//   - timeout - duration before timing out request.
+//   - reset_deadline - a duration to trigger resets of tcp connections to upstreams. This is useful in dynamic dns environments.
+//   - flush_interval - interval at which the proxy should flush data to the browser
+//   - skip_request_signing - skip request signing if this behavior is problematic or undesired. For requests with large http bodies
+//     this maybe useful to unset as http bodies are read into memory in order to sign.
 type OptionsConfig struct {
 	HeaderOverrides       map[string]string `yaml:"header_overrides"`
 	InjectRequestHeaders  map[string]string `yaml:"inject_request_headers"`

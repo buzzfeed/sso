@@ -121,7 +121,7 @@ func TestCipherDataRace(t *testing.T) {
 			b := make([]byte, 32)
 			_, err := rand.Read(b)
 			if err != nil {
-				t.Fatalf("unexecpted error reading random bytes: %v", err)
+				t.Errorf("unexecpted error reading random bytes: %v", err)
 			}
 
 			sha := fmt.Sprintf("%x", sha1.New().Sum(b))
@@ -131,40 +131,40 @@ func TestCipherDataRace(t *testing.T) {
 
 			value1, err := c.Marshal(tc)
 			if err != nil {
-				t.Fatalf("unexpected err: %v", err)
+				t.Errorf("unexpected err: %v", err)
 			}
 
 			value2, err := c.Marshal(tc)
 			if err != nil {
-				t.Fatalf("unexpected err: %v", err)
+				t.Errorf("unexpected err: %v", err)
 			}
 
 			if value1 == value2 {
-				t.Fatalf("expected marshaled values to not be equal %v != %v", value1, value2)
+				t.Errorf("expected marshaled values to not be equal %v != %v", value1, value2)
 			}
 
 			got1 := &TC{}
 			err = c.Unmarshal(value1, got1)
 			if err != nil {
-				t.Fatalf("unexpected err unmarshalling struct: %v", err)
+				t.Errorf("unexpected err unmarshalling struct: %v", err)
 			}
 
 			if !reflect.DeepEqual(got1, tc) {
 				t.Logf("want: %#v", tc)
 				t.Logf(" got: %#v", got1)
-				t.Fatalf("expected structs to be equal")
+				t.Errorf("expected structs to be equal")
 			}
 
 			got2 := &TC{}
 			err = c.Unmarshal(value2, got2)
 			if err != nil {
-				t.Fatalf("unexpected err unmarshalling struct: %v", err)
+				t.Errorf("unexpected err unmarshalling struct: %v", err)
 			}
 
 			if !reflect.DeepEqual(got1, got2) {
 				t.Logf("got2: %#v", got2)
 				t.Logf("got1: %#v", got1)
-				t.Fatalf("expected structs to be equal")
+				t.Errorf("expected structs to be equal")
 			}
 
 		}(miscreantCipher, wg)

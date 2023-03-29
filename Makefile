@@ -2,7 +2,6 @@ version := "v3.0.0"
 
 commit := $(shell git rev-parse --short HEAD)
 
-
 build: dist/sso-auth dist/sso-proxy
 
 dist/sso-auth:
@@ -16,8 +15,7 @@ dist/sso-proxy:
 	go build -mod=readonly -o dist/sso-proxy ./cmd/sso-proxy
 
 tools:
-	go get golang.org/x/lint/golint
-	go get github.com/rakyll/statik 
+	go install github.com/rakyll/statik
 
 test:
 	./scripts/test
