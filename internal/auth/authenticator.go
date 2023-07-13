@@ -236,7 +236,7 @@ func (p *Authenticator) authenticate(rw http.ResponseWriter, req *http.Request) 
 	}
 
 	logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(
-		fmt.Sprintf("authentication: user passed validation"))
+		"authentication: user passed validation")
 
 	return session, nil
 }
@@ -600,7 +600,7 @@ func (p *Authenticator) getOAuthCallback(rw http.ResponseWriter, req *http.Reque
 		return "", HTTPError{Code: http.StatusForbidden, Message: errorMsg}
 	}
 	logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(
-		fmt.Sprintf("oauth callback: user passed validation"))
+		"oauth callback: user passed validation")
 
 	logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info("authentication complete")
 	err = p.sessionStore.SaveSession(rw, req, session)
@@ -669,7 +669,7 @@ func (p *Authenticator) Redeem(rw http.ResponseWriter, req *http.Request) {
 		logger.WithUser(session.Email).WithRefreshDeadline(session.RefreshDeadline).WithLifetimeDeadline(session.LifetimeDeadline).Error("expired session")
 		p.sessionStore.ClearSession(rw, req)
 
-		http.Error(rw, fmt.Sprintf("expired session"), http.StatusUnauthorized)
+		http.Error(rw, "expired session", http.StatusUnauthorized)
 		return
 	}
 
