@@ -530,7 +530,7 @@ func TestTimeoutHandler(t *testing.T) {
 			},
 			globalTimeout:      time.Duration(100) * time.Millisecond,
 			ExpectedStatusCode: 503,
-			ExpectedBody:       fmt.Sprintf("service-test failed to respond within the 10ms timeout period"),
+			ExpectedBody:       "service-test failed to respond within the 10ms timeout period",
 		},
 		{
 			name: "times out using global write timeout",
