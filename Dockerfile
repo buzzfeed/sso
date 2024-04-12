@@ -23,7 +23,7 @@ RUN cd cmd/sso-proxy/generate-request-signature && go build -mod=readonly -o /bi
 #
 # add static assets and copy binaries from build stage
 # =============================================================================
-FROM debian:bullseye-slim
+FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates curl && rm -rf /var/lib/apt/lists/* \
     && groupadd -r sso && useradd -r -g sso sso
 WORKDIR /sso
