@@ -1,11 +1,11 @@
 defaults: &defaults
   docker:
-    - image: circleci/golang:1.14
-  working_directory: /go/src/github.com/buzzfeed/sso
+    - image: cimg/go:1.14
+  working_directory: ~/go/src/github.com/buzzfeed/sso
 
 attach_workspace: &attach_workspace
   attach_workspace:
-    at: /go/src/github.com/buzzfeed/sso
+    at: ~/go/src/github.com/buzzfeed/sso
 
 version: 2
 jobs:
@@ -34,7 +34,7 @@ jobs:
           command: |
             make dist/sso-proxy
       - persist_to_workspace:
-          root: /go/src/github.com/buzzfeed/sso
+          root: ~/go/src/github.com/buzzfeed/sso
           paths:
             - .
 
@@ -43,6 +43,8 @@ jobs:
     steps:
       - *attach_workspace
       - setup_remote_docker
+      - docker/setup-buildx:
+          version: 20.10.11 
       - run:
           name: push sso-dev commit tag
           command: |
