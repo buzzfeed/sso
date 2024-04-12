@@ -618,8 +618,8 @@ func TestRewriteRoutingHandling(t *testing.T) {
 			ToTemplate:   upstreamURL.Host,
 			ExpectedCode: http.StatusOK,
 			ExpectedResponse: map[string][]string{
-				"Host":             []string{upstreamURL.Host},
-				"X-Forwarded-Host": []string{"localhost"},
+				"Host":             {upstreamURL.Host},
+				"X-Forwarded-Host": {"localhost"},
 			},
 		},
 		{
@@ -629,8 +629,8 @@ func TestRewriteRoutingHandling(t *testing.T) {
 			ToTemplate:   fmt.Sprintf("%s:$1", upstreamHost), // add port to dest
 			ExpectedCode: http.StatusOK,
 			ExpectedResponse: map[string][]string{
-				"Host":             []string{upstreamURL.Host},
-				"X-Forwarded-Host": []string{fmt.Sprintf("somedomain--%s", upstreamPort)},
+				"Host":             {upstreamURL.Host},
+				"X-Forwarded-Host": {fmt.Sprintf("somedomain--%s", upstreamPort)},
 			},
 		},
 	}
