@@ -1,6 +1,6 @@
 defaults: &defaults
   docker:
-    - image: cimg/go:1.14
+    - image: cimg/go:1.21
   working_directory: ~/go/src/github.com/buzzfeed/sso
 
 attach_workspace: &attach_workspace
@@ -43,8 +43,6 @@ jobs:
     steps:
       - *attach_workspace
       - setup_remote_docker
-      - docker/setup-buildx:
-          version: 20.10.11 
       - run:
           name: push sso-dev commit tag
           command: |
