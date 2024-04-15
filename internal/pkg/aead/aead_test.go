@@ -113,15 +113,19 @@ func TestCipherDataRace(t *testing.T) {
 		Field string `json:"field"`
 	}
 
+	// Create a channel to collect errors from goroutines
+	errCh := make(chan error, 100)
+
 	wg := &sync.WaitGroup{}
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
-		go func(c *MiscreantCipher, wg *sync.WaitGroup) {
+		go func(c *MiscreantCipher, wg *sync.WaitGroup, errCh chan<- error) {
 			defer wg.Done()
 			b := make([]byte, 32)
 			_, err := rand.Read(b)
 			if err != nil {
-				t.Fatalf("unexecpted error reading random bytes: %v", err)
+				errCh <- fmt.Errorf("unexpected error reading random bytes: %v", err)
+				return
 			}
 
 			sha := fmt.Sprintf("%x", sha1.New().Sum(b))
@@ -131,43 +135,55 @@ func TestCipherDataRace(t *testing.T) {
 
 			value1, err := c.Marshal(tc)
 			if err != nil {
-				t.Fatalf("unexpected err: %v", err)
+				errCh <- fmt.Errorf("unexpected err: %v", err)
+				return
 			}
 
 			value2, err := c.Marshal(tc)
 			if err != nil {
-				t.Fatalf("unexpected err: %v", err)
+				errCh <- fmt.Errorf("unexpected err: %v", err)
+				return
 			}
 
 			if value1 == value2 {
-				t.Fatalf("expected marshaled values to not be equal %v != %v", value1, value2)
+				errCh <- fmt.Errorf("expected marshaled values to not be equal %v != %v", value1, value2)
+				return
 			}
 
 			got1 := &TC{}
 			err = c.Unmarshal(value1, got1)
 			if err != nil {
-				t.Fatalf("unexpected err unmarshalling struct: %v", err)
+				errCh <- fmt.Errorf("unexpected err unmarshalling struct: %v", err)
+				return
 			}
 
 			if !reflect.DeepEqual(got1, tc) {
-				t.Logf("want: %#v", tc)
-				t.Logf(" got: %#v", got1)
-				t.Fatalf("expected structs to be equal")
+				errCh <- fmt.Errorf("expected structs to be equal: want %#v, got %#v", tc, got1)
+				return
 			}
 
 			got2 := &TC{}
 			err = c.Unmarshal(value2, got2)
 			if err != nil {
-				t.Fatalf("unexpected err unmarshalling struct: %v", err)
+				errCh <- fmt.Errorf("unexpected err unmarshalling struct: %v", err)
+				return
 			}
 
 			if !reflect.DeepEqual(got1, got2) {
-				t.Logf("got2: %#v", got2)
-				t.Logf("got1: %#v", got1)
-				t.Fatalf("expected structs to be equal")
+				errCh <- fmt.Errorf("expected structs to be equal: got1 %#v, got2 %#v", got1, got2)
+				return
 			}
 
-		}(miscreantCipher, wg)
+		}(miscreantCipher, wg, errCh)
 	}
-	wg.Wait()
+
+	go func() {
+		wg.Wait()
+		close(errCh) // Close the channel after all goroutines have finished
+	}()
+
+	// Collect and handle errors from the channel
+	for err := range errCh {
+		t.Errorf("Test failed: %v", err)
+	}
 }
