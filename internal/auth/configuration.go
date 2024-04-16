@@ -80,7 +80,7 @@ func DefaultAuthConfig() Configuration {
 			},
 		},
 		ClientConfigs: map[string]ClientConfig{
-			"proxy": ClientConfig{},
+			"proxy": {},
 		},
 		ServerConfig: ServerConfig{
 			Port:   4180,

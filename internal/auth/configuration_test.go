@@ -42,7 +42,7 @@ func testConfiguration(t *testing.T) Configuration {
 
 		// we provide no defaults for these right now
 		ProviderConfigs: map[string]ProviderConfig{
-			"foo": ProviderConfig{
+			"foo": {
 				ProviderType: "test",
 				ProviderSlug: "foo",
 				ClientConfig: ClientConfig{
@@ -52,7 +52,7 @@ func testConfiguration(t *testing.T) Configuration {
 			},
 		},
 		ClientConfigs: map[string]ClientConfig{
-			"proxy": ClientConfig{
+			"proxy": {
 				ID:     "proxy-client-id",
 				Secret: "proxy-client-secret",
 			},
@@ -228,7 +228,7 @@ func TestConfigValidate(t *testing.T) {
 				},
 				// we provide no defaults for these right now
 				ProviderConfigs: map[string]ProviderConfig{
-					"foo": ProviderConfig{
+					"foo": {
 						ProviderType: "test",
 						ProviderSlug: "foo",
 						ClientConfig: ClientConfig{
@@ -238,7 +238,7 @@ func TestConfigValidate(t *testing.T) {
 					},
 				},
 				ClientConfigs: map[string]ClientConfig{
-					"proxy": ClientConfig{
+					"proxy": {
 						ID:     "proxy-client-id",
 						Secret: "proxy-client-secret",
 					},
