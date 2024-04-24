@@ -81,22 +81,22 @@ func NewCookieStore(cookieName string, optFuncs ...func(*CookieStore) error) (*C
 
 func (s *CookieStore) makeCookie(req *http.Request, name string, value string, expiration time.Duration, now time.Time) *http.Cookie {
 	logger := log.NewLogEntry()
-
+	domain := req.Host
+	if h, _, err := net.SplitHostPort(domain); err == nil {
+		domain = h
+	}
 	if s.CookieDomain != "" {
-		domain := req.Host
-		if h, _, err := net.SplitHostPort(domain); err == nil {
-			domain = h
-		}
 		if !strings.HasSuffix(domain, s.CookieDomain) {
-			logger.WithRequestHost(domain).WithCookieDomain(s.CookieDomain).Warn("Warning: Using explicitly configured cookie domain.")
+			logger.WithRequestHost(domain).WithCookieDomain(s.CookieDomain).Warn("Warning: Using configured cookie domain.")
 		}
+		domain = s.CookieDomain
 	}
 
 	return &http.Cookie{
 		Name:     name,
 		Value:    value,
 		Path:     "/",
-		Domain:   s.CookieDomain,
+		Domain:   domain,
 		HttpOnly: s.CookieHTTPOnly,
 		Secure:   s.CookieSecure,
 		Expires:  now.Add(expiration),
