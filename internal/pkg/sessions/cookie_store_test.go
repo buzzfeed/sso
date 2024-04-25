@@ -104,16 +104,12 @@ func TestMakeSessionCookie(t *testing.T) {
 		expectedCookie *http.Cookie
 	}{
 		{
-			// In order to prevent subdomains being included, the Domain
-			// value is left empty by default.
-			// While empty, it defaults to the URL domain with subdomains _excluded_.
-			// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie
 			name: "default cookie domain",
 			expectedCookie: &http.Cookie{
 				Name:     cookieName,
 				Value:    cookieValue,
 				Path:     "/",
-				Domain:   "",
+				Domain:   "www.example.com",
 				HttpOnly: true,
 				Secure:   true,
 				Expires:  now.Add(expiration),
@@ -163,16 +159,12 @@ func TestMakeSessionCSRFCookie(t *testing.T) {
 		expectedCookie *http.Cookie
 	}{
 		{
-			// In order to prevent subdomains being included, the Domain
-			// value is left empty by default.
-			// While empty, it defaults to the URL domain with subdomains _excluded_.
-			// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie
 			name: "default cookie domain",
 			expectedCookie: &http.Cookie{
 				Name:     csrfName,
 				Value:    cookieValue,
 				Path:     "/",
-				Domain:   "",
+				Domain:   "www.example.com",
 				HttpOnly: true,
 				Secure:   true,
 				Expires:  now.Add(expiration),
