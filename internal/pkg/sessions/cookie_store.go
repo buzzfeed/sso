@@ -79,7 +79,7 @@ func NewCookieStore(cookieName string, optFuncs ...func(*CookieStore) error) (*C
 	return c, nil
 }
 
-func (s *CookieStore) makeCookie(req *http.Request, name string, value string, expiration time.Duration, now time.Time) *http.Cookie {
+func (s *CookieStore) makeCookie(req *http.Request, name string, value string, expiration time.Duration, now time.Time, disableSubdomains bool) *http.Cookie {
 	logger := log.NewLogEntry()
 	domain := req.Host
 	if h, _, err := net.SplitHostPort(domain); err == nil {
@@ -90,6 +90,8 @@ func (s *CookieStore) makeCookie(req *http.Request, name string, value string, e
 			logger.WithRequestHost(domain).WithCookieDomain(s.CookieDomain).Warn("Warning: Using configured cookie domain.")
 		}
 		domain = s.CookieDomain
+	} else if disableSubdomains {
+		domain = ""
 	}
 
 	return &http.Cookie{
@@ -105,17 +107,18 @@ func (s *CookieStore) makeCookie(req *http.Request, name string, value string, e
 
 // makeSessionCookie constructs a session cookie given the request, an expiration time and the current time.
 func (s *CookieStore) makeSessionCookie(req *http.Request, value string, expiration time.Duration, now time.Time) *http.Cookie {
-	return s.makeCookie(req, s.Name, value, expiration, now)
+	return s.makeCookie(req, s.Name, value, expiration, now, false)
 }
 
 // makeCSRFCookie creates a CSRF cookie given the request, an expiration time, and the current time.
 func (s *CookieStore) makeCSRFCookie(req *http.Request, value string, expiration time.Duration, now time.Time) *http.Cookie {
-	return s.makeCookie(req, s.CSRFCookieName, value, expiration, now)
+	return s.makeCookie(req, s.CSRFCookieName, value, expiration, now, false)
 }
 
 // ClearCSRF clears the CSRF cookie from the request
 func (s *CookieStore) ClearCSRF(rw http.ResponseWriter, req *http.Request) {
 	http.SetCookie(rw, s.makeCSRFCookie(req, "", time.Hour*-1, time.Now()))
+	http.SetCookie(rw, s.makeCookie(req, s.CSRFCookieName, "", time.Hour*-1, time.Now(), true))
 }
 
 // SetCSRF sets the CSRFCookie creates a CSRF cookie in a given request
@@ -131,6 +134,7 @@ func (s *CookieStore) GetCSRF(req *http.Request) (*http.Cookie, error) {
 // ClearSession clears the session cookie from a request
 func (s *CookieStore) ClearSession(rw http.ResponseWriter, req *http.Request) {
 	http.SetCookie(rw, s.makeSessionCookie(req, "", time.Hour*-1, time.Now()))
+	http.SetCookie(rw, s.makeCookie(req, s.Name, "", time.Hour*-1, time.Now(), true))
 }
 
 func (s *CookieStore) setSessionCookie(rw http.ResponseWriter, req *http.Request, val string) {
