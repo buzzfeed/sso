@@ -496,7 +496,7 @@ func (p *OAuthProxy) OAuthCallback(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).WithInGroups(session.Groups).Info(
-		fmt.Sprintf("oauth callback: user validated "))
+		"oauth callback: user validated ")
 
 	// We add the request host into the session to allow us to validate that each request has
 	// been authorized for the upstream it's requesting.
@@ -733,7 +733,7 @@ func (p *OAuthProxy) Authenticate(rw http.ResponseWriter, req *http.Request) (er
 	}
 
 	logger.WithRemoteAddress(remoteAddr).WithUser(session.Email).Info(
-		fmt.Sprintf("authentication: user validated"))
+		"authentication: user validated")
 
 	for key, val := range p.upstreamConfig.InjectRequestHeaders {
 		req.Header.Set(key, val)

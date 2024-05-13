@@ -2,7 +2,6 @@ package validators
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/buzzfeed/sso/internal/pkg/sessions"
@@ -33,7 +32,7 @@ func NewEmailAddressValidator(allowedEmails []string) EmailAddressValidator {
 	var emailAddresses []string
 
 	for _, email := range allowedEmails {
-		emailAddress := fmt.Sprintf("%s", strings.ToLower(email))
+		emailAddress := strings.ToLower(email)
 		emailAddresses = append(emailAddresses, emailAddress)
 	}
 
