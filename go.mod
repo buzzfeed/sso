@@ -7,7 +7,7 @@ require (
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869 // indirect
 	github.com/datadog/datadog-go v0.0.0-20180822151419-281ae9f2d895
 	github.com/gorilla/mux v1.7.2
-	github.com/gorilla/websocket v1.4.0
+	github.com/gorilla/websocket v1.4.1
 	github.com/imdario/mergo v0.3.7
 	github.com/mccutchen/go-httpbin v1.1.1
 	github.com/micro/go-micro v1.5.0
