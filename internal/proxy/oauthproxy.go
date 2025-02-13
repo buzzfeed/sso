@@ -331,23 +331,23 @@ func (p *OAuthProxy) OAuthStart(rw http.ResponseWriter, req *http.Request, tags 
 	// We redirect the browser to the authenticator with a 302 status code. The target URL is
 	// constructed using the GetSignInURL() method, which encodes the following data:
 	//
-	// * client_id: Defined by the OAuth2 RFC https://tools.ietf.org/html/rfc6749.
+	// * client_id: Defined by the OAuth2 RFC https://datatracker.ietf.org/doc/html/rfc6749
 	//              Identifies the application requesting authentication information,
 	//              from our perspective this will always be static since the client
 	//              will always be sso proxy
 	//
-	// * redirect_uri: Defined by the OAuth2 RFC https://tools.ietf.org/html/rfc6749.
+	// * redirect_uri: Defined by the OAuth2 RFC https://datatracker.ietf.org/doc/html/rfc6749
 	//                 Informs the authenticator _where_ to redirect the user back to once
 	//                 they have authenticated with the auth provider and given us permission
 	//                 to access their auth information
 	//
-	// * response_type: Defined by the OAuth2 RFC https://tools.ietf.org/html/rfc6749.
+	// * response_type: Defined by the OAuth2 RFC https://datatracker.ietf.org/doc/html/rfc6749
 	//                  Required by the spec and must be set to "code"
 	//
-	// * scope: Defined by the OAuth2 RFC https://tools.ietf.org/html/rfc6749.
+	// * scope: Defined by the OAuth2 RFC https://datatracker.ietf.org/doc/html/rfc6749
 	//          Used to offer different auth scopes, but will be unnecessary in the context of SSO.
 	//
-	// * state: Defined by the OAuth2 RFC https://tools.ietf.org/html/rfc6749.
+	// * state: Defined by the OAuth2 RFC https://datatracker.ietf.org/doc/html/rfc6749
 	//          Used to prevent cross site forgery and maintain state across the client and server.
 
 	key := aead.GenerateKey()
