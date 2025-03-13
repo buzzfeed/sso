@@ -15,10 +15,9 @@ require (
 	github.com/mitchellh/mapstructure v1.1.2
 	github.com/rakyll/statik v0.1.7
 	github.com/sirupsen/logrus v1.4.2
-	golang.org/x/net v0.21.0 // indirect
+	golang.org/x/net v0.36.0 // indirect
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
-	golang.org/x/sync v0.1.0
-	golang.org/x/sys v0.19.0 // indirect
+	golang.org/x/sync v0.11.0
 	golang.org/x/xerrors v0.0.0-20191011141410-1b5146add898
 	google.golang.org/api v0.5.0
 	gopkg.in/yaml.v2 v2.2.2
