@@ -367,6 +367,13 @@ func (p *Authenticator) SignOut(rw http.ResponseWriter, req *http.Request) {
 	logger := log.NewLogEntry()
 
 	redirectURI := req.Form.Get("redirect_uri")
+	// replace all backslashes with forward slashes before parsing the URL
+	redirectURI = strings.ReplaceAll(redirectURI, "\\", "/")
+	target, err := url.Parse(redirectURI)
+	if err != nil || target.Hostname() != "" {
+		rw.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	// statsd client tags
 	proxyHost := getProxyHost(req)
@@ -392,7 +399,11 @@ func (p *Authenticator) SignOut(rw http.ResponseWriter, req *http.Request) {
 		// a different error, clear the session cookie and redirect
 		logger.Error(err, "error loading cookie session")
 		p.sessionStore.ClearSession(rw, req)
-		http.Redirect(rw, req, redirectURI, http.StatusFound)
+		if target.Hostname() == "" {
+			http.Redirect(rw, req, redirectURI, http.StatusFound)
+		} else {
+			rw.WriteHeader(http.StatusBadRequest)
+		}
 		return
 	}
 
@@ -406,7 +417,11 @@ func (p *Authenticator) SignOut(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	p.sessionStore.ClearSession(rw, req)
-	http.Redirect(rw, req, redirectURI, http.StatusFound)
+	if target.Hostname() == "" {
+		http.Redirect(rw, req, redirectURI, http.StatusFound)
+	} else {
+		rw.WriteHeader(http.StatusBadRequest)
+	}
 }
 
 type signOutResp struct {
@@ -427,7 +442,11 @@ func (p *Authenticator) SignOutPage(rw http.ResponseWriter, req *http.Request, m
 
 	session, err := p.sessionStore.LoadSession(req)
 	if err != nil {
-		http.Redirect(rw, req, redirectURI, http.StatusFound)
+		if target.Hostname() == "" {
+			http.Redirect(rw, req, redirectURI, http.StatusFound)
+		} else {
+			rw.WriteHeader(http.StatusBadRequest)
+		}
 		return
 	}
 
