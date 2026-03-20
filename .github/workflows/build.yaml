@@ -1,0 +1,40 @@
+name: CI/CD
+on:
+  pull_request:
+    branches:
+      - '*'
+  push:
+    branches:
+      - main
+jobs:
+  Pipeline:
+    name: Pipeline
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: "0"
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - name: build
+        run: |
+          make imagebuild-commit
+      - id: auth
+        if: ${{ github.ref == 'refs/heads/main' }}
+        uses: "google-github-actions/auth@v2"
+        with:
+          project_id: ${{ secrets.GCP_GCR_PROJECT_ID }}
+          credentials_json: ${{ secrets.GCP_GCR_SA_KEY }}
+      - name: Set up Cloud SDK
+        if: ${{ github.ref == 'refs/heads/main' }}
+        uses: google-github-actions/setup-gcloud@v2
+      - name: Set up Docker login
+        if: ${{ github.ref == 'refs/heads/main' }}
+        run: |
+          gcloud auth configure-docker
+      - name: Push docker image
+        if: ${{ github.ref == 'refs/heads/main' }}
+        run: |
+          make releasepush

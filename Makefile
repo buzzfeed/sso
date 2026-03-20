@@ -1,4 +1,4 @@
-version := "v3.1.1"
+version := "v3.1.2"
 
 commit := $(shell git rev-parse --short HEAD)
 
@@ -25,20 +25,11 @@ test:
 clean:
 	rm -r dist
 
-imagepush-commit:
-	docker buildx create --use --platform=linux/arm64,linux/amd64 --name imagepush-commit
-	docker buildx build -t buzzfeed/sso-dev:$(commit) . --platform linux/amd64,linux/arm64 --push
-	docker buildx rm imagepush-commit
+imagebuild-commit:
+	docker build -t buzzfeed-sso-dev:$(commit) . --platform linux/amd64
 
-imagepush-latest:
-	docker buildx create --use --platform=linux/arm64,linux/amd64 --name imagepush-latest
-	docker buildx build -t buzzfeed/sso-dev:latest . --platform linux/amd64,linux/arm64 --push
-	docker buildx rm imagepush-latest
-
-releasepush:
-	docker buildx create --use --platform=linux/arm64,linux/amd64 --name releasepush
-	docker buildx build -t buzzfeed/sso:$(version) . --platform linux/amd64,linux/arm64 --push
-	docker buildx build -t buzzfeed/sso:latest . --platform linux/amd64,linux/arm64 --push
-	docker buildx rm releasepush
+releasepush: imagebuild-commit
+	docker tag buzzfeed-sso-dev:$(commit) gcr.io/weave-lab/ops/buzzfeed-sso:$(version)
+	docker push gcr.io/weave-lab/ops/buzzfeed-sso:$(version)
 
 .PHONY: dist/sso-auth dist/sso-proxy tools
