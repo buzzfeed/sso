@@ -39,9 +39,9 @@ func (p *OAuthProxy) setResponseHeaderOverrides(upstreamConfig *UpstreamConfig, 
 func requireHTTPS(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		rw.Header().Set("Strict-Transport-Security", "max-age=31536000")
-		if req.URL.Scheme != "https" && req.Header.Get("X-Forwarded-Proto") != "https" {
+		if !isSecureScheme(req.URL.Scheme) && !isSecureScheme(req.Header.Get("X-Forwarded-Proto")) {
 			dest := &url.URL{
-				Scheme:   "https",
+				Scheme:   redirectScheme(req),
 				Host:     req.Host,
 				Path:     req.URL.Path,
 				RawQuery: req.URL.RawQuery,
@@ -51,6 +51,23 @@ func requireHTTPS(h http.Handler) http.Handler {
 		}
 		h.ServeHTTP(rw, req)
 	})
+}
+
+func redirectScheme(req *http.Request) string {
+	if req.Header.Get("X-Forwarded-Proto") == "ws" || req.URL.Scheme == "ws" {
+		return "wss"
+	}
+
+	return "https"
+}
+
+func isSecureScheme(scheme string) bool {
+	switch scheme {
+	case "https", "wss":
+		return true
+	default:
+		return false
+	}
 }
 
 func setHealthCheck(healthcheckPath string, next http.Handler) http.Handler {
