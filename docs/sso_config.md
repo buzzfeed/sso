@@ -3,7 +3,7 @@
 ### Proxy Config
 All services using `sso_proxy` are configured in a `upstream_config.yml` file.
 All config values can be templated from environmental variables with the prefix `SSO_CONFIG_`.
-For example, the following config would have the following environment variables configed:, `SSO_CONFIG_CLUSTER`, `SSO_CONFIG_ROOT_DOMAIN`.
+For example, the following config would have the following environment variables configured:, `SSO_CONFIG_CLUSTER`, `SSO_CONFIG_ROOT_DOMAIN`.
 
 
 ```json
